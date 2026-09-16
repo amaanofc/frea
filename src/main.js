@@ -7,6 +7,7 @@ import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSI
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent, getGrowthMetrics } from './analytics.js';
 import { fetchMentors, fetchMentor, fetchMonthlySlots, submitBooking, submitMentorApplication, fetchStats } from './api.js';
+import './mount-calendar.tsx';
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -527,16 +528,25 @@ function renderProfile(mentorId) {
           </div>
         </div>
 
-        <!-- Interactive Monthly Calendar & Open Slots Engine -->
+        <!-- Interactive Appointment Picker (calendar-03) -->
         <div class="profile__section">
           <h3 class="profile__section-title">pick a date & time</h3>
-          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all slots are 20-min Google Meets · 100% free · choose any open day</span>
+          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all slots are 20-min Google Meets · 100% free · select date on left, time on right</span>
 
-          <div id="profile-calendar-root" class="calendar-picker">
+          <div id="profile-calendar-root" class="calendar-picker" style="min-height: 380px;">
             <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
               <span style="font-size: 26px;">📅</span>
-              <p style="margin-top: 8px; font-weight: 600;">loading calendar & open sessions...</p>
+              <p style="margin-top: 8px; font-weight: 600;">loading appointment picker...</p>
             </div>
+          </div>
+
+          <!-- Sticky Booking Bar -->
+          <div class="profile__book-bar" id="book-bar" style="display: none; margin-top: 24px;">
+            <div>
+              <div class="profile__book-selected" id="book-selected-text"></div>
+              <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant Google Meet invite · verified UK student only</div>
+            </div>
+            <button class="pill-btn" onclick="openBookingModal(${mentor.id})">confirm chat 🚀</button>
           </div>
         </div>
       </div>
@@ -838,6 +848,28 @@ async function loadMentorCalendar(mentorId, year, month) {
   calendarState.mentorId = parseInt(mentorId);
   calendarState.year = y;
   calendarState.month = m;
+
+  // Booking bar update handler called when a time button is clicked in the React Appointment Picker
+  window.__updateBookingBar = (displayDate, time) => {
+    const bookBar = document.getElementById('book-bar');
+    const bookText = document.getElementById('book-selected-text');
+    if (bookBar && bookText) {
+      if (displayDate && time) {
+        bookBar.style.display = 'flex';
+        bookText.innerHTML = `Selected: <span>${displayDate} at ${time} (BST)</span> · 20-min meet`;
+        bookBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        bookBar.style.display = 'none';
+      }
+    }
+  };
+
+  // Mount shadcn React Appointment Picker (calendar-03)
+  if (window.mountAppointmentPicker) {
+    window.mountAppointmentPicker('profile-calendar-root', calendarState.mentorId);
+    return;
+  }
+
   calendarState.loading = true;
 
   const root = document.getElementById('profile-calendar-root');

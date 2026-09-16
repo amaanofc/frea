@@ -4,7 +4,50 @@
    frea — Design System (Superr.ai aesthetic)
    ───────────────────────────────────────────── */
 
+:root {
+  --background: #fdfbf9;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #ff6f1e;
+  --primary-foreground: #ffffff;
+  --secondary: #f7efe9;
+  --secondary-foreground: #171717;
+  --muted: #f7efe9;
+  --muted-foreground: #737373;
+  --accent: #f7efe9;
+  --accent-foreground: #171717;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(23, 23, 23, 0.15);
+  --input: rgba(23, 23, 23, 0.15);
+  --ring: #ff6f1e;
+  --radius: 0.65rem;
+}
+
 @theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   /* Colors — Superr palette */
   --color-cream-paper: #fdfbf9;
   --color-charcoal: #171717;
@@ -2512,4 +2555,161 @@ body {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ─────────────────────────────────────────────
+   Calendar-03 Appointment Picker & DayPicker v10 Theme
+   ───────────────────────────────────────────── */
+
+.rdp {
+  --rdp-cell-size: 38px;
+  --rdp-accent-color: var(--color-marker-orange, #ff6f1e);
+  --rdp-background-color: rgba(255, 111, 30, 0.15);
+  font-family: var(--font-body);
+  margin: 0;
+  width: 100%;
+}
+
+.rdp-root {
+  width: 100%;
+}
+
+.rdp-months {
+  position: relative;
+}
+
+.rdp-month_caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  margin-bottom: 8px;
+}
+
+.rdp-caption_label {
+  font-family: var(--font-display) !important;
+  font-weight: 800 !important;
+  font-size: 16px !important;
+  color: var(--color-cocoa-ink) !important;
+  letter-spacing: -0.01em;
+}
+
+.rdp-nav {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.rdp-button_previous,
+.rdp-button_next {
+  pointer-events: auto !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid rgba(23, 23, 23, 0.2) !important;
+  background-color: #ffffff !important;
+  color: var(--color-cocoa-ink) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  padding: 0 !important;
+}
+
+.rdp-button_previous:hover,
+.rdp-button_next:hover {
+  background-color: var(--color-charcoal) !important;
+  color: #ffffff !important;
+  border-color: var(--color-charcoal) !important;
+  transform: scale(1.05);
+}
+
+.rdp-month_grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.rdp-weekdays {
+  border-bottom: 1px solid rgba(23, 23, 23, 0.1);
+}
+
+.rdp-weekday {
+  font-family: var(--font-body) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: rgba(43, 26, 7, 0.6) !important;
+  text-align: center !important;
+  height: 32px !important;
+  padding: 0 !important;
+  vertical-align: middle !important;
+}
+
+.rdp-week {
+  height: 38px;
+}
+
+.rdp-day {
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 1px !important;
+}
+
+.rdp-day_button {
+  width: 34px !important;
+  height: 34px !important;
+  margin: 0 auto !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--color-cocoa-ink) !important;
+  background: transparent !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+}
+
+.rdp-day_button:hover:not(:disabled) {
+  background-color: rgba(255, 111, 30, 0.15) !important;
+  color: var(--color-marker-orange) !important;
+}
+
+.rdp-selected .rdp-day_button,
+.rdp-day_button[aria-selected="true"] {
+  background-color: var(--color-marker-orange, #ff6f1e) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 8px rgba(255, 111, 30, 0.3) !important;
+}
+
+.rdp-today .rdp-day_button {
+  border: 1.5px solid var(--color-marker-orange) !important;
+  color: var(--color-marker-orange) !important;
+}
+
+.rdp-selected.rdp-today .rdp-day_button {
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+.rdp-outside .rdp-day_button {
+  opacity: 0.25 !important;
+  cursor: default !important;
+}
+
+.rdp-disabled .rdp-day_button {
+  opacity: 0.2 !important;
+  cursor: not-allowed !important;
 }
