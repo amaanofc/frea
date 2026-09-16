@@ -201,8 +201,10 @@ function renderLanding() {
               <!-- Senior Student ID Badge Card -->
               <div class="hero__senior-pass">
                 <div class="hero__pass-header">
-                  <span class="hero__pass-badge">🎓 Senior Student Pass · 2026</span>
-                  <span class="hero__pass-verified">✓ verified senior</span>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="hero__pass-badge">🎓 Senior Student Pass · 2026</span>
+                    <span class="hero__pass-verified">✓ verified</span>
+                  </div>
                 </div>
                 <div class="hero__pass-body">
                   <div class="hero__pass-avatar">
