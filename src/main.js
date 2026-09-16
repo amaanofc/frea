@@ -6,6 +6,7 @@ import './style.css';
 import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS } from './data.js';
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent, getGrowthMetrics } from './analytics.js';
+import { fetchMentors, fetchMentor, fetchMonthlySlots, submitBooking, submitMentorApplication, fetchStats } from './api.js';
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -526,62 +527,15 @@ function renderProfile(mentorId) {
           </div>
         </div>
 
-        <!-- Interactive Week Calendar Date-Picker -->
+        <!-- Interactive Monthly Calendar & Open Slots Engine -->
         <div class="profile__section">
           <h3 class="profile__section-title">pick a date & time</h3>
-          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 12px;">all slots are 20-min Google Meets · 100% free</span>
+          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all slots are 20-min Google Meets · 100% free · choose any open day</span>
 
-          <div class="calendar-picker">
-            <div class="calendar-picker__header">
-              <div class="calendar-picker__month">
-                <span>📅 September 2026</span>
-                <span style="font-size: 13px; font-weight: 500; opacity: 0.6; margin-left: 8px;">(Week 39)</span>
-              </div>
-              <div class="calendar-picker__tz">
-                ⏰ times shown in UK BST (London)
-              </div>
-            </div>
-
-            <!-- Days Strip -->
-            <div class="calendar-days-row" id="calendar-days-strip">
-              ${mentor.availability.map((dayObj, idx) => {
-                const parts = dayObj.day.split(' ');
-                const dayName = parts[0];
-                const dayDate = `${parts[1]} ${parts[2]}`;
-                const isActive = idx === 0;
-                return `
-                  <div class="calendar-day-card ${isActive ? 'active' : ''}" data-day-idx="${idx}" onclick="selectCalendarDay(${mentor.id}, ${idx})">
-                    <div class="calendar-day-card__name">${dayName}</div>
-                    <div class="calendar-day-card__date">${dayDate}</div>
-                    <span class="calendar-day-card__badge">${dayObj.slots.length} slots</span>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-
-            <!-- Time Slots Panel for Selected Day -->
-            <div class="calendar-slots-panel">
-              <div class="calendar-slots-panel__title" id="calendar-slots-title">
-                <span>Available 20-min slots for <strong>${activeDayObj ? activeDayObj.day : ''}</strong>:</span>
-              </div>
-              <div class="calendar-slots-grid" id="calendar-slots-container">
-                ${activeDayObj ? activeDayObj.slots.map(slot => `
-                  <button class="calendar-slot-chip" data-slot="${slot}" onclick="selectCalendarSlot(this, '${activeDayObj.day}', '${slot}')">
-                    <span class="calendar-slot-chip__clock">🕒</span>
-                    <span>${slot}</span>
-                    <span class="calendar-slot-chip__duration">(20m)</span>
-                  </button>
-                `).join('') : '<p>No available slots on this day.</p>'}
-              </div>
-            </div>
-
-            <!-- Booking Bar -->
-            <div class="profile__book-bar" id="book-bar" style="display: none;">
-              <div>
-                <div class="profile__book-selected" id="book-selected-text"></div>
-                <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant Google Meet invite · verified UK student only</div>
-              </div>
-              <button class="pill-btn" onclick="openBookingModal(${mentor.id})">confirm chat 🚀</button>
+          <div id="profile-calendar-root" class="calendar-picker">
+            <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
+              <span style="font-size: 26px;">📅</span>
+              <p style="margin-top: 8px; font-weight: 600;">loading calendar & open sessions...</p>
             </div>
           </div>
         </div>
@@ -735,7 +689,7 @@ function setLivePostitColor(color) {
 }
 window.setLivePostitColor = setLivePostitColor;
 
-function handleBecomeMentorSubmit(e) {
+async function handleBecomeMentorSubmit(e) {
   e.preventDefault();
   const name = document.getElementById('bm-name')?.value;
   const uni = document.getElementById('bm-uni')?.value;
@@ -743,6 +697,7 @@ function handleBecomeMentorSubmit(e) {
   const year = document.getElementById('bm-year')?.value;
   const email = document.getElementById('bm-email')?.value.trim().toLowerCase();
   const topTip = document.getElementById('bm-toptip')?.value;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
 
   // Strict .ac.uk validation
   if (!email || !email.endsWith('.ac.uk')) {
@@ -751,43 +706,73 @@ function handleBecomeMentorSubmit(e) {
     return;
   }
 
-  // Track Growth Event
-  trackEvent('mentor_application_submitted', {
-    name,
-    university: uni,
-    major,
-    year,
-    emailDomain: email.split('@')[1]
-  });
+  // Get selected achievements
+  const achievements = Array.from(document.querySelectorAll('#bm-achievements input:checked')).map(cb => cb.value);
+  const colorInput = document.querySelector('input[name="postit-color"]:checked');
+  const topTipColor = colorInput ? colorInput.value : 'yellow';
 
-  // Save to localStorage
-  try {
-    const apps = JSON.parse(localStorage.getItem('frea_mentor_applications') || '[]');
-    apps.push({ name, uni, major, year, email, topTip, submittedAt: new Date().toISOString() });
-    localStorage.setItem('frea_mentor_applications', JSON.stringify(apps));
-  } catch (err) {
-    console.warn(err);
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'submitting... 🚀';
   }
 
-  // Open confirmation modal
-  const modal = document.getElementById('modal-content');
-  modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">✕</button>
-    <div class="modal--confirmation">
-      <div class="modal__celebration">🎓 ☕ 🌟</div>
-      <h2 class="modal__title">application received!</h2>
-      <p class="modal__body">
-        thank you, <strong>${name}</strong>! We've sent a verification link to <strong>${email}</strong>. Once confirmed, your profile and top-tip post-it note will go live on the directory.
-      </p>
-      <div style="margin-top: 20px;">
-        <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">explore other seniors</button>
-      </div>
-    </div>
-  `;
+  try {
+    await submitMentorApplication({
+      name,
+      university: uni,
+      degree: major,
+      year,
+      email,
+      achievements,
+      topTip,
+      topTipColor
+    });
 
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
+    // Track Growth Event
+    trackEvent('mentor_application_submitted', {
+      name,
+      university: uni,
+      major,
+      year,
+      emailDomain: email.split('@')[1]
+    });
+
+    // Save to localStorage for client caching
+    try {
+      const apps = JSON.parse(localStorage.getItem('frea_mentor_applications') || '[]');
+      apps.push({ name, uni, major, year, email, topTip, submittedAt: new Date().toISOString() });
+      localStorage.setItem('frea_mentor_applications', JSON.stringify(apps));
+    } catch (err) {
+      console.warn(err);
+    }
+
+    // Open confirmation modal
+    const modal = document.getElementById('modal-content');
+    modal.innerHTML = `
+      <button class="modal__close" onclick="closeModal()">✕</button>
+      <div class="modal--confirmation">
+        <div class="modal__celebration">🎓 ☕ 🌟</div>
+        <h2 class="modal__title">application received!</h2>
+        <p class="modal__body">
+          thank you, <strong>${name}</strong>! We've sent a verification link to <strong>${email}</strong>. Once confirmed, your profile and top-tip post-it note will go live on the directory.
+        </p>
+        <div style="margin-top: 20px;">
+          <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">explore other seniors</button>
+        </div>
+      </div>
+    `;
+
+    const overlay = document.getElementById('modal-overlay');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } catch (err) {
+    alert(`⚠️ Could not submit application: ${err.message || 'Please check your connection.'}`);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = 'submit mentor application 🚀';
+    }
+  }
 }
 window.handleBecomeMentorSubmit = handleBecomeMentorSubmit;
 
@@ -833,14 +818,309 @@ function renderFooter() {
   `;
 }
 
+// ─── Monthly Calendar State & Slot Engine ─────
+
+let calendarState = {
+  mentorId: 1,
+  year: 2026,
+  month: 9,
+  viewMode: 'grid', // 'grid' | 'all'
+  selectedDate: null,
+  selectedSlot: null,
+  selectedDisplayDate: '',
+  data: null,
+  loading: false
+};
+
+async function loadMentorCalendar(mentorId, year, month) {
+  const y = year || calendarState.year || 2026;
+  const m = month || calendarState.month || 9;
+  calendarState.mentorId = parseInt(mentorId);
+  calendarState.year = y;
+  calendarState.month = m;
+  calendarState.loading = true;
+
+  const root = document.getElementById('profile-calendar-root');
+  if (root && !calendarState.data) {
+    root.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
+        <span style="font-size: 26px;">📅</span>
+        <p style="margin-top: 8px; font-weight: 600;">loading calendar & open sessions...</p>
+      </div>
+    `;
+  }
+
+  try {
+    const data = await fetchMonthlySlots(calendarState.mentorId, y, m);
+    calendarState.data = data;
+    calendarState.loading = false;
+
+    // Check if previously selected date still exists in this month with open slots
+    const dayWithDate = data.days.find(d => d.date === calendarState.selectedDate && d.hasSlots);
+    if (!dayWithDate) {
+      // Pick first day with open slots by default
+      const firstWithSlots = data.days.find(d => d.hasSlots);
+      if (firstWithSlots) {
+        calendarState.selectedDate = firstWithSlots.date;
+        calendarState.selectedDisplayDate = firstWithSlots.displayDate;
+      } else {
+        calendarState.selectedDate = null;
+        calendarState.selectedDisplayDate = '';
+      }
+      calendarState.selectedSlot = null;
+    }
+
+    renderCalendarDOM();
+  } catch (err) {
+    console.error('Failed to load monthly slots', err);
+    calendarState.loading = false;
+    if (root) {
+      root.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--color-marker-orange);">Failed to load schedule. Please try refreshing.</div>`;
+    }
+  }
+}
+window.loadMentorCalendar = loadMentorCalendar;
+
+function navigateMonth(delta) {
+  let m = calendarState.month + delta;
+  let y = calendarState.year;
+  if (m < 1) {
+    m = 12;
+    y -= 1;
+  } else if (m > 12) {
+    m = 1;
+    y += 1;
+  }
+  trackEvent('calendar_month_navigated', { year: y, month: m });
+  loadMentorCalendar(calendarState.mentorId, y, m);
+}
+window.navigateMonth = navigateMonth;
+
+function setCalendarViewMode(mode) {
+  calendarState.viewMode = mode;
+  trackEvent('calendar_view_toggled', { mode });
+  renderCalendarDOM();
+}
+window.setCalendarViewMode = setCalendarViewMode;
+
+function selectCalendarMonthCell(dateStr) {
+  if (!calendarState.data) return;
+  const day = calendarState.data.days.find(d => d.date === dateStr);
+  if (!day || !day.hasSlots) return;
+
+  calendarState.selectedDate = dateStr;
+  calendarState.selectedDisplayDate = day.displayDate;
+  calendarState.selectedSlot = null;
+  window.__selectedDay = day.displayDate;
+  window.__selectedSlot = '';
+
+  trackEvent('calendar_day_selected', { date: dateStr, displayDate: day.displayDate });
+  renderCalendarDOM();
+}
+window.selectCalendarMonthCell = selectCalendarMonthCell;
+
+function selectMonthSlotChip(time, dateStr, displayDate) {
+  calendarState.selectedDate = dateStr;
+  calendarState.selectedDisplayDate = displayDate;
+  calendarState.selectedSlot = time;
+  window.__selectedDay = displayDate;
+  window.__selectedSlot = time;
+
+  trackEvent('slot_selected', { date: dateStr, displayDate, slot: time });
+
+  // Update selection visually
+  renderCalendarDOM();
+
+  const bookBar = document.getElementById('book-bar');
+  if (bookBar) {
+    bookBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+window.selectMonthSlotChip = selectMonthSlotChip;
+
+function selectAllSlotsQuickBook(time, dateStr, displayDate) {
+  calendarState.selectedDate = dateStr;
+  calendarState.selectedDisplayDate = displayDate;
+  calendarState.selectedSlot = time;
+  window.__selectedDay = displayDate;
+  window.__selectedSlot = time;
+
+  openBookingModal(calendarState.mentorId);
+}
+window.selectAllSlotsQuickBook = selectAllSlotsQuickBook;
+
+function renderCalendarDOM() {
+  const container = document.getElementById('profile-calendar-root');
+  if (!container || !calendarState.data) return;
+
+  const data = calendarState.data;
+  const monthNamesFull = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const fullMonthTitle = `${monthNamesFull[calendarState.month - 1]} ${calendarState.year}`;
+
+  const isGridView = calendarState.viewMode === 'grid';
+  const selectedDayObj = data.days.find(d => d.date === calendarState.selectedDate) || data.days.find(d => d.hasSlots) || null;
+
+  let contentHtml = `
+    <div class="month-calendar">
+      <!-- Calendar Controls & Navigation Header -->
+      <div class="month-calendar__header">
+        <div class="month-calendar__nav">
+          <button class="month-nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">←</button>
+          <div class="month-calendar__title">
+            <span>📅 ${fullMonthTitle}</span>
+          </div>
+          <button class="month-nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">→</button>
+        </div>
+
+        <!-- View Mode Toggle: Grid vs All Open Slots -->
+        <div class="month-view-toggle">
+          <button class="view-toggle-btn ${isGridView ? 'active' : ''}" onclick="window.setCalendarViewMode('grid')">
+            📅 Month Grid
+          </button>
+          <button class="view-toggle-btn ${!isGridView ? 'active' : ''}" onclick="window.setCalendarViewMode('all')">
+            ⚡ All Open Slots (${data.totalOpenSlots})
+          </button>
+        </div>
+      </div>
+
+      <!-- Timezone & Availability Sub-bar -->
+      <div class="month-calendar__tz-bar">
+        <span>⏰ times shown in UK BST (London time)</span>
+        <span style="font-weight: 700; color: var(--color-marker-orange);">● <strong>${data.totalOpenSlots}</strong> available sessions this month</span>
+      </div>
+  `;
+
+  if (isGridView) {
+    // 7-Column Grid View
+    contentHtml += `
+      <!-- Weekday column labels (Monday to Sunday) -->
+      <div class="month-calendar__weekdays">
+        <div class="month-weekday">Mon</div>
+        <div class="month-weekday">Tue</div>
+        <div class="month-weekday">Wed</div>
+        <div class="month-weekday">Thu</div>
+        <div class="month-weekday">Fri</div>
+        <div class="month-weekday">Sat</div>
+        <div class="month-weekday">Sun</div>
+      </div>
+
+      <!-- Days Grid with Offset Empty Cells -->
+      <div class="month-calendar__grid">
+    `;
+
+    // Offset cells before the 1st of the month
+    for (let i = 0; i < data.firstWeekdayOffset; i++) {
+      contentHtml += `<div class="month-cell month-cell--empty"></div>`;
+    }
+
+    // Days in the month
+    data.days.forEach(day => {
+      const isSelected = selectedDayObj && selectedDayObj.date === day.date;
+      const hasSlots = day.hasSlots;
+      const cellClasses = [
+        'month-cell',
+        hasSlots ? 'month-cell--has-slots' : 'month-cell--no-slots',
+        isSelected ? 'active' : ''
+      ].filter(Boolean).join(' ');
+
+      const clickHandler = hasSlots ? `onclick="window.selectCalendarMonthCell('${day.date}')"` : '';
+
+      contentHtml += `
+        <div class="${cellClasses}" ${clickHandler} data-date="${day.date}">
+          <div class="month-cell__num">${day.dayNumber}</div>
+          <div>
+            ${hasSlots ? `<span class="month-cell__indicator">● ${day.slotCount} slot${day.slotCount > 1 ? 's' : ''}</span>` : '<span style="font-size: 11px; opacity: 0.35;">—</span>'}
+          </div>
+        </div>
+      `;
+    });
+
+    contentHtml += `</div>`;
+
+    // Slots Drawer for the Selected Day
+    if (selectedDayObj && selectedDayObj.hasSlots) {
+      contentHtml += `
+        <div class="month-slots-drawer">
+          <div class="month-slots-drawer__header">
+            <div class="month-slots-drawer__title">
+              Available 20-min slots for <strong>${selectedDayObj.displayDate}</strong> (${selectedDayObj.slots.length} available):
+            </div>
+            <span style="font-size: 12px; opacity: 0.65;">Select a time to book</span>
+          </div>
+
+          <div class="month-slots-chips">
+            ${selectedDayObj.slots.map(slot => {
+              const isSlotSelected = calendarState.selectedSlot === slot && calendarState.selectedDate === selectedDayObj.date;
+              return `
+                <button class="calendar-slot-chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${slot}', '${selectedDayObj.date}', '${selectedDayObj.displayDate}')">
+                  <span class="calendar-slot-chip__clock">🕒</span>
+                  <span>${slot}</span>
+                  <span class="calendar-slot-chip__duration">(20m)</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      contentHtml += `
+        <div class="month-slots-drawer" style="text-align: center; opacity: 0.7;">
+          <p>No open slots for this day. Please click a date marked with <span style="color: #15803d; font-weight: 700;">● slots</span>.</p>
+        </div>
+      `;
+    }
+  } else {
+    // "All Open Slots This Month" Chronological View
+    contentHtml += `
+      <div class="month-all-slots-view">
+        ${data.allOpenSlots.length > 0 ? data.allOpenSlots.map(slot => `
+          <div class="all-slots-card">
+            <div>
+              <div class="all-slots-card__date">${slot.displayDate}</div>
+              <div class="all-slots-card__time">🕒 ${slot.time} (20 min)</div>
+            </div>
+            <button class="pill-btn pill-btn--small all-slots-card__action" onclick="window.selectAllSlotsQuickBook('${slot.time}', '${slot.date}', '${slot.displayDate}')">
+              book slot →
+            </button>
+          </div>
+        `).join('') : '<p style="padding: 20px; text-align: center; opacity: 0.7;">No open slots this month.</p>'}
+      </div>
+    `;
+  }
+
+  // Booking Bar
+  const hasSelectedSlot = !!calendarState.selectedSlot;
+  contentHtml += `
+    <div class="profile__book-bar" id="book-bar" style="${hasSelectedSlot ? 'display: flex;' : 'display: none;'}">
+      <div>
+        <div class="profile__book-selected" id="book-selected-text">
+          ${hasSelectedSlot ? `Selected: <span>${calendarState.selectedDisplayDate} at ${calendarState.selectedSlot} (BST)</span> · 20-min meet` : ''}
+        </div>
+        <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant Google Meet invite · verified UK student only</div>
+      </div>
+      <button class="pill-btn" onclick="window.openBookingModal(${calendarState.mentorId})">confirm chat 🚀</button>
+    </div>
+  </div>`;
+
+  container.innerHTML = contentHtml;
+}
+
 // ─── Booking Modal ─────
 
 function openBookingModal(mentorId) {
-  const mentor = MENTORS.find(m => m.id === mentorId);
+  const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
   if (!mentor) return;
 
-  const selectedDay = window.__selectedDay || '';
-  const selectedSlot = window.__selectedSlot || '';
+  const selectedDay = window.__selectedDay || calendarState.selectedDisplayDate || '';
+  const selectedSlot = window.__selectedSlot || calendarState.selectedSlot || '';
+
+  if (!selectedSlot) {
+    alert('Please click on an available time slot before confirming your booking!');
+    return;
+  }
 
   trackEvent('booking_modal_opened', { mentorId: mentor.id, mentorName: mentor.name, day: selectedDay, slot: selectedSlot });
 
@@ -868,7 +1148,7 @@ function openBookingModal(mentorId) {
       <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Your UK University Student Email:</label>
       <div class="modal__input-row">
         <input type="email" class="modal__input" id="booking-email" placeholder="e.g. s123456@ed.ac.uk or name@imperial.ac.uk">
-        <button class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat 🚀</button>
+        <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat 🚀</button>
       </div>
       <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
       <div style="font-size: 12px; opacity: 0.6; margin-top: 8px;">
@@ -882,10 +1162,11 @@ function openBookingModal(mentorId) {
   document.body.style.overflow = 'hidden';
 }
 
-function confirmBooking(mentorId) {
+async function confirmBooking(mentorId) {
   const emailInput = document.getElementById('booking-email');
   const errorEl = document.getElementById('booking-error-msg');
   const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+  const confirmBtn = document.getElementById('confirm-booking-btn');
 
   if (!email || !email.includes('@')) {
     if (errorEl) {
@@ -901,109 +1182,99 @@ function confirmBooking(mentorId) {
       errorEl.style.display = 'block';
       errorEl.innerText = '⚠️ Please use your official university email (ending in .ac.uk) to verify your UK student status!';
     }
-    emailInput.style.borderColor = '#ff6f1e';
+    if (emailInput) emailInput.style.borderColor = '#ff6f1e';
     return;
   }
 
-  const mentor = MENTORS.find(m => m.id === mentorId);
+  const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
+  const selectedDay = window.__selectedDay || calendarState.selectedDisplayDate;
+  const selectedSlot = window.__selectedSlot || calendarState.selectedSlot;
 
-  // Track event in growth engine
-  trackEvent('booking_completed', {
-    mentorId: mentor?.id,
-    mentorName: mentor?.name,
-    day: window.__selectedDay,
-    slot: window.__selectedSlot,
-    emailDomain: email.split('@')[1]
-  });
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerText = 'generating meet... ⏳';
+  }
 
-  const modal = document.getElementById('modal-content');
-  modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">✕</button>
-    <div class="modal--confirmation">
-      <div class="modal__celebration">🎉 ☕ ⚡</div>
-      <h2 class="modal__title">you're booked in!</h2>
-      <p class="modal__body">
-        calendar invite and Google Meet link sent to <strong>${email}</strong> for <strong>${window.__selectedDay} at ${window.__selectedSlot}</strong>.
-      </p>
-      <div style="background: var(--color-dew-drop); padding: 14px 18px; border-radius: 10px; border-left: 3px solid var(--color-marker-orange); margin: 16px 0; font-size: 14px; text-align: left;">
-        <strong>Senior Tip from ${mentor?.name || 'your mentor'}:</strong><br>
-        <em>${mentor?.topTip || 'Bring 2-3 specific questions so you get the most out of your 20 minutes!'}</em>
+  try {
+    const booking = await submitBooking({
+      mentorId: parseInt(mentorId),
+      studentEmail: email,
+      date: selectedDay,
+      time: selectedSlot
+    });
+
+    // Track event in growth engine
+    trackEvent('booking_completed', {
+      mentorId: mentor?.id,
+      mentorName: mentor?.name,
+      day: selectedDay,
+      slot: selectedSlot,
+      emailDomain: email.split('@')[1],
+      bookingId: booking.id
+    });
+
+    // Reload calendar in background to immediately reflect booked slot
+    loadMentorCalendar(mentorId, calendarState.year, calendarState.month);
+
+    const modal = document.getElementById('modal-content');
+    modal.innerHTML = `
+      <button class="modal__close" onclick="closeModal()">✕</button>
+      <div class="modal--confirmation">
+        <div class="modal__celebration">🎉 ☕ ⚡</div>
+        <h2 class="modal__title">you're booked in!</h2>
+        <p class="modal__body">
+          calendar invite and Google Meet link sent to <strong>${email}</strong> for <strong>${selectedDay} at ${selectedSlot} (BST)</strong>.
+        </p>
+
+        <div style="background: #ffffff; border: 2px solid var(--color-marker-orange); border-radius: 12px; padding: 16px; margin: 16px 0; text-align: left;">
+          <div style="font-size: 13px; font-weight: 700; color: var(--color-cocoa-ink); margin-bottom: 4px;">📹 Google Meet Meeting Room:</div>
+          <a href="${booking.googleMeetUrl}" target="_blank" rel="noopener noreferrer" style="font-family: monospace; font-size: 15px; font-weight: 700; color: #2563eb; word-break: break-all; text-decoration: underline;">
+            ${booking.googleMeetUrl}
+          </a>
+          <div style="font-size: 11.5px; opacity: 0.65; margin-top: 6px;">Booking Ref: <code>${booking.id}</code> · 20-min 1-on-1 session</div>
+        </div>
+
+        <div style="background: var(--color-dew-drop); padding: 14px 18px; border-radius: 10px; border-left: 3px solid var(--color-marker-orange); margin: 16px 0; font-size: 14px; text-align: left;">
+          <strong>Senior Tip from ${mentor?.name || 'your mentor'}:</strong><br>
+          <em>${mentor?.topTip || 'Bring 2-3 specific questions so you get the most out of your 20 minutes!'}</em>
+        </div>
+        <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">browse more seniors</button>
       </div>
-      <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">browse more seniors</button>
-    </div>
-  `;
+    `;
+  } catch (err) {
+    console.error('Booking failed', err);
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerText = 'confirm chat 🚀';
+    }
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = `⚠️ ${err.message || 'Could not complete booking. Please try again or choose another slot.'}`;
+    }
+  }
 }
 
 function closeModal() {
   const overlay = document.getElementById('modal-overlay');
-  overlay.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
 
-// ─── Interactive Calendar Selection Handlers ─────
-
-function selectCalendarDay(mentorId, dayIdx) {
-  const mentor = MENTORS.find(m => m.id === mentorId);
-  if (!mentor || !mentor.availability[dayIdx]) return;
-
-  window.__activeDayIndex = dayIdx;
-  const activeDayObj = mentor.availability[dayIdx];
-  window.__selectedDay = activeDayObj.day;
-  window.__selectedSlot = '';
-
-  // Update day card styling
-  document.querySelectorAll('.calendar-day-card').forEach(card => {
-    card.classList.toggle('active', parseInt(card.dataset.dayIdx) === dayIdx);
-  });
-
-  // Update title
-  const title = document.getElementById('calendar-slots-title');
-  if (title) {
-    title.innerHTML = `Available 20-min slots for <strong>${activeDayObj.day}</strong>:`;
-  }
-
-  // Update slots
-  const container = document.getElementById('calendar-slots-container');
-  if (container) {
-    container.innerHTML = activeDayObj.slots.map(slot => `
-      <button class="calendar-slot-chip" data-slot="${slot}" onclick="selectCalendarSlot(this, '${activeDayObj.day}', '${slot}')">
-        <span class="calendar-slot-chip__clock">🕒</span>
-        <span>${slot}</span>
-        <span class="calendar-slot-chip__duration">(20m)</span>
-      </button>
-    `).join('');
-  }
-
-  // Hide book bar until slot selected
-  const bookBar = document.getElementById('book-bar');
-  if (bookBar) bookBar.style.display = 'none';
-}
-window.selectCalendarDay = selectCalendarDay;
-
-function selectCalendarSlot(el, day, slot) {
-  document.querySelectorAll('.calendar-slot-chip').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
-
-  window.__selectedDay = day;
-  window.__selectedSlot = slot;
-
-  trackEvent('slot_selected', { day, slot });
-
-  const bookBar = document.getElementById('book-bar');
-  const bookText = document.getElementById('book-selected-text');
-  if (bookBar && bookText) {
-    bookBar.style.display = 'flex';
-    bookText.innerHTML = `Selected: <span>${day} at ${slot} (BST)</span> · 20-min meet`;
-    bookBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-}
-window.selectCalendarSlot = selectCalendarSlot;
-
 // ─── Growth Analytics & Transparency Modal ─────
 
-function openGrowthModal() {
+async function openGrowthModal() {
   const metrics = getGrowthMetrics();
   trackEvent('growth_modal_viewed');
+
+  let stats = { totalBookings: 12048, verifiedMentors: 500, averageRating: 4.9 };
+  try {
+    stats = await fetchStats();
+  } catch (e) {
+    // local fallback
+  }
+
+  const totalBookingsCount = stats.totalBookings || (12000 + (metrics.bookingsCompleted || 0));
+  const mentorsCount = stats.verifiedMentors || 500;
 
   const modal = document.getElementById('modal-content');
   modal.innerHTML = `
@@ -1020,14 +1291,14 @@ function openGrowthModal() {
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 24px;">
         <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
           <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: var(--color-marker-orange);">
-            ${(12000 + (metrics.bookingsCompleted || 0)).toLocaleString()}
+            ${totalBookingsCount.toLocaleString()}
           </div>
           <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">1-on-1 chats booked</div>
         </div>
 
         <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
           <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: #3b82f6;">
-            500+
+            ${mentorsCount}+
           </div>
           <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">verified senior mentors</div>
         </div>
@@ -1213,6 +1484,7 @@ function renderPage() {
   } else if (route.startsWith('/mentor/')) {
     const id = route.split('/')[2];
     app.innerHTML = renderProfile(id);
+    loadMentorCalendar(id, 2026, 9);
   } else {
     app.innerHTML = renderLanding();
   }
@@ -1229,6 +1501,12 @@ window.navigateTo = navigateTo;
 window.openBookingModal = openBookingModal;
 window.confirmBooking = confirmBooking;
 window.closeModal = closeModal;
+window.loadMentorCalendar = loadMentorCalendar;
+window.navigateMonth = navigateMonth;
+window.setCalendarViewMode = setCalendarViewMode;
+window.selectCalendarMonthCell = selectCalendarMonthCell;
+window.selectMonthSlotChip = selectMonthSlotChip;
+window.selectAllSlotsQuickBook = selectAllSlotsQuickBook;
 
 // ─── Scroll Reveal Observer ─────
 
