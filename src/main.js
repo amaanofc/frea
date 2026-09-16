@@ -6,6 +6,8 @@ import './style.css';
 import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS } from './data.js';
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent, getGrowthMetrics } from './analytics.js';
+import { initCustomCursor } from './cursor.js';
+import { renderCurvedRibbon, initCurvedRibbonAnimation } from './curvedLine.js';
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -295,21 +297,40 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Stats Band -->
-      <section class="section page-container">
-        <div class="stats-band reveal">
-          <div class="stats-band__grid">
-            <div class="stat-item">
-              <div class="stat-item__number">500+</div>
-              <div class="stat-item__label">verified UK seniors</div>
+      <!-- "By students... for students." Wavy Kinetic Manifesto Section with Curved Loop Ribbon -->
+      <section class="manifesto-section page-container reveal">
+        <div class="manifesto-card">
+          <div class="manifesto-washi"></div>
+
+          <div class="manifesto-header">
+            <span class="manifesto-badge">✨ our ethos</span>
+          </div>
+
+          <!-- Top Line: "By students..." (Left Aligned) -->
+          <div class="manifesto-line manifesto-line--left">
+            <h2 class="manifesto-title">
+              <span class="wavy-word" style="--d: 0s">by</span>
+              <span class="wavy-word wavy-word--serif" style="--d: 0.12s">students...</span>
+            </h2>
+            <div class="manifesto-note manifesto-note--left">
+              <span>(no recruiters · no paywalls · no corporate fluff)</span>
             </div>
-            <div class="stat-item">
-              <div class="stat-item__number">${(12000 + (metrics.bookingsCompleted || 0)).toLocaleString()}+</div>
-              <div class="stat-item__label">1-on-1 chats completed</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-item__number">4.9★</div>
-              <div class="stat-item__label">average fresher rating</div>
+          </div>
+
+          <!-- Curved Ribbon Loop Animation (Voldog / Wisprflow UI inspiration) -->
+          ${renderCurvedRibbon()}
+
+          <!-- Bottom Line: "for students." (Split Right Aligned, Fade in on Scroll) -->
+          <div class="manifesto-line manifesto-line--right">
+            <h2 class="manifesto-title manifesto-title--accent">
+              <span class="wavy-word" style="--d: 0.22s">for</span>
+              <span class="wavy-word wavy-word--highlight" style="--d: 0.34s">students.</span>
+            </h2>
+            <div class="manifesto-note manifesto-note--right">
+              <span class="manifesto-free-tag">100% free · forever</span>
+              <p class="manifesto-body-text">
+                real, unfiltered advice from elder students who survived the exact same exams, modules, and application seasons.
+              </p>
             </div>
           </div>
         </div>
@@ -815,7 +836,6 @@ function renderFooter() {
         <div class="footer__links">
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/browse')">browse seniors</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')">become a mentor 🎓</a>
-          <a class="footer__link" href="#" onclick="event.preventDefault(); window.openGrowthModal()">growth & stats 📈</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
         </div>
       </div>
@@ -824,12 +844,6 @@ function renderFooter() {
         <span style="opacity: 0.85; font-size: 13px;">🛡️ .ac.uk verified · Jisc educational governance</span>
       </div>
     </footer>
-
-    <!-- Floating Live Growth Transparency Pill -->
-    <div class="growth-pill" onclick="window.openGrowthModal()" id="growth-tracker-pill">
-      <span class="growth-pill__dot"></span>
-      <span>📈 ${(12000 + (metrics.bookingsCompleted || 0)).toLocaleString()} chats booked · growth</span>
-    </div>
   `;
 }
 
@@ -1219,6 +1233,7 @@ function renderPage() {
 
   setupRevealObserver();
   setupNavLinks();
+  initCurvedRibbonAnimation();
 }
 
 function navigateTo(path) {
@@ -1290,6 +1305,7 @@ function setupNavLinks() {
 
 function init() {
   initAnalytics();
+  initCustomCursor();
   renderPage();
   setupNavbarScroll();
   setupModalClose();
