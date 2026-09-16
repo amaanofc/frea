@@ -3,8 +3,91 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frea — find your senior mentor</title>
-    <meta name="description" content="Connect with senior university students who've achieved real success. Book a free 20-minute call and get the mentoring you deserve." />
+    <title>frea — Free Peer Mentoring for UK University Students | Imperial, LSE, Oxford, UCL</title>
+    <meta name="description" content="Connect with senior UK university students who've achieved real success. Book a free 20-minute 1-on-1 call for CV roasts, Spring Week prep, exam survival, and grad schemes. 100% free for verified .ac.uk students." />
+    <meta name="keywords" content="UK university mentoring, peer mentoring UK, student mentorship platform, Imperial College London mentor, LSE spring weeks, Oxford law vacation schemes, Cambridge peer advice, free university advice UK, Russell Group mentors" />
+    <link rel="canonical" href="https://frea.co.uk/" />
+
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://frea.co.uk/" />
+    <meta property="og:site_name" content="frea" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:title" content="frea — The student mentoring platform that's actually free" />
+    <meta property="og:description" content="Connect with elder students from Imperial, Oxford, LSE, UCL, and Bristol for 20-min 1-on-1 chats. Free for all UK students with a .ac.uk email." />
+    <meta property="og:image" content="https://frea.co.uk/og-preview.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="frea — Free Peer Mentoring for UK Students" />
+    <meta name="twitter:description" content="Real advice from elder students who survived the brutal modules and landed top roles. 100% free." />
+    <meta name="twitter:image" content="https://frea.co.uk/og-preview.png" />
+
+    <!-- Structured Data: JSON-LD for Google Search & SERP Rich Snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "EducationalOrganization",
+          "@id": "https://frea.co.uk/#organization",
+          "name": "frea",
+          "url": "https://frea.co.uk",
+          "logo": "https://frea.co.uk/favicon.svg",
+          "description": "Free student peer-to-peer mentoring platform for UK higher education students.",
+          "areaServed": "GB",
+          "knowsAbout": ["Higher Education Mentoring", "Spring Weeks", "Summer Analyst Internships", "Graduate Schemes", "Exam Techniques"]
+        },
+        {
+          "@type": "Service",
+          "@id": "https://frea.co.uk/#service",
+          "name": "frea 1-on-1 Senior Student Mentoring",
+          "provider": { "@id": "https://frea.co.uk/#organization" },
+          "serviceType": "Peer Mentoring",
+          "audience": {
+            "@type": "Audience",
+            "audienceType": "UK University Students"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "GBP",
+            "description": "100% free 20-minute mentoring calls for students with verified .ac.uk emails."
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://frea.co.uk/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Is frea really 100% free?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, completely free for all UK university students. Our senior mentors volunteer 20 to 40 minutes a week to pay it forward. There are zero hidden fees or premium subscriptions."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Who can book a call on frea?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Any current student or recent graduate at an accredited UK university with an official .ac.uk student email address."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Why does frea require an .ac.uk email?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "In the UK, .ac.uk domains are strictly controlled by Jisc and exclusively issued to accredited higher education institutions. This guarantees every participant is a genuine student peer."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 
     <!-- Google Fonts: Fraunces (serif display) + Plus Jakarta Sans (humanist body) + Caveat (handwritten scrawl) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,6 +123,7 @@
       </a>
       <div class="navbar__actions">
         <span class="navbar__pill-tag">free for all students</span>
+        <button class="pill-btn pill-btn--subtle" data-navigate="/become-a-mentor" id="nav-become-mentor">become a mentor 🎓</button>
         <button class="pill-btn" data-navigate="/browse" id="nav-cta">find a senior mentor</button>
       </div>
     </nav>

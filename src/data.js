@@ -1,324 +1,379 @@
 // ─────────────────────────────────────────────
-// frea — Mock Mentor Data
+// frea — UK Senior Mentors & Data System
 // ─────────────────────────────────────────────
 
 export const MENTORS = [
   {
     id: 1,
     name: "Aanya Sharma",
-    year: "4th year",
+    year: "4th year (MEng)",
     major: "Computer Science",
-    university: "IIT Delhi",
-    bio: "built a startup that got into Y Combinator's summer batch. dropped out of the idea but kept all the lessons. happy to chat about tech interviews, building side projects, or figuring out if startups are your thing.",
-    achievements: ["yc-alumni", "hackathon-winner", "open-source"],
-    helpsWith: ["tech interviews", "side projects", "startup life", "dsa prep"],
+    university: "Imperial College London",
+    bio: "founded a dev tools startup in 2nd year that got backed by Y Combinator (S23). incoming software engineer at Stripe London. happy to roast your tech CV, do mock technical interviews, or talk about launching a side project at uni.",
+    topTip: "“don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins.”",
+    topTipColor: "yellow",
+    achievements: ["yc-alumni", "stripe-offer", "hackathon-winner"],
+    helpsWith: ["tech interviews", "spring weeks", "side projects", "leetcoding"],
     rating: 4.9,
     callsCompleted: 47,
     availability: [
-      { day: "Mon", slots: ["10:00 AM", "2:00 PM", "4:00 PM"] },
-      { day: "Wed", slots: ["11:00 AM", "3:00 PM"] },
-      { day: "Fri", slots: ["9:00 AM", "1:00 PM", "5:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["10:00 AM", "2:30 PM", "4:30 PM"] },
+      { day: "Wed 23 Sep", slots: ["11:00 AM", "3:00 PM"] },
+      { day: "Fri 25 Sep", slots: ["9:30 AM", "1:00 PM", "5:00 PM"] }
     ],
     color: "blue"
   },
   {
     id: 2,
-    name: "Rohan Mehta",
-    year: "3rd year",
-    major: "Mechanical Engineering",
-    university: "BITS Pilani",
-    bio: "went from a 6.2 gpa in first year to dean's list by third. turns out it's less about being smart and more about knowing how to study. let me share what actually worked.",
-    achievements: ["deans-list", "research-published", "topper"],
-    helpsWith: ["study techniques", "gpa recovery", "time management", "research papers"],
+    name: "Callum Davies",
+    year: "3rd year (BSc)",
+    major: "Economics & Finance",
+    university: "LSE",
+    bio: "landed Spring Weeks at Goldman Sachs and Morgan Stanley, converting into an investment banking summer analyst offer. non-target school before transferring to LSE. let's talk cold emailing, commercial awareness, and passing numerical tests.",
+    topTip: "“first year counts 0% towards your degree, but 100% for Spring Weeks. start applications in September.”",
+    topTipColor: "mint",
+    achievements: ["goldman-intern", "spring-week-alum", "first-class-honours"],
+    helpsWith: ["spring weeks", "investment banking", "cv roast", "assessment centres"],
     rating: 4.8,
     callsCompleted: 62,
     availability: [
-      { day: "Tue", slots: ["10:00 AM", "12:00 PM"] },
-      { day: "Thu", slots: ["2:00 PM", "4:00 PM", "6:00 PM"] },
-      { day: "Sat", slots: ["11:00 AM"] }
+      { day: "Tue 22 Sep", slots: ["10:30 AM", "12:00 PM"] },
+      { day: "Thu 24 Sep", slots: ["2:00 PM", "4:30 PM", "6:00 PM"] },
+      { day: "Sat 26 Sep", slots: ["11:00 AM", "1:30 PM"] }
     ],
     color: "orange"
   },
   {
     id: 3,
     name: "Priya Nair",
-    year: "recent grad",
-    major: "Psychology",
-    university: "Delhi University",
-    bio: "just landed a role at google's ux research team. my secret? i volunteered for every research project i could find. the portfolio wrote itself. let's talk about breaking into ux from a non-design background.",
-    achievements: ["google-offer", "research-published", "volunteer-lead"],
-    helpsWith: ["ux research", "career switching", "portfolio building", "interview prep"],
+    year: "recent grad (MSc)",
+    major: "Human-Computer Interaction",
+    university: "UCL",
+    bio: "switched from Psychology into UX Research, now at Google's King's Cross office. built my portfolio through student societies and voluntary design sprints. let's break down how to transition into tech without a traditional CS degree.",
+    topTip: "“your design portfolio doesn't need 20 case studies. it needs 2 projects where you clearly articulate trade-offs.”",
+    topTipColor: "blush",
+    achievements: ["google-offer", "published-researcher", "society-president"],
+    helpsWith: ["ux research", "career switching", "portfolio review", "tech transition"],
     rating: 5.0,
     callsCompleted: 31,
     availability: [
-      { day: "Mon", slots: ["6:00 PM", "7:00 PM"] },
-      { day: "Wed", slots: ["6:00 PM"] },
-      { day: "Sun", slots: ["10:00 AM", "11:00 AM", "12:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["5:30 PM", "6:30 PM"] },
+      { day: "Wed 23 Sep", slots: ["6:00 PM", "7:00 PM"] },
+      { day: "Sun 27 Sep", slots: ["10:00 AM", "11:30 AM", "1:00 PM"] }
     ],
     color: "pink"
   },
   {
     id: 4,
-    name: "Arjun Patel",
-    year: "4th year",
-    major: "Business Administration",
-    university: "IIM Ahmedabad",
-    bio: "founded the entrepreneurship cell, ran three failed ventures, and finally built one that pays my rent. failure is the curriculum, not the exception. let's figure out your first move together.",
-    achievements: ["founded-club", "entrepreneur", "case-comp-winner"],
-    helpsWith: ["entrepreneurship", "case competitions", "leadership", "fundraising"],
-    rating: 4.7,
+    name: "Noah Adebayo",
+    year: "4th year (MEng)",
+    major: "Mechanical Engineering",
+    university: "University of Bristol",
+    bio: "failed my 1st year thermofluids exam with a 38%, panicked, overhauled my study system with active recall and finished 2nd year with an 81% 1st. now incoming on Dyson's graduate scheme. let me share what actually worked.",
+    topTip: "“rereading lecture slides is a trap. do past papers from week 3, even if you have to cheat on the mark scheme at first.”",
+    topTipColor: "sky",
+    achievements: ["first-class-honours", "dyson-grad-scheme", "formula-student-lead"],
+    helpsWith: ["gpa comeback", "revision systems", "engineering careers", "exam technique"],
+    rating: 4.9,
     callsCompleted: 55,
     availability: [
-      { day: "Tue", slots: ["9:00 AM", "11:00 AM"] },
-      { day: "Thu", slots: ["3:00 PM", "5:00 PM"] },
-      { day: "Sat", slots: ["10:00 AM", "2:00 PM"] }
+      { day: "Tue 22 Sep", slots: ["9:30 AM", "11:00 AM"] },
+      { day: "Thu 24 Sep", slots: ["3:00 PM", "5:00 PM"] },
+      { day: "Sat 26 Sep", slots: ["10:00 AM", "2:00 PM"] }
     ],
     color: "green"
   },
   {
     id: 5,
-    name: "Meera Krishnan",
-    year: "3rd year",
-    major: "Data Science",
-    university: "IIIT Hyderabad",
-    bio: "kaggle grandmaster at 20. sounds fancy but it's really just about consistency and learning to read documentation properly. i can help you go from zero to your first competition medal.",
-    achievements: ["kaggle-grandmaster", "internship-faang", "hackathon-winner"],
-    helpsWith: ["machine learning", "kaggle competitions", "data science career", "python"],
-    rating: 4.9,
+    name: "Oliver Zhang",
+    year: "3rd year (BA)",
+    major: "Law (Jurisprudence)",
+    university: "University of Oxford",
+    bio: "president of the Oxford Law Society and incoming vacation scheme student at Clifford Chance. happy to review training contract applications, discuss Watson Glaser prep, or share how to tackle weekly tutorial essays under pressure.",
+    topTip: "“for law essays: never just summarize the statute. take a bold stance in your first paragraph and defend it ruthlessly.”",
+    topTipColor: "yellow",
+    achievements: ["magic-circle-offer", "society-president", "first-class-honours"],
+    helpsWith: ["vacation schemes", "commercial law", "watson glaser", "essay technique"],
+    rating: 4.8,
     callsCompleted: 38,
     availability: [
-      { day: "Mon", slots: ["4:00 PM", "5:00 PM"] },
-      { day: "Wed", slots: ["10:00 AM", "2:00 PM"] },
-      { day: "Fri", slots: ["3:00 PM", "4:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["4:00 PM", "5:30 PM"] },
+      { day: "Wed 23 Sep", slots: ["10:00 AM", "2:00 PM"] },
+      { day: "Fri 25 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
     color: "blue"
   },
   {
     id: 6,
-    name: "Kabir Singh",
-    year: "recent grad",
-    major: "Design",
-    university: "NID Ahmedabad",
-    bio: "designed the app that 2 million students use daily for campus navigation. now at razorpay leading product design. your portfolio doesn't need 20 projects — it needs 3 great ones.",
-    achievements: ["product-launch", "design-award", "internship-faang"],
-    helpsWith: ["product design", "portfolio review", "design interviews", "figma"],
-    rating: 4.8,
+    name: "Emily Watson",
+    year: "recent grad (MEng)",
+    major: "Product Design Engineering",
+    university: "University of Bath",
+    bio: "completed a 12-month industrial placement year at McLaren Automotive in Woking. designed a composite bracket now on track cars. let's talk about landing competitive automotive placements and balancing studio coursework.",
+    topTip: "“placement years are the single highest ROI decision in university. apply to 25+, not 3.”",
+    topTipColor: "mint",
+    achievements: ["mclaren-placement", "design-award", "patent-filed"],
+    helpsWith: ["placement years", "cad & prototyping", "engineering portfolios", "automotive"],
+    rating: 4.9,
     callsCompleted: 44,
     availability: [
-      { day: "Tue", slots: ["7:00 PM", "8:00 PM"] },
-      { day: "Sat", slots: ["11:00 AM", "12:00 PM", "1:00 PM"] }
+      { day: "Tue 22 Sep", slots: ["6:30 PM", "7:30 PM"] },
+      { day: "Sat 26 Sep", slots: ["11:00 AM", "12:30 PM", "2:00 PM"] }
     ],
     color: "orange"
   },
   {
     id: 7,
-    name: "Zara Ahmed",
-    year: "4th year",
-    major: "Biotechnology",
-    university: "IIT Bombay",
-    bio: "published two papers in nature communications before graduating. research isn't about genius, it's about asking the right questions and finding a mentor who cares. i want to be that mentor for you.",
-    achievements: ["research-published", "deans-list", "scholarship"],
-    helpsWith: ["research methodology", "paper writing", "grad school apps", "lab skills"],
+    name: "Tariq Al-Mansoor",
+    year: "4th year (MBChB)",
+    major: "Medicine",
+    university: "University of Manchester",
+    bio: "intercalated in medical neuroscience and co-authored two papers in BMJ Open. mentoring 1st and 2nd year medics on surviving anatomy labs, OSCE clinical communication, and getting involved in hospital audits early.",
+    topTip: "“anki is your second brain in medical school. never write paper summaries you'll never look at again.”",
+    topTipColor: "blush",
+    achievements: ["published-researcher", "first-class-honours", "peer-mentor"],
+    helpsWith: ["med school survival", "anki workflows", "clinical osces", "audit projects"],
     rating: 5.0,
     callsCompleted: 29,
     availability: [
-      { day: "Mon", slots: ["11:00 AM", "1:00 PM"] },
-      { day: "Thu", slots: ["10:00 AM", "4:00 PM"] },
-      { day: "Sun", slots: ["3:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["11:00 AM", "1:30 PM"] },
+      { day: "Thu 24 Sep", slots: ["10:00 AM", "4:00 PM"] },
+      { day: "Sun 27 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
     color: "pink"
   },
   {
     id: 8,
-    name: "Dev Malhotra",
-    year: "3rd year",
-    major: "Economics",
-    university: "St. Stephen's College",
-    bio: "interned at goldman sachs and the reserve bank in the same year. the trick? cold emails actually work if you write them right. let me help you land that dream internship.",
-    achievements: ["internship-faang", "debate-champion", "topper"],
-    helpsWith: ["internship hunting", "cold emailing", "finance career", "economics prep"],
-    rating: 4.6,
+    name: "Maya Tremblay",
+    year: "3rd year (BSc)",
+    major: "Mathematics & Statistics",
+    university: "University of Warwick",
+    bio: "cleared first-round quantitative trading assessments at Jane Street and Citadel. non-traditional math background who practiced probability puzzles from scratch. happy to run mock quant screens and share problem sets.",
+    topTip: "“quant interviews are 80% mental math speed and 20% expected value logic. practice 15 mins daily on Zetamac.”",
+    topTipColor: "sky",
+    achievements: ["quant-intern", "hackathon-winner", "top-of-cohort"],
+    helpsWith: ["quant trading", "mental maths", "probability puzzles", "maths modules"],
+    rating: 4.9,
     callsCompleted: 51,
     availability: [
-      { day: "Wed", slots: ["9:00 AM", "11:00 AM", "5:00 PM"] },
-      { day: "Fri", slots: ["2:00 PM", "4:00 PM"] }
+      { day: "Wed 23 Sep", slots: ["9:00 AM", "11:30 AM", "5:00 PM"] },
+      { day: "Fri 25 Sep", slots: ["2:00 PM", "4:00 PM"] }
     ],
     color: "green"
   },
   {
     id: 9,
-    name: "Ishita Reddy",
-    year: "4th year",
-    major: "Architecture",
-    university: "SPA Delhi",
-    bio: "won the national architecture thesis award and survived 47 all-nighters in the process. i now know how to work smarter, not just harder. let's talk about surviving architecture school while keeping your sanity.",
-    achievements: ["thesis-award", "design-award", "volunteer-lead"],
-    helpsWith: ["thesis guidance", "design thinking", "work-life balance", "portfolio"],
+    name: "Lucas Wright",
+    year: "4th year (BA)",
+    major: "History & Politics",
+    university: "University of Cambridge",
+    bio: "secured an offer on the UK Civil Service Fast Stream and won the faculty dissertation award on British housing policy. let's discuss surviving weekly supervisions, reading list triage, and public sector careers.",
+    topTip: "“read the intro and conclusion of 5 books rather than cover-to-cover on 1 book. write the essay outline first.”",
+    topTipColor: "yellow",
+    achievements: ["civil-service-offer", "dissertation-prize", "first-class-honours"],
+    helpsWith: ["civil service", "essay writing", "reading lists", "supervision prep"],
     rating: 4.9,
     callsCompleted: 22,
     availability: [
-      { day: "Tue", slots: ["6:00 PM"] },
-      { day: "Thu", slots: ["6:00 PM", "7:00 PM"] },
-      { day: "Sat", slots: ["10:00 AM", "11:00 AM"] }
+      { day: "Tue 22 Sep", slots: ["5:30 PM", "6:30 PM"] },
+      { day: "Thu 24 Sep", slots: ["6:00 PM", "7:00 PM"] },
+      { day: "Sat 26 Sep", slots: ["10:30 AM", "12:00 PM"] }
     ],
     color: "blue"
   },
   {
     id: 10,
-    name: "Aarav Joshi",
-    year: "recent grad",
-    major: "Computer Science",
-    university: "IIT Kanpur",
-    bio: "cracked google, microsoft, and amazon — chose microsoft because of the team, not the package. interviews are a skill you can learn. i've helped 30+ juniors clear faang rounds.",
-    achievements: ["internship-faang", "open-source", "hackathon-winner"],
-    helpsWith: ["faang prep", "system design", "competitive programming", "resume review"],
+    name: "Sophia Taylor",
+    year: "3rd year (BSc)",
+    major: "Data Science & AI",
+    university: "University of Edinburgh",
+    bio: "Google DeepMind undergraduate scholar and lead organizer of Edinburgh's annual hackathon. worked on LLM evaluation over the summer. let's chat about breaking into machine learning research and Kaggle as an undergrad.",
+    topTip: "“cold email 5 PhD students working on papers you find interesting. they need help 10x more than professors do.”",
+    topTipColor: "mint",
+    achievements: ["deepmind-scholar", "hackathon-winner", "open-source"],
+    helpsWith: ["machine learning", "research abroad", "kaggle competitions", "python & pytorch"],
     rating: 4.9,
     callsCompleted: 73,
     availability: [
-      { day: "Mon", slots: ["8:00 PM", "9:00 PM"] },
-      { day: "Wed", slots: ["8:00 PM"] },
-      { day: "Sat", slots: ["10:00 AM", "11:00 AM", "12:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["7:00 PM", "8:30 PM"] },
+      { day: "Wed 23 Sep", slots: ["8:00 PM"] },
+      { day: "Sat 26 Sep", slots: ["10:00 AM", "11:30 AM", "1:00 PM"] }
     ],
     color: "orange"
   },
   {
     id: 11,
-    name: "Tara Bose",
-    year: "3rd year",
-    major: "Physics",
-    university: "IISc Bangalore",
-    bio: "spent a summer at cern working on particle physics simulations. it started with one email to a professor who said yes. i can help you find your own research opportunity abroad.",
-    achievements: ["research-published", "scholarship", "cern-intern"],
-    helpsWith: ["research abroad", "scholarship apps", "physics career", "grad school"],
+    name: "Liam Fletcher",
+    year: "4th year (MEng)",
+    major: "Electrical Engineering",
+    university: "Durham University",
+    bio: "captained Durham's Solar Car project and raced across Australia. secured clean-tech grant funding before graduating. let's brainstorm ambitious hardware projects, society leadership, and applying for innovation grants.",
+    topTip: "“join an ambitious student engineering society in week 2 of fresher's term. it'll teach you 10x more than lectures.”",
+    topTipColor: "blush",
+    achievements: ["startup-founder", "patent-filed", "society-president"],
+    helpsWith: ["hardware projects", "hackathons", "funding grants", "engineering projects"],
     rating: 4.8,
-    callsCompleted: 19,
+    callsCompleted: 34,
     availability: [
-      { day: "Mon", slots: ["3:00 PM"] },
-      { day: "Thu", slots: ["11:00 AM", "2:00 PM"] },
-      { day: "Sun", slots: ["4:00 PM", "5:00 PM"] }
+      { day: "Tue 22 Sep", slots: ["4:00 PM", "5:30 PM"] },
+      { day: "Fri 25 Sep", slots: ["10:00 AM", "11:30 AM"] },
+      { day: "Sat 26 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
-    color: "pink"
+    color: "green"
   },
   {
     id: 12,
-    name: "Nikhil Verma",
-    year: "4th year",
-    major: "Electrical Engineering",
-    university: "IIT Madras",
-    bio: "built a solar-powered drone that won the smart india hackathon. engineering projects don't need to be boring — they need to solve real problems. let's brainstorm your next build.",
-    achievements: ["hackathon-winner", "patent-filed", "founded-club"],
-    helpsWith: ["hardware projects", "hackathons", "innovation", "engineering basics"],
-    rating: 4.7,
-    callsCompleted: 34,
+    name: "Chloe Jenkins",
+    year: "recent grad (BSc)",
+    major: "Biochemistry",
+    university: "University of St Andrews",
+    bio: "interned at the Francis Crick Institute in London and won the faculty dissertation award. now on a fully-funded PhD at Oxford. happy to review personal statements, graduate lab placement requests, and summer research apps.",
+    topTip: "“cold email lab PIs with one specific question about their latest paper. generic emails get deleted; curiosity gets replies.”",
+    topTipColor: "sky",
+    achievements: ["crick-institute-alum", "dissertation-prize", "funded-phd"],
+    helpsWith: ["phd applications", "cold emailing labs", "biochemistry revision", "personal statements"],
+    rating: 5.0,
+    callsCompleted: 31,
     availability: [
-      { day: "Tue", slots: ["4:00 PM", "5:00 PM"] },
-      { day: "Fri", slots: ["10:00 AM", "11:00 AM"] },
-      { day: "Sat", slots: ["3:00 PM"] }
+      { day: "Mon 21 Sep", slots: ["2:00 PM", "3:30 PM"] },
+      { day: "Thu 24 Sep", slots: ["11:00 AM", "1:30 PM"] },
+      { day: "Sun 27 Sep", slots: ["4:00 PM", "5:30 PM"] }
     ],
-    color: "green"
+    color: "pink"
   }
 ];
 
-// Achievement metadata for sticker rendering
+// Standardized Achievement Tags with Category & Matching Semantic Icons
 export const ACHIEVEMENTS = {
-  "yc-alumni": { label: "yc alumni", icon: "rocket", color: "orange" },
-  "hackathon-winner": { label: "hackathon winner", icon: "lightning", color: "blue" },
-  "open-source": { label: "open source", icon: "code", color: "green" },
-  "deans-list": { label: "dean's list", icon: "star", color: "orange" },
-  "research-published": { label: "published researcher", icon: "book", color: "pink" },
-  "topper": { label: "class topper", icon: "trophy", color: "orange" },
-  "google-offer": { label: "google offer", icon: "sparkle", color: "blue" },
-  "volunteer-lead": { label: "volunteer lead", icon: "heart", color: "pink" },
-  "founded-club": { label: "founded a club", icon: "flag", color: "green" },
-  "entrepreneur": { label: "entrepreneur", icon: "rocket", color: "orange" },
-  "case-comp-winner": { label: "case comp winner", icon: "trophy", color: "blue" },
-  "kaggle-grandmaster": { label: "kaggle grandmaster", icon: "sparkle", color: "orange" },
-  "internship-faang": { label: "faang intern", icon: "briefcase", color: "blue" },
-  "product-launch": { label: "shipped a product", icon: "rocket", color: "green" },
-  "design-award": { label: "design award", icon: "star", color: "pink" },
-  "scholarship": { label: "scholarship holder", icon: "medal", color: "orange" },
-  "thesis-award": { label: "thesis award", icon: "trophy", color: "orange" },
-  "debate-champion": { label: "debate champion", icon: "mic", color: "green" },
-  "cern-intern": { label: "cern intern", icon: "sparkle", color: "blue" },
-  "patent-filed": { label: "patent filed", icon: "lightbulb", color: "orange" }
+  // Career & Corporate (Sky Blue)
+  "yc-alumni": { label: "yc alumni", icon: "rocket", category: "career", color: "orange" },
+  "stripe-offer": { label: "stripe offer", icon: "briefcase", category: "career", color: "blue" },
+  "goldman-intern": { label: "goldman sachs intern", icon: "briefcase", category: "career", color: "blue" },
+  "spring-week-alum": { label: "spring week alum", icon: "lightning", category: "career", color: "blue" },
+  "google-offer": { label: "google offer", icon: "briefcase", category: "career", color: "blue" },
+  "dyson-grad-scheme": { label: "dyson grad scheme", icon: "briefcase", category: "career", color: "blue" },
+  "magic-circle-offer": { label: "magic circle law offer", icon: "briefcase", category: "career", color: "blue" },
+  "mclaren-placement": { label: "mclaren placement year", icon: "briefcase", category: "career", color: "blue" },
+  "quant-intern": { label: "quant trading intern", icon: "lightning", category: "career", color: "blue" },
+  "civil-service-offer": { label: "civil service fast stream", icon: "flag", category: "career", color: "blue" },
+  "crick-institute-alum": { label: "crick institute alum", icon: "microscope", category: "career", color: "blue" },
+
+  // Academic Excellence (Marker Orange)
+  "first-class-honours": { label: "first-class honours (1st)", icon: "trophy", category: "academics", color: "orange" },
+  "top-of-cohort": { label: "top of cohort", icon: "trophy", category: "academics", color: "orange" },
+  "dissertation-prize": { label: "dissertation prize", icon: "star", category: "academics", color: "orange" },
+  "funded-phd": { label: "fully funded phd", icon: "mortarboard", category: "academics", color: "orange" },
+
+  // Ventures, Hackathons & Societies (Sprout Green)
+  "hackathon-winner": { label: "hackathon 1st place", icon: "lightning", category: "projects", color: "green" },
+  "open-source": { label: "open source lead", icon: "code", category: "projects", color: "green" },
+  "formula-student-lead": { label: "formula student lead", icon: "flag", category: "projects", color: "green" },
+  "startup-founder": { label: "startup founder", icon: "rocket", category: "projects", color: "green" },
+  "patent-filed": { label: "patent filed", icon: "lightbulb", category: "projects", color: "green" },
+
+  // Research & Science (Rose Pink)
+  "published-researcher": { label: "published researcher", icon: "microscope", category: "research", color: "pink" },
+  "deepmind-scholar": { label: "deepmind scholar", icon: "sparkle", category: "research", color: "pink" },
+  "design-award": { label: "national design award", icon: "star", category: "research", color: "pink" },
+
+  // Leadership & Community (Lavender)
+  "society-president": { label: "society president", icon: "flag", category: "leadership", color: "purple" },
+  "peer-mentor": { label: "senior peer mentor", icon: "heart", category: "leadership", color: "purple" }
 };
 
-// Subject filter options
+// UK Subject Categories
 export const SUBJECTS = [
   "all",
-  "computer science",
+  "computing & ai",
   "engineering",
-  "business",
-  "design",
-  "science",
-  "arts & humanities"
+  "economics & finance",
+  "law",
+  "medicine & life sciences",
+  "maths & physics",
+  "humanities & politics"
 ];
 
+// Mapping mentors' degrees to subject filter categories
+export const SUBJECT_MAP = {
+  "Computer Science": "computing & ai",
+  "Economics & Finance": "economics & finance",
+  "Human-Computer Interaction": "computing & ai",
+  "Mechanical Engineering": "engineering",
+  "Law (Jurisprudence)": "law",
+  "Product Design Engineering": "engineering",
+  "Medicine": "medicine & life sciences",
+  "Mathematics & Statistics": "maths & physics",
+  "History & Politics": "humanities & politics",
+  "Data Science & AI": "computing & ai",
+  "Electrical Engineering": "engineering",
+  "Biochemistry": "medicine & life sciences"
+};
+
+// UK University Year filter options
 export const YEAR_FILTERS = [
   "all years",
+  "2nd year",
   "3rd year",
-  "4th year",
+  "4th year (MEng)",
   "recent grad"
 ];
 
-// Map majors to filter categories
-export const SUBJECT_MAP = {
-  "Computer Science": "computer science",
-  "Data Science": "computer science",
-  "Mechanical Engineering": "engineering",
-  "Electrical Engineering": "engineering",
-  "Biotechnology": "science",
-  "Physics": "science",
-  "Business Administration": "business",
-  "Economics": "business",
-  "Design": "design",
-  "Architecture": "design",
-  "Psychology": "arts & humanities"
-};
+// UK Premier Universities
+export const UK_UNIVERSITIES = [
+  "All UK Universities",
+  "Imperial College London",
+  "University of Oxford",
+  "University of Cambridge",
+  "UCL",
+  "LSE",
+  "University of Bristol",
+  "University of Warwick",
+  "University of Manchester",
+  "University of Bath",
+  "University of Edinburgh",
+  "Durham University",
+  "University of St Andrews"
+];
 
-// Testimonials
+// Testimonials from UK Students
 export const TESTIMONIALS = [
   {
-    quote: "i was terrified of coding interviews. one call with aarav and i realized it's just pattern recognition. got into microsoft three months later.",
-    name: "Sneha K.",
-    detail: "2nd year, CS · IIT Bombay"
+    quote: "i had no idea how Spring Weeks worked as a 1st year at Bristol. Callum hopped on a 20-min call, tore my CV apart in the kindest way, and explained the exact timeline. I got two offers.",
+    name: "Marcus Thorne",
+    detail: "1st Year Economics · University of Bristol"
   },
   {
-    quote: "priya helped me pivot from psychology to ux research. she didn't just give advice — she reviewed my portfolio and told me exactly what to fix.",
-    name: "Rahul M.",
-    detail: "3rd year, Psychology · DU"
+    quote: "Aanya literally saved my Imperial CS 2nd year. Her advice on not over-optimizing LeetCode and focusing on building real side projects got me through my Stripe technical screens.",
+    name: "Elena Rostova",
+    detail: "2nd Year Computing · Imperial College London"
   },
   {
-    quote: "i thought research was only for geniuses. tara showed me how to write my first cold email to a professor. i'm now doing research at eth zurich.",
-    name: "Ananya S.",
-    detail: "2nd year, Physics · IISc"
+    quote: "Every careers adviser told me to 'network on LinkedIn', which felt fake and uncomfortable. Chatting with Priya for 20 minutes was like having an older sibling who already works at Google.",
+    name: "Tobi Adeleke",
+    detail: "Final Year Psychology · UCL"
   }
 ];
 
-// FAQ data
+// FAQ items
 export const FAQ_ITEMS = [
   {
-    question: "what even is frea?",
-    answer: "frea is a peer-to-peer mentoring platform where younger uni students connect with seniors who've achieved real things — research publications, internships at top companies, hackathon wins, and more. you book a free 20-minute call and get genuine advice from someone who's actually been there."
+    question: "is frea really 100% free?",
+    answer: "yes, completely free for all UK university students. our senior mentors volunteer 20 to 40 minutes a week because elder students helped them when they were freshers, and they want to pay it forward. there are no fees, hidden charges, or premium upsells ever."
   },
   {
-    question: "is it really free?",
-    answer: "yes, completely free. no hidden charges, no premium tiers, no catches. mentors volunteer their time because they remember how much a good conversation can change your trajectory. we believe mentoring should be accessible to everyone."
+    question: "who can book a call?",
+    answer: "any current student or recent graduate at an accredited UK university with an official '.ac.uk' student email address. you can book with seniors at your own university or explore mentors from Oxford, Cambridge, Imperial, LSE, and across the Russell Group."
   },
   {
-    question: "who are the mentors?",
-    answer: "they're senior university students (3rd year, 4th year, and recent graduates) who've achieved something meaningful — dean's list, research publications, faang internships, hackathon wins, founded clubs, and more. every mentor is verified and has opted in to help."
+    question: "what happens during the 20-minute call?",
+    answer: "it's a relaxed 1-on-1 Google Meet call. you can ask for a CV roast, interview advice, module survival tips, or general guidance on breaking into top firms and research labs. no corporate jargon, no awkward networking pressure."
   },
   {
-    question: "how long is each call?",
-    answer: "20 minutes. it's short enough to stay focused and long enough to get real value. come with specific questions and you'll walk away with actionable advice."
+    question: "how do i become a senior mentor?",
+    answer: "if you're a 2nd year, 3rd year, master's student or recent grad with valuable university or career experience, you can submit an application via our 'become a mentor' page. we verify your student status and onboard you in under 24 hours."
   },
   {
-    question: "can i become a mentor?",
-    answer: "absolutely! if you're a 3rd year student or above with achievements you're proud of, we'd love to have you. hit us up and we'll get you set up."
-  },
-  {
-    question: "what if my mentor doesn't show up?",
-    answer: "it happens rarely, but if it does, you can rebook with the same mentor or try someone new. we track reliability and mentors who consistently miss calls are gently removed from the platform."
+    question: "why do we require a '.ac.uk' university email?",
+    answer: "in the UK, '.ac.uk' domains are strictly controlled by Jisc and exclusively issued to verified higher education institutions. this ensures our community consists entirely of genuine university peers."
   }
 ];
