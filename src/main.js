@@ -12,13 +12,13 @@ import { fetchMentors, fetchMentor, fetchMonthlySlots, submitBooking, submitMent
 
 const LIVE_QUESTIONS = [
   { q: "can someone roast my CV before Friday's spring week deadline?", tag: "Finance @ LSE" },
-  { q: "how do i recover from a 2:2 in 1st year exams?", tag: "Mech Eng @ Bristol" },
+  { q: "how do i recover from a 2:2 in 1st year exams?", tag: "Mech Eng @ Imperial" },
   { q: "how did you land a Y Combinator interview as a student?", tag: "CS @ Imperial" },
-  { q: "what actually goes on a 1st year tech CV with zero experience?", tag: "Computing @ Bath" },
+  { q: "what actually goes on a 1st year tech CV with zero experience?", tag: "Computing @ UCL" },
   { q: "switching from Psychology to UX Research — where do i start?", tag: "HCI @ UCL" },
-  { q: "non-Russell Group student trying to break into quant — be real with me", tag: "Maths @ Warwick" },
   { q: "how to prep for Watson Glaser and magic circle vacation schemes?", tag: "Law @ Oxford" },
-  { q: "how did you get your undergraduate research paper published?", tag: "Biochem @ Cambridge" },
+  { q: "how to survive organic chemistry lab reports?", tag: "Biochem @ Imperial" },
+  { q: "how do assessment centres actually test commercial awareness?", tag: "Economics @ LSE" },
 ];
 
 // ─── Goal / Intent Filters for Browse ─────
@@ -215,6 +215,8 @@ function howStep(number, label, desc, iconSvg) {
 // ─── PAGE: Landing ─────
 
 function renderLanding() {
+  const tickerItems = [...LIVE_QUESTIONS, ...LIVE_QUESTIONS];
+
   return `
     <div class="page-view">
       <!-- Hero -->
@@ -304,66 +306,20 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Section 1: Disciplines Velocity Band -->
-      <section class="velocity-strip-section velocity-strip-section--disciplines">
-        <div class="velocity-band">
-          <div class="velocity-band__track">
-            <span class="velocity-word">Tech</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Engineering</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Law</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Medicine</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Maths</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Finance</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Economics</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Architecture</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Computer Science</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Biochemistry</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">PPE</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--script">...and many more degrees & subjects</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
-            <span class="velocity-sep">✦</span>
-            <!-- Seamless Loop Clone -->
-            <span class="velocity-word">Tech</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Engineering</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Law</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Medicine</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Maths</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Finance</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Economics</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Architecture</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Computer Science</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Biochemistry</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">PPE</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--script">...and many more degrees & subjects</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
-            <span class="velocity-sep">✦</span>
+      <!-- Original Live Questions Ticker (Top Ribbon) -->
+      <div class="questions-ticker">
+        <div class="questions-ticker__inner">
+          <div class="questions-ticker__badge">🔥 freshers are asking:</div>
+          <div class="questions-ticker__track">
+            ${tickerItems.map(item => `
+              <div class="ticker-item">
+                <span>“${item.q}”</span>
+                <span class="ticker-item__tag">${item.tag}</span>
+              </div>
+            `).join('')}
           </div>
         </div>
-      </section>
+      </div>
 
       <!-- How It Works -->
       <section class="section page-container">
@@ -443,17 +399,13 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Section 2: "Built by students, for students" Pride & University Band -->
-      <section class="velocity-strip-section velocity-strip-section--ethos">
+      <!-- Horizontal Scroll Velocity Ribbon (Single Font, Thicker Profile) -->
+      <section class="velocity-strip-section">
         <div class="velocity-band">
           <div class="velocity-band__track">
-            <span class="velocity-word velocity-word--script-accent">built by students, for students</span>
+            <span class="velocity-word velocity-word--highlight">built by students, for students</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">100% free</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">zero corporate cringe</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">unfiltered advice</span>
+            <span class="velocity-word">100% free peer mentoring</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">Imperial</span>
             <span class="velocity-sep">·</span>
@@ -462,27 +414,23 @@ function renderLanding() {
             <span class="velocity-word">Oxford</span>
             <span class="velocity-sep">·</span>
             <span class="velocity-word">UCL</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Cambridge</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Bristol</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Edinburgh</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Warwick</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">caffeinated 20-min chats</span>
+            <span class="velocity-word">honest course & module advice</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--script-accent">elder peers who actually care</span>
+            <span class="velocity-word">exam playbooks & revision systems</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">spring weeks & internship guidance</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">zero corporate cringe</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">20-minute caffeinated chats</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--highlight">elder peers who actually care</span>
             <span class="velocity-sep">✦</span>
             <!-- Seamless Loop Clone -->
-            <span class="velocity-word velocity-word--script-accent">built by students, for students</span>
+            <span class="velocity-word velocity-word--highlight">built by students, for students</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">100% free</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">zero corporate cringe</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">unfiltered advice</span>
+            <span class="velocity-word">100% free peer mentoring</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">Imperial</span>
             <span class="velocity-sep">·</span>
@@ -491,18 +439,18 @@ function renderLanding() {
             <span class="velocity-word">Oxford</span>
             <span class="velocity-sep">·</span>
             <span class="velocity-word">UCL</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Cambridge</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Bristol</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Edinburgh</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Warwick</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">caffeinated 20-min chats</span>
+            <span class="velocity-word">honest course & module advice</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--script-accent">elder peers who actually care</span>
+            <span class="velocity-word">exam playbooks & revision systems</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">spring weeks & internship guidance</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">zero corporate cringe</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">20-minute caffeinated chats</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--highlight">elder peers who actually care</span>
             <span class="velocity-sep">✦</span>
           </div>
         </div>
