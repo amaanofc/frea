@@ -313,30 +313,30 @@ export const MENTORS = [
 // Standardized Achievement Tags with Category & Matching Semantic Icons
 export const ACHIEVEMENTS = {
   // Career & Corporate (Sky Blue)
-  "yc-alumni": { label: "yc alumni", icon: "rocket", category: "career", color: "orange" },
-  "stripe-offer": { label: "stripe offer", icon: "briefcase", category: "career", color: "blue" },
-  "goldman-intern": { label: "goldman sachs intern", icon: "briefcase", category: "career", color: "blue" },
-  "spring-week-alum": { label: "spring week alum", icon: "lightning", category: "career", color: "blue" },
-  "google-offer": { label: "google offer", icon: "briefcase", category: "career", color: "blue" },
-  "dyson-grad-scheme": { label: "dyson grad scheme", icon: "briefcase", category: "career", color: "blue" },
-  "magic-circle-offer": { label: "magic circle law offer", icon: "briefcase", category: "career", color: "blue" },
-  "mclaren-placement": { label: "mclaren placement year", icon: "briefcase", category: "career", color: "blue" },
-  "quant-intern": { label: "quant trading intern", icon: "lightning", category: "career", color: "blue" },
-  "civil-service-offer": { label: "civil service fast stream", icon: "flag", category: "career", color: "blue" },
-  "crick-institute-alum": { label: "crick institute alum", icon: "microscope", category: "career", color: "blue" },
+  "goldman-intern": { label: "goldman sachs intern", icon: "briefcase", category: "career", color: "sky" },
+  "stripe-offer": { label: "stripe software engineer", icon: "code", category: "career", color: "sky" },
+  "google-offer": { label: "google ux researcher", icon: "sparkle", category: "career", color: "sky" },
+  "dyson-grad-scheme": { label: "dyson grad scheme", icon: "rocket", category: "career", color: "sky" },
+  "magic-circle-offer": { label: "clifford chance vacation scheme", icon: "medal", category: "career", color: "sky" },
+  "mclaren-placement": { label: "mclaren automotive placement", icon: "trophy", category: "career", color: "sky" },
+  "quant-intern": { label: "jane street quant intern", icon: "lightning", category: "career", color: "sky" },
+  "civil-service-offer": { label: "civil service fast stream", icon: "flag", category: "career", color: "sky" },
+  "crick-institute-alum": { label: "francis crick institute intern", icon: "microscope", category: "career", color: "sky" },
 
-  // Academic Excellence (Marker Orange)
-  "first-class-honours": { label: "first-class honours (1st)", icon: "trophy", category: "academics", color: "orange" },
-  "top-of-cohort": { label: "top of cohort", icon: "trophy", category: "academics", color: "orange" },
-  "dissertation-prize": { label: "dissertation prize", icon: "star", category: "academics", color: "orange" },
-  "funded-phd": { label: "fully funded phd", icon: "mortarboard", category: "academics", color: "orange" },
+  // Academic Excellence (Amber Gold)
+  "first-class-honours": { label: "first class honours (1st)", icon: "mortarboard", category: "academic", color: "amber" },
+  "top-of-cohort": { label: "top of cohort (rank 1)", icon: "trophy", category: "academic", color: "amber" },
+  "dissertation-prize": { label: "faculty dissertation prize", icon: "star", category: "academic", color: "amber" },
+  "funded-phd": { label: "fully-funded oxford phd", icon: "sparkle", category: "academic", color: "amber" },
 
-  // Ventures, Hackathons & Societies (Sprout Green)
-  "hackathon-winner": { label: "hackathon 1st place", icon: "lightning", category: "projects", color: "green" },
-  "open-source": { label: "open source lead", icon: "code", category: "projects", color: "green" },
-  "formula-student-lead": { label: "formula student lead", icon: "flag", category: "projects", color: "green" },
-  "startup-founder": { label: "startup founder", icon: "rocket", category: "projects", color: "green" },
-  "patent-filed": { label: "patent filed", icon: "lightbulb", category: "projects", color: "green" },
+  // Entrepreneurship & Hackathons (Sprout Green)
+  "yc-alumni": { label: "y combinator (S23)", icon: "rocket", category: "startup", color: "green" },
+  "hackathon-winner": { label: "hackathon winner (1st place)", icon: "trophy", category: "startup", color: "green" },
+  "patent-filed": { label: "patent co-inventor", icon: "lightbulb", category: "startup", color: "green" },
+  "open-source": { label: "1k+ github stars", icon: "code", category: "startup", color: "green" },
+  "startup-founder": { label: "student startup founder", icon: "rocket", category: "startup", color: "green" },
+  "spring-week-alum": { label: "3x spring week conversions", icon: "medal", category: "startup", color: "green" },
+  "formula-student-lead": { label: "formula student lead", icon: "lightning", category: "startup", color: "green" },
 
   // Research & Science (Rose Pink)
   "published-researcher": { label: "published researcher", icon: "microscope", category: "research", color: "pink" },
@@ -351,29 +351,33 @@ export const ACHIEVEMENTS = {
 // UK Subject Categories
 export const SUBJECTS = [
   "all",
-  "computing & ai",
-  "engineering",
-  "economics & finance",
-  "law",
-  "medicine & life sciences",
-  "maths & physics",
-  "humanities & politics"
+  "Tech",
+  "Law",
+  "Engineering",
+  "Math",
+  "Medicine & Life Sciences",
+  "Humanities & Politics",
+  "Languages & Arts",
+  "Economics & Finance"
 ];
 
 // Mapping mentors' degrees to subject filter categories
 export const SUBJECT_MAP = {
-  "Computer Science": "computing & ai",
-  "Economics & Finance": "economics & finance",
-  "Human-Computer Interaction": "computing & ai",
-  "Mechanical Engineering": "engineering",
-  "Law (Jurisprudence)": "law",
-  "Product Design Engineering": "engineering",
-  "Medicine": "medicine & life sciences",
-  "Mathematics & Statistics": "maths & physics",
-  "History & Politics": "humanities & politics",
-  "Data Science & AI": "computing & ai",
-  "Electrical Engineering": "engineering",
-  "Biochemistry": "medicine & life sciences"
+  "Computer Science": "Tech",
+  "Economics & Finance": "Economics & Finance",
+  "Human-Computer Interaction": "Tech",
+  "Mechanical Engineering": "Engineering",
+  "Law (Jurisprudence)": "Law",
+  "Product Design Engineering": "Engineering",
+  "Medicine": "Medicine & Life Sciences",
+  "Mathematics & Statistics": "Math",
+  "History & Politics": "Humanities & Politics",
+  "Data Science & AI": "Tech",
+  "Electrical Engineering": "Engineering",
+  "Biochemistry": "Medicine & Life Sciences",
+  "Modern Languages & Cultures": "Languages & Arts",
+  "Architecture": "Languages & Arts",
+  "English Literature": "Languages & Arts"
 };
 
 // UK University Year filter options

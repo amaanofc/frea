@@ -25,21 +25,23 @@ const LIVE_QUESTIONS = [
 
 const GOAL_FILTERS = [
   { id: "all", label: "✨ all goals" },
-  { id: "cv-roast", label: "📄 roast my cv" },
-  { id: "interview", label: "💼 interview prep" },
-  { id: "gpa-recovery", label: "📈 1st year comeback" },
-  { id: "startup", label: "🚀 student startups" },
-  { id: "switching", label: "🔄 switching fields" },
-  { id: "research", label: "🔬 research papers" },
+  { id: "academics", label: "📚 Academics" },
+  { id: "research", label: "🔬 Research" },
+  { id: "internships", label: "💼 Internships and Grad roles" },
+  { id: "entrepreneurship", label: "🚀 Entrepreneurship" },
+  { id: "personal-dev", label: "🌱 Personal development" },
+  { id: "switching-degrees", label: "🔄 Switching degrees" },
+  { id: "managing-uni", label: "⚡ Managing uni life" }
 ];
 
 const GOAL_KEYWORD_MAP = {
-  "cv-roast": ["cv", "resume", "spring week", "portfolio", "review"],
-  "interview": ["interview", "spring week", "internship", "prep", "assessment centre"],
-  "gpa-recovery": ["exam", "revision", "active recall", "first-class", "recovery"],
-  "startup": ["startup", "projects", "yc", "founder", "hackathon"],
-  "switching": ["switching", "transition", "non-design", "portfolio"],
-  "research": ["research", "paper", "dissertation", "phd", "crick", "thesis"],
+  "academics": ["exam", "revision", "active recall", "first-class", "recovery", "module", "study", "anki", "tutorial", "essay", "marks", "dissertation", "past papers", "gpa", "lecture", "gpa comeback", "reading lists"],
+  "research": ["research", "paper", "dissertation", "phd", "crick", "thesis", "lab", "deepmind", "scholar", "bmj", "audit", "pi", "published researcher", "published-researcher"],
+  "internships": ["intern", "internship", "spring week", "grad", "graduate", "analyst", "assessment centre", "cv", "resume", "dyson", "goldman", "stripe", "vacation scheme", "clifford chance", "fast stream", "civil service", "placement", "mclaren", "quant", "jane street", "citadel"],
+  "entrepreneurship": ["startup", "founder", "yc", "y combinator", "grant", "venture", "hackathon", "side project", "building", "clean-tech", "patent", "projects"],
+  "personal-dev": ["portfolio", "career", "confidence", "habit", "cold email", "leadership", "president", "society", "society-president", "mentor", "personal development", "growth", "networking", "peer mentor", "creative careers"],
+  "switching-degrees": ["switch", "switching", "transition", "non-cs", "non-target", "transfer", "psychology", "non-traditional", "career switching"],
+  "managing-uni": ["survival", "freshers", "balance", "1st year", "pressure", "managing", "uni life", "time management", "societies", "burnout", "year abroad", "med school survival"]
 };
 
 // ─── SVG Sticker Icons ─────────────────────
@@ -191,12 +193,19 @@ function mentorCard(mentor) {
   `;
 }
 
-// ─── Hand-drawn Arrow SVG ─────
+// ─── Hand-drawn Sketch Curved Arrow SVG ─────
 
 function handArrow() {
-  return `<div class="how-arrow">
-    <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
-      <path d="M2 12c10-2 20-2 30 0M32 12l10 0M38 7l4 5-4 5" stroke="#171717" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+  return `<div class="how-arrow" aria-hidden="true">
+    <svg width="64" height="32" viewBox="0 0 64 32" fill="none" class="hand-drawn-arrow-svg">
+      <!-- Human-drawn sweeping curved shaft -->
+      <path d="M 6 22 C 18 10, 38 8, 54 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+      <!-- Upper sketched barb -->
+      <path d="M 42 8 C 47 11, 51 14, 55 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+      <!-- Lower sketched barb -->
+      <path d="M 43 25 C 48 21, 52 18, 55 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+      <!-- Subtle highlighter ink mark -->
+      <path d="M 8 23 C 6 23.5, 4 24, 3 24.5" stroke="var(--color-marker-orange)" stroke-width="2" stroke-linecap="round" fill="none" />
     </svg>
   </div>`;
 }
@@ -399,7 +408,7 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Horizontal Scroll Velocity Ribbon (Single Font, Thicker Profile) -->
+      <!-- Horizontal Scroll Velocity Ribbon (Pure Peer Mission, Grounded & Authentic) -->
       <section class="velocity-strip-section">
         <div class="velocity-band">
           <div class="velocity-band__track">
@@ -407,50 +416,42 @@ function renderLanding() {
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">100% free peer mentoring</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Imperial</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">LSE</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Oxford</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">UCL</span>
+            <span class="velocity-word">the unwritten rules of university</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">honest course & module advice</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">exam playbooks & revision systems</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">spring weeks & internship guidance</span>
+            <span class="velocity-word">internships, spring weeks & grad roles</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">zero corporate cringe</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">20-minute caffeinated chats</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--highlight">elder peers who actually care</span>
+            <span class="velocity-word velocity-word--highlight">elder peers who actually give a damn</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">from freshers week to graduation</span>
             <span class="velocity-sep">✦</span>
             <!-- Seamless Loop Clone -->
             <span class="velocity-word velocity-word--highlight">built by students, for students</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">100% free peer mentoring</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Imperial</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">LSE</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">Oxford</span>
-            <span class="velocity-sep">·</span>
-            <span class="velocity-word">UCL</span>
+            <span class="velocity-word">the unwritten rules of university</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">honest course & module advice</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">exam playbooks & revision systems</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word">spring weeks & internship guidance</span>
+            <span class="velocity-word">internships, spring weeks & grad roles</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">zero corporate cringe</span>
             <span class="velocity-sep">✦</span>
             <span class="velocity-word">20-minute caffeinated chats</span>
             <span class="velocity-sep">✦</span>
-            <span class="velocity-word velocity-word--highlight">elder peers who actually care</span>
+            <span class="velocity-word velocity-word--highlight">elder peers who actually give a damn</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">from freshers week to graduation</span>
             <span class="velocity-sep">✦</span>
           </div>
         </div>
@@ -505,7 +506,7 @@ function renderBrowse() {
             </select>
 
             <div class="filter-hub__count-badge" id="match-count-badge">
-              12 verified seniors
+              ${MENTORS.length} verified seniors
             </div>
           </div>
 
@@ -812,10 +813,13 @@ function renderBecomeMentor() {
 
           <!-- Live Post-It Note Preview -->
           <div class="mentor-form-group">
-            <label class="mentor-form-label">Your Top Tip for Freshers <span>* (appears on your post-it note!)</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+              <label class="mentor-form-label" style="margin-bottom: 0;">Your Top Tip for Freshers <span>* (appears on your post-it note!)</span></label>
+              <span id="bm-tip-counter" style="font-size: 12px; font-weight: 600; color: var(--color-cocoa-ink); opacity: 0.6;">0 / 140</span>
+            </div>
             <div class="live-postit-preview-wrap">
               <div>
-                <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required placeholder="e.g. don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins." oninput="updateLivePostit(this.value)"></textarea>
+                <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required maxlength="140" placeholder="e.g. Give your best tip here..." oninput="updateLivePostit(this.value)"></textarea>
                 <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
                   <span style="font-size: 13px; font-weight: 600;">Post-It Color:</span>
                   <label><input type="radio" name="postit-color" value="yellow" checked onchange="setLivePostitColor('yellow')"> Yellow</label>
@@ -830,7 +834,7 @@ function renderBecomeMentor() {
                 <div class="live-postit-preview" id="live-postit-card">
                   <div class="live-postit-preview__pin"></div>
                   <div class="live-postit-preview__text" id="live-postit-text">
-                    “don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins.”
+                    “Give your best tip here...”
                   </div>
                   <span class="live-postit-preview__author" id="live-postit-author">— you @ google meet</span>
                 </div>
@@ -858,8 +862,22 @@ function renderBecomeMentor() {
 // Live Post-It Preview Handlers
 function updateLivePostit(val) {
   const textEl = document.getElementById('live-postit-text');
+  const counterEl = document.getElementById('bm-tip-counter');
+  if (counterEl) {
+    const len = val.length;
+    counterEl.innerText = `${len} / 140`;
+    if (len >= 130) {
+      counterEl.style.color = 'var(--color-marker-orange)';
+      counterEl.style.fontWeight = '700';
+      counterEl.style.opacity = '1';
+    } else {
+      counterEl.style.color = 'var(--color-cocoa-ink)';
+      counterEl.style.fontWeight = '600';
+      counterEl.style.opacity = '0.6';
+    }
+  }
   if (textEl) {
-    textEl.innerText = val.trim() ? `“${val.trim()}”` : `“your senior advice here...”`;
+    textEl.innerText = val.trim() ? `“${val.trim()}”` : `“Give your best tip here...”`;
   }
 }
 window.updateLivePostit = updateLivePostit;

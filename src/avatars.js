@@ -230,6 +230,34 @@ export const MENTOR_AVATARS = {
       <path d="M55 40c2-2 6-1 7 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
       <path d="M43 54c3 3 10 1 12-2" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
     </svg>
+  `,
+
+  // 13. Hannah Clarke: Wavy blonde hair, tortoiseshell glasses, warm terracotta sweater, creative smile
+  13: (size = 80) => `
+    <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
+      <rect width="100" height="100" rx="16" fill="#fef3c7"/>
+      <path d="M16 100c2-20 16-28 34-28s32 8 34 28" fill="#ea580c" stroke="#171717" stroke-width="2.5"/>
+      <path d="M44 72l6 9 6-9" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
+      <rect x="42" y="60" width="16" height="13" fill="#fbd5b5" stroke="#171717" stroke-width="2"/>
+      <!-- Long wavy hair background -->
+      <path d="M26 38c-2 18 2 34 6 42 2-8 3-20 3-26" fill="#d97706" stroke="#171717" stroke-width="2"/>
+      <path d="M74 38c2 18-2 34-6 42-2-8-3-20-3-26" fill="#d97706" stroke="#171717" stroke-width="2"/>
+      <ellipse cx="50" cy="46" rx="18" ry="20" fill="#fbd5b5" stroke="#171717" stroke-width="2.5"/>
+      <!-- Hair top & bangs -->
+      <path d="M30 38c0-14 10-22 20-22s20 8 20 22c0 4-2 7-6 8-4-8-7-10-14-10s-10 2-14 10c-4-1-6-4-6-8z" fill="#d97706" stroke="#171717" stroke-width="2.5"/>
+      <!-- Glasses -->
+      <rect x="35" y="41" width="12" height="10" rx="3" stroke="#78350f" stroke-width="2.2" fill="#ffffff" fill-opacity="0.25"/>
+      <rect x="53" y="41" width="12" height="10" rx="3" stroke="#78350f" stroke-width="2.2" fill="#ffffff" fill-opacity="0.25"/>
+      <path d="M47 45h6" stroke="#78350f" stroke-width="2.2"/>
+      <circle cx="41" cy="46" r="1.8" fill="#171717"/>
+      <circle cx="59" cy="46" r="1.8" fill="#171717"/>
+      <circle cx="42" cy="45" r="0.6" fill="#ffffff"/>
+      <circle cx="60" cy="45" r="0.6" fill="#ffffff"/>
+      <!-- Warm smile and cheek blush -->
+      <path d="M44 56c2 3 10 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <ellipse cx="37" cy="52" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
+      <ellipse cx="63" cy="52" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
+    </svg>
   `
 };
 
