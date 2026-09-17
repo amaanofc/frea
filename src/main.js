@@ -193,19 +193,21 @@ function mentorCard(mentor) {
   `;
 }
 
-// ─── Hand-drawn Sketch Curved Arrow SVG ─────
+// ─── Authentic Sketchy Hand-drawn Arrow SVG ─────
 
 function handArrow() {
   return `<div class="how-arrow" aria-hidden="true">
-    <svg width="64" height="32" viewBox="0 0 64 32" fill="none" class="hand-drawn-arrow-svg">
-      <!-- Human-drawn sweeping curved shaft -->
-      <path d="M 6 22 C 18 10, 38 8, 54 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+    <svg width="76" height="38" viewBox="0 0 76 38" fill="none" class="sketchy-flow-arrow">
+      <!-- Natural primary curved arc -->
+      <path d="M 6 27 C 22 9, 50 8, 68 19" stroke="#171717" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      <!-- Secondary hand-sketched pass for authentic doodle texture -->
+      <path d="M 7 28 C 24 11, 48 10, 67 19" stroke="#171717" stroke-width="1.3" stroke-linecap="round" opacity="0.6" fill="none" />
       <!-- Upper sketched barb -->
-      <path d="M 42 8 C 47 11, 51 14, 55 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
+      <path d="M 52 11 C 58 14, 64 17, 68 19" stroke="#171717" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      <path d="M 53 12 C 59 15, 64 17, 68 19" stroke="#171717" stroke-width="1.3" stroke-linecap="round" opacity="0.5" fill="none" />
       <!-- Lower sketched barb -->
-      <path d="M 43 25 C 48 21, 52 18, 55 16" stroke="var(--color-charcoal)" stroke-width="2.5" stroke-linecap="round" fill="none" />
-      <!-- Subtle highlighter ink mark -->
-      <path d="M 8 23 C 6 23.5, 4 24, 3 24.5" stroke="var(--color-marker-orange)" stroke-width="2" stroke-linecap="round" fill="none" />
+      <path d="M 54 28 C 60 24, 65 21, 68 19" stroke="#171717" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      <path d="M 55 27 C 60 23, 65 21, 68 19" stroke="#171717" stroke-width="1.3" stroke-linecap="round" opacity="0.5" fill="none" />
     </svg>
   </div>`;
 }

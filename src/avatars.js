@@ -45,22 +45,37 @@ export const MENTOR_AVATARS = {
     </svg>
   `,
 
-  // 3. Priya Nair: Topknot messy bun, yellow hoops, lavender turtleneck, bright smile
+  // 3. Priya Nair: Topknot messy bun, warm smile, cute earrings, lavender turtleneck
   3: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
       <rect width="100" height="100" rx="16" fill="#fce7f3"/>
-      <path d="M18 100c2-20 16-28 32-28s30 8 32 28" fill="#c084fc" stroke="#171717" stroke-width="2.5"/>
-      <rect x="40" y="60" width="20" height="14" rx="4" fill="#a855f7" stroke="#171717" stroke-width="2"/>
-      <circle cx="50" cy="14" r="11" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
-      <path d="M44 14c3-3 8-3 12 0" stroke="#ff6f1e" stroke-width="2" stroke-linecap="round"/>
-      <ellipse cx="50" cy="46" rx="18" ry="20" fill="#d99564" stroke="#171717" stroke-width="2.5"/>
-      <path d="M32 38c0-10 8-16 18-16s18 6 18 16c0 6-3 12-5 14-2-7-6-10-13-10s-11 3-13 10c-2-2-5-8-5-14z" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
-      <circle cx="31" cy="48" r="4" stroke="#ff6f1e" stroke-width="2" fill="none"/>
-      <circle cx="69" cy="48" r="4" stroke="#ff6f1e" stroke-width="2" fill="none"/>
-      <path d="M39 42c2-3 6-3 8 0" stroke="#171717" stroke-width="2.5" stroke-linecap="round"/>
-      <path d="M53 42c2-3 6-3 8 0" stroke="#171717" stroke-width="2.5" stroke-linecap="round"/>
-      <path d="M43 53c2 5 12 5 14 0" fill="#fdfbf9" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="50" cy="48" r="1.5" fill="#b46a38"/>
+      <!-- Shoulders & Lavender Turtleneck -->
+      <path d="M16 100c2-20 16-28 34-28s32 8 34 28" fill="#c084fc" stroke="#171717" stroke-width="2.5"/>
+      <rect x="42" y="60" width="16" height="14" rx="3" fill="#a855f7" stroke="#171717" stroke-width="2"/>
+      <rect x="44" y="52" width="12" height="10" fill="#d99564" stroke="#171717" stroke-width="2"/>
+      <!-- Topknot Bun with Hair Tie -->
+      <circle cx="50" cy="16" r="10" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
+      <path d="M45 16c2-2 8-2 10 0" stroke="#ff6f1e" stroke-width="2" stroke-linecap="round"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="45" rx="18" ry="19" fill="#d99564" stroke="#171717" stroke-width="2.5"/>
+      <!-- Hair Bangs & Frame (shows full forehead and eyes naturally) -->
+      <path d="M32 38c0-14 9-20 18-20s18 6 18 20c-3-2-7-3-12-1-4 2-8 1-12-2-5 3-9 4-12 3z" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
+      <!-- Cute small hoop earrings at the ears -->
+      <circle cx="31" cy="47" r="2.5" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
+      <circle cx="69" cy="47" r="2.5" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
+      <!-- Eyebrows -->
+      <path d="M38 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <path d="M54 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <!-- Friendly Cartoon Eyes with pupil highlights -->
+      <circle cx="42" cy="43" r="2.2" fill="#171717"/>
+      <circle cx="58" cy="43" r="2.2" fill="#171717"/>
+      <circle cx="43" cy="42" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="42" r="0.8" fill="#ffffff"/>
+      <!-- Rosy Cheeks -->
+      <ellipse cx="37" cy="48" rx="2.8" ry="1.5" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="63" cy="48" rx="2.8" ry="1.5" fill="#f43f5e" opacity="0.35"/>
+      <!-- Warm, Happy Smile -->
+      <path d="M44 52c2 3 10 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
     </svg>
   `,
 
