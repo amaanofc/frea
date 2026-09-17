@@ -304,38 +304,81 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Scroll Velocity Text Band -->
+      <!-- Section 1: Disciplines Velocity Band -->
       <section class="velocity-strip-section">
         <div class="velocity-band">
-          <div class="velocity-band__track">
-            <span class="velocity-word">Tech</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Engineering</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Law</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Medicine</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Maths</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Finance</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Tech</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Engineering</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Law</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Medicine</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Maths</span>
-            <span class="velocity-sep">✦</span>
-            <span class="velocity-word">Finance</span>
-            <span class="velocity-sep">✦</span>
+          <!-- Row 1: Core Disciplines (Moving Left) -->
+          <div class="velocity-band__row">
+            <div class="velocity-band__track">
+              <span class="velocity-word">Tech</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Engineering</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Law</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Medicine</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Maths</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Finance</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Economics</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Architecture</span>
+              <span class="velocity-sep">✦</span>
+              <!-- Seamless Loop Clone -->
+              <span class="velocity-word">Tech</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Engineering</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Law</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Medicine</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Maths</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Finance</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Economics</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Architecture</span>
+              <span class="velocity-sep">✦</span>
+            </div>
           </div>
-        </div>
-        <div class="velocity-static-badge">
-          <span class="handwritten handwritten--rotated">...and many more degrees & subjects</span>
+          <!-- Row 2: Sub-disciplines & Notes (Moving Right) -->
+          <div class="velocity-band__row">
+            <div class="velocity-band__track velocity-band__track--reverse">
+              <span class="velocity-word velocity-word--subtle">...and many more degrees & subjects</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Computer Science</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Physics</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Biochemistry</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">PPE</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Data Science</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
+              <span class="velocity-sep">✦</span>
+              <!-- Seamless Loop Clone -->
+              <span class="velocity-word velocity-word--subtle">...and many more degrees & subjects</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">Computer Science</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Physics</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Biochemistry</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">PPE</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Data Science</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
+              <span class="velocity-sep">✦</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -412,6 +455,96 @@ function renderLanding() {
               <div class="mission-card__icon">🛡️</div>
               <h3 class="mission-card__title">vetted seniors</h3>
               <p class="mission-card__desc">every mentor is verified with their university email, verified on LinkedIn, and screened before joining.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: "Built by students, for students" Pride & University Band -->
+      <section class="velocity-strip-section velocity-strip-section--secondary">
+        <div class="velocity-band">
+          <!-- Row 1: Platform Ethos & Pride (Moving Left) -->
+          <div class="velocity-band__row">
+            <div class="velocity-band__track">
+              <span class="velocity-word velocity-word--highlight">built by students, for students</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">100% free</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">zero corporate cringe</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">unfiltered advice</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">caffeinated 20-min chats</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">insider playbooks</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--subtle">the unwritten rules</span>
+              <span class="velocity-sep">✦</span>
+              <!-- Seamless Loop Clone -->
+              <span class="velocity-word velocity-word--highlight">built by students, for students</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">100% free</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">zero corporate cringe</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">unfiltered advice</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">caffeinated 20-min chats</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word">insider playbooks</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--subtle">the unwritten rules</span>
+              <span class="velocity-sep">✦</span>
+            </div>
+          </div>
+          <!-- Row 2: Top UK Universities & Real Seniors (Moving Right) -->
+          <div class="velocity-band__row">
+            <div class="velocity-band__track velocity-band__track--reverse">
+              <span class="velocity-word">Imperial</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">LSE</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Oxford</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">UCL</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Cambridge</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Bristol</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Edinburgh</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Warwick</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Manchester</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">King's College</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--subtle">elder peers who actually care</span>
+              <span class="velocity-sep">✦</span>
+              <!-- Seamless Loop Clone -->
+              <span class="velocity-word">Imperial</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">LSE</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Oxford</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">UCL</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Cambridge</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Bristol</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Edinburgh</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Warwick</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">Manchester</span>
+              <span class="velocity-sep">·</span>
+              <span class="velocity-word">King's College</span>
+              <span class="velocity-sep">✦</span>
+              <span class="velocity-word velocity-word--subtle">elder peers who actually care</span>
+              <span class="velocity-sep">✦</span>
             </div>
           </div>
         </div>
