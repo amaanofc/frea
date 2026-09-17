@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 
 import './style.css';
-import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS } from './data.js';
+import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS, getAllDocs, getDocById } from './data.js';
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent, getGrowthMetrics } from './analytics.js';
 import { fetchMentors, fetchMentor, fetchMonthlySlots, submitBooking, submitMentorApplication, fetchStats } from './api.js';
@@ -150,7 +150,7 @@ function mentorCard(mentor) {
       <div class="mentor-card__tape"></div>
       <div class="mentor-card__header">
         <div class="mentor-card__avatar">
-          ${getMentorAvatar(mentor.id, 52)}
+          ${getMentorAvatar(mentor, 52)}
         </div>
         <div class="mentor-card__identity">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
@@ -572,6 +572,127 @@ function renderBrowse() {
   `;
 }
 
+// ─── Docs & Freabies State & Storage ─────
+
+function getUnlockedDocIds() {
+  try {
+    return JSON.parse(localStorage.getItem('frea_unlocked_docs') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function isDocUnlocked(docId) {
+  return getUnlockedDocIds().includes(docId);
+}
+
+function unlockDoc(docId) {
+  const current = getUnlockedDocIds();
+  if (!current.includes(docId)) {
+    current.push(docId);
+    try {
+      localStorage.setItem('frea_unlocked_docs', JSON.stringify(current));
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+}
+window.isDocUnlocked = isDocUnlocked;
+window.unlockDoc = unlockDoc;
+
+// ─── Render Doc Card Component (Notebook Style) ─────
+
+function renderDocCard(doc, mentor = null, showAuthor = false) {
+  const isUnlocked = isDocUnlocked(doc.id);
+  const isPaid = doc.type === 'paid';
+
+  let typeBadgeHtml = '';
+  if (isUnlocked && isPaid) {
+    typeBadgeHtml = `<span class="doc-badge doc-badge--unlocked">unlocked ✓</span>`;
+  } else if (isPaid) {
+    typeBadgeHtml = `<span class="doc-badge doc-badge--paid">£${doc.price.toFixed(2)}</span>`;
+  } else {
+    typeBadgeHtml = `<span class="doc-badge doc-badge--free">freabie 🎁</span>`;
+  }
+
+  const authorName = doc.mentorName || (mentor ? mentor.name : 'Senior Mentor');
+  const authorUni = doc.mentorUniversity || (mentor ? mentor.university : '');
+  const authorMajor = doc.mentorMajor || (mentor ? mentor.major : '');
+  const mentorId = doc.mentorId || (mentor ? mentor.id : 1);
+  const tapeRotation = ((parseInt(String(doc.id).replace(/\D/g, '')) || 1) % 5) - 2;
+
+  let actionBtnHtml = '';
+  if (isUnlocked || !isPaid) {
+    actionBtnHtml = `
+      <button class="pill-btn pill-btn--small ${isUnlocked ? 'pill-btn--unlocked' : ''}" onclick="window.downloadDoc('${doc.id}')" title="Download to device">
+        <span>${isPaid ? 'download guide ✓' : 'get freabie 🎁'}</span>
+      </button>
+    `;
+  } else {
+    actionBtnHtml = `
+      <button class="pill-btn pill-btn--small pill-btn--animated" onclick="window.openDocCheckoutModal('${doc.id}')" title="Unlock full playbook">
+        <span class="pill-btn__inner">
+          <span>unlock £${doc.price.toFixed(2)}</span>
+          <span class="pill-btn__arrow">⚡</span>
+        </span>
+      </button>
+    `;
+  }
+
+  return `
+    <div class="doc-card ${isPaid ? 'doc-card--paid' : 'doc-card--free'} ${isUnlocked ? 'doc-card--unlocked' : ''}" id="doc-card-${doc.id}">
+      <div class="doc-card__tape" style="transform: translateX(-50%) rotate(${tapeRotation}deg);"></div>
+      
+      <div class="doc-card__top">
+        <div class="doc-card__badges">
+          ${typeBadgeHtml}
+          <span class="doc-format-badge">${doc.format}</span>
+        </div>
+        <span class="doc-category-badge">${doc.category || 'Academic'}</span>
+      </div>
+
+      <div class="doc-card__main">
+        <h4 class="doc-card__title" onclick="window.openDocPreviewModal('${doc.id}')">${doc.title}</h4>
+        <p class="doc-card__subtitle">${doc.subtitle}</p>
+
+        ${showAuthor ? `
+          <div class="doc-card__author" onclick="window.navigateTo('/mentor/${mentorId}')" title="View ${authorName}'s full profile">
+            <div class="doc-card__author-avatar">
+              ${getMentorAvatar(mentorId, 32)}
+            </div>
+            <div class="doc-card__author-info">
+              <span class="doc-card__author-name">${authorName}</span>
+              <span class="doc-card__author-uni">${authorUni} · ${authorMajor}</span>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="doc-card__highlights">
+          ${(doc.previewBullets || []).slice(0, 2).map(bullet => `
+            <div class="doc-card__highlight-item">
+              <span class="doc-card__check">✓</span>
+              <span>${bullet}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="doc-card__footer">
+        <div class="doc-card__stats">
+          <span class="doc-card__rating">⭐ ${doc.rating.toFixed(1)}</span>
+          <span class="doc-card__downloads">(${doc.downloads} downloads)</span>
+          <span class="doc-card__pages">· ${doc.pages}</span>
+        </div>
+        <div class="doc-card__actions">
+          <button class="pill-btn pill-btn--subtle pill-btn--small" onclick="window.openDocPreviewModal('${doc.id}')">preview</button>
+          ${actionBtnHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+window.renderDocCard = renderDocCard;
+
 // ─── PAGE: Mentor Profile (With Interactive Week Calendar) ─────
 
 function renderProfile(mentorId) {
@@ -600,7 +721,7 @@ function renderProfile(mentorId) {
 
         <div class="profile__header">
           <div class="profile__avatar-frame" style="position: relative; overflow: hidden; box-shadow: 4px 6px 0px var(--color-charcoal); width: 180px; height: 180px; border-radius: 16px; border: 2.5px solid var(--color-charcoal);">
-            ${getMentorAvatar(mentor.id, 180)}
+            ${getMentorAvatar(mentor, 180)}
             <div class="sticker" style="position: absolute; top: -14px; right: -14px; transform: rotate(12deg);">${stickerDecoration('sparkle', 28)}</div>
             <div class="sticker" style="position: absolute; bottom: -10px; left: -10px; transform: rotate(-10deg);">${stickerDecoration('star', 24)}</div>
           </div>
@@ -685,6 +806,35 @@ function renderProfile(mentorId) {
           </div>
         </div>
 
+        <!-- Mentor's Curated Docs & Freabies Section -->
+        <div class="profile__section profile__docs-section" id="mentor-docs-section">
+          <div class="profile__docs-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <h3 class="profile__section-title" style="margin-bottom: 0;">docs & freabies 📚</h3>
+                <span class="pill-tag pill-tag--small" style="background: var(--color-dew-drop); font-weight: 700;">${(mentor.docs || []).length} resources</span>
+              </div>
+              <span class="handwritten" style="font-size: 19px; color: var(--color-marker-orange); display: block; margin-top: 4px;">
+                revision bibles, templates & free notes curated by ${mentor.name.split(' ')[0]}
+              </span>
+            </div>
+
+            <!-- Filter tabs: All, Free Freabies, Paid Playbooks -->
+            <div class="doc-filter-group" id="profile-doc-filters">
+              <button class="doc-filter-btn active" data-filter="all" onclick="window.filterProfileDocs('all', ${mentor.id})">all (${(mentor.docs || []).length})</button>
+              <button class="doc-filter-btn" data-filter="free" onclick="window.filterProfileDocs('free', ${mentor.id})">freabies 🎁 (${(mentor.docs || []).filter(d => d.type === 'free').length})</button>
+              <button class="doc-filter-btn" data-filter="paid" onclick="window.filterProfileDocs('paid', ${mentor.id})">playbooks ⚡ (${(mentor.docs || []).filter(d => d.type === 'paid').length})</button>
+            </div>
+          </div>
+
+          <div class="docs-grid" id="profile-docs-grid">
+            ${(mentor.docs && mentor.docs.length > 0)
+              ? mentor.docs.map(doc => renderDocCard(doc, mentor, false)).join('')
+              : `<div class="docs-empty-state"><p>No docs published yet by this mentor. Check out the calendar below to book a free chat!</p></div>`
+            }
+          </div>
+        </div>
+
         <!-- Interactive Clean Vanilla Month Calendar -->
         <div class="profile__section">
           <h3 class="profile__section-title">pick a date & time</h3>
@@ -760,6 +910,45 @@ function renderBecomeMentor() {
                 <option value="recent grad">Recent graduate</option>
               </select>
             </div>
+          </div>
+
+          <!-- Profile Picture / Illustrated Avatar Selection -->
+          <div class="mentor-form-group">
+            <label class="mentor-form-label">Profile Picture <span>(choose an illustrated avatar or upload your own photo)</span></label>
+            <div class="profile-pic-selector">
+              <div class="profile-pic-preview-wrap">
+                <div class="profile-pic-preview" id="bm-photo-preview">
+                  ${getMentorAvatar(1, 72)}
+                </div>
+                <div class="profile-pic-preview-meta">
+                  <span id="bm-avatar-status" style="font-weight: 700; font-size: 14px; color: var(--color-charcoal); display: block;">Illustrated Avatar #1</span>
+                  <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-top: 2px;">Appears on your mentor card, profile & calendar</span>
+                </div>
+              </div>
+
+              <div class="profile-pic-controls">
+                <div class="profile-pic-upload-action">
+                  <label class="pill-btn pill-btn--small" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                    <span>📷 Upload your own photo</span>
+                    <input type="file" id="bm-photo-input" accept="image/*" style="display: none;" onchange="handleMentorPhotoUpload(event)">
+                  </label>
+                  <button type="button" id="bm-remove-photo-btn" class="pill-btn pill-btn--small" style="display: none; background: #fee2e2; border-color: #ef4444; color: #b91c1c;" onclick="removeMentorUploadedPhoto()">✕ Remove custom photo</button>
+                </div>
+
+                <div style="margin-top: 14px;">
+                  <span style="font-size: 12.5px; font-weight: 700; color: var(--color-charcoal); opacity: 0.75; display: block; margin-bottom: 8px;">Or pick from our handcrafted avatars (both genders):</span>
+                  <div class="avatar-preset-grid" id="bm-avatar-presets">
+                    ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(id => `
+                      <button type="button" class="avatar-preset-btn ${id === 1 ? 'active' : ''}" data-avatar-id="${id}" onclick="selectMentorPresetAvatar(${id})" title="Avatar ${id}">
+                        ${getMentorAvatar(id, 40)}
+                      </button>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" id="bm-selected-avatar-id" value="1">
+            <input type="hidden" id="bm-photo-data" value="">
           </div>
 
           <div class="mentor-form-group">
@@ -844,6 +1033,27 @@ function renderBecomeMentor() {
             </div>
           </div>
 
+          <!-- Optional First Resource / Freabie Publication -->
+          <div class="mentor-form-group">
+            <div style="background: var(--color-warm-card); border: 1.5px solid rgba(23, 23, 23, 0.15); border-radius: 12px; padding: 18px 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <label class="mentor-form-label" style="margin-bottom: 0;">Publish your first Resource or Freabie <span>(optional)</span></label>
+                <span class="doc-badge doc-badge--free">monetize or share free</span>
+              </div>
+              <span style="font-size: 13px; opacity: 0.75; display: block; margin-bottom: 12px; line-height: 1.5;">Share your revision notes, interview cheat sheets, or templates. Keep them 100% free as a "freabie 🎁", or set a student price (£2.99–£5.99) to earn directly. You can add more later at any time.</span>
+              
+              <div class="mentor-form-row" style="margin-bottom: 10px;">
+                <input type="text" class="mentor-form-input" id="bm-doc-title" placeholder="Resource Title (e.g. 1st Year Exam Survival Bible or Tech CV Template)">
+                <select class="mentor-form-select" id="bm-doc-type">
+                  <option value="free">Freabie (100% Free 🎁)</option>
+                  <option value="paid_299">Paid Playbook (£2.99)</option>
+                  <option value="paid_499">Paid Playbook (£4.99)</option>
+                </select>
+              </div>
+              <input type="text" class="mentor-form-input" id="bm-doc-desc" placeholder="Brief subtitle / key takeaway (e.g. Annotated lecture walkthroughs & past paper traps solved)">
+            </div>
+          </div>
+
           <div style="margin-top: 36px; text-align: center;">
             <button type="submit" class="pill-btn pill-btn--animated" style="padding: 14px 44px; font-size: 17px;">
               <span class="pill-btn__inner">
@@ -900,6 +1110,84 @@ function setLivePostitColor(color) {
 }
 window.setLivePostitColor = setLivePostitColor;
 
+// ─── Mentor Profile Photo & Avatar Handlers ─────
+
+function handleMentorPhotoUpload(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('⚠️ Please select an image smaller than 5MB.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const dataUrl = evt.target.result;
+    const photoDataEl = document.getElementById('bm-photo-data');
+    const previewEl = document.getElementById('bm-photo-preview');
+    const statusEl = document.getElementById('bm-avatar-status');
+    const removeBtn = document.getElementById('bm-remove-photo-btn');
+
+    if (photoDataEl) photoDataEl.value = dataUrl;
+    if (previewEl) {
+      previewEl.innerHTML = `<img src="${dataUrl}" alt="Preview" class="mentor-avatar-img">`;
+    }
+    if (statusEl) {
+      statusEl.innerText = 'Custom Photo Uploaded ✓';
+    }
+    if (removeBtn) {
+      removeBtn.style.display = 'inline-flex';
+    }
+
+    // Deselect avatar buttons
+    document.querySelectorAll('.avatar-preset-btn').forEach(b => b.classList.remove('active'));
+  };
+  reader.readAsDataURL(file);
+}
+window.handleMentorPhotoUpload = handleMentorPhotoUpload;
+
+function removeMentorUploadedPhoto() {
+  const photoDataEl = document.getElementById('bm-photo-data');
+  const fileInput = document.getElementById('bm-photo-input');
+  const removeBtn = document.getElementById('bm-remove-photo-btn');
+  const avatarIdEl = document.getElementById('bm-selected-avatar-id');
+
+  if (photoDataEl) photoDataEl.value = '';
+  if (fileInput) fileInput.value = '';
+  if (removeBtn) removeBtn.style.display = 'none';
+
+  const avatarId = avatarIdEl ? parseInt(avatarIdEl.value) || 1 : 1;
+  selectMentorPresetAvatar(avatarId);
+}
+window.removeMentorUploadedPhoto = removeMentorUploadedPhoto;
+
+function selectMentorPresetAvatar(id) {
+  const avatarIdEl = document.getElementById('bm-selected-avatar-id');
+  const photoDataEl = document.getElementById('bm-photo-data');
+  const fileInput = document.getElementById('bm-photo-input');
+  const previewEl = document.getElementById('bm-photo-preview');
+  const statusEl = document.getElementById('bm-avatar-status');
+  const removeBtn = document.getElementById('bm-remove-photo-btn');
+
+  if (avatarIdEl) avatarIdEl.value = id;
+  if (photoDataEl) photoDataEl.value = '';
+  if (fileInput) fileInput.value = '';
+  if (removeBtn) removeBtn.style.display = 'none';
+
+  if (previewEl) {
+    previewEl.innerHTML = getMentorAvatar(id, 72);
+  }
+  if (statusEl) {
+    statusEl.innerText = `Illustrated Avatar #${id}`;
+  }
+
+  document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.avatarId) === id);
+  });
+}
+window.selectMentorPresetAvatar = selectMentorPresetAvatar;
+
 async function handleBecomeMentorSubmit(e) {
   e.preventDefault();
   const name = document.getElementById('bm-name')?.value;
@@ -910,6 +1198,8 @@ async function handleBecomeMentorSubmit(e) {
   const linkedin = document.getElementById('bm-linkedin')?.value.trim() || '';
   const website = document.getElementById('bm-website')?.value.trim() || '';
   const pitchVideoUrl = document.getElementById('bm-pitch')?.value.trim() || '';
+  const photoUrl = document.getElementById('bm-photo-data')?.value.trim() || '';
+  const avatarId = parseInt(document.getElementById('bm-selected-avatar-id')?.value) || 1;
   const topTip = document.getElementById('bm-toptip')?.value;
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
@@ -940,6 +1230,8 @@ async function handleBecomeMentorSubmit(e) {
       linkedin,
       website,
       pitchVideoUrl,
+      photoUrl,
+      avatarId,
       achievements,
       topTip,
       topTipColor
@@ -957,7 +1249,7 @@ async function handleBecomeMentorSubmit(e) {
     // Save to localStorage for client caching
     try {
       const apps = JSON.parse(localStorage.getItem('frea_mentor_applications') || '[]');
-      apps.push({ name, uni, major, year, email, linkedin, website, pitchVideoUrl, topTip, submittedAt: new Date().toISOString() });
+      apps.push({ name, uni, major, year, email, linkedin, website, pitchVideoUrl, photoUrl, avatarId, topTip, submittedAt: new Date().toISOString() });
       localStorage.setItem('frea_mentor_applications', JSON.stringify(apps));
     } catch (err) {
       console.warn(err);
@@ -1008,6 +1300,630 @@ async function handleBecomeMentorSubmit(e) {
 }
 window.handleBecomeMentorSubmit = handleBecomeMentorSubmit;
 
+// ─── Filter Profile Docs (Freabies vs Paid) ─────
+
+function filterProfileDocs(filterType, mentorId) {
+  const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
+  if (!mentor || !mentor.docs) return;
+
+  const container = document.getElementById('profile-doc-filters');
+  if (container) {
+    container.querySelectorAll('.doc-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filterType);
+    });
+  }
+
+  let filtered = mentor.docs;
+  if (filterType === 'free') {
+    filtered = mentor.docs.filter(d => d.type === 'free');
+  } else if (filterType === 'paid') {
+    filtered = mentor.docs.filter(d => d.type === 'paid');
+  }
+
+  const grid = document.getElementById('profile-docs-grid');
+  if (grid) {
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div class="docs-empty-state" style="grid-column: 1 / -1; padding: 28px; text-align: center;">
+          <p style="font-size: 15px; opacity: 0.75;">No ${filterType === 'free' ? 'freabies' : 'paid playbooks'} currently listed for this mentor.</p>
+        </div>
+      `;
+    } else {
+      grid.innerHTML = filtered.map(doc => renderDocCard(doc, mentor, false)).join('');
+    }
+  }
+
+  trackEvent('profile_docs_filtered', { mentorId, filterType, count: filtered.length });
+}
+window.filterProfileDocs = filterProfileDocs;
+
+// ─── PAGE: Resources & Freabies Hub ─────
+
+let activeResourcesType = 'all'; // 'all' | 'free' | 'paid'
+let activeResourcesSubject = 'all';
+let activeResourcesSearch = '';
+
+function getFilteredDocs() {
+  const allDocs = getAllDocs();
+  return allDocs.filter(doc => {
+    // Type filter (Hick's Law: 3 distinct choices)
+    if (activeResourcesType === 'free' && doc.type !== 'free') return false;
+    if (activeResourcesType === 'paid' && doc.type !== 'paid') return false;
+
+    // Subject filter
+    if (activeResourcesSubject !== 'all') {
+      const targetSubj = activeResourcesSubject.toLowerCase();
+      const docCategory = (doc.category || '').toLowerCase();
+      const mentorMajor = (doc.mentorMajor || '').toLowerCase();
+      const mappedCategory = (SUBJECT_MAP[doc.mentorMajor] || '').toLowerCase();
+      
+      const matchesCategory = docCategory.includes(targetSubj) || targetSubj.includes(docCategory);
+      const matchesMapped = mappedCategory.includes(targetSubj) || targetSubj.includes(mappedCategory);
+      const matchesMajor = mentorMajor.includes(targetSubj) || targetSubj.includes(mentorMajor);
+      if (!matchesCategory && !matchesMapped && !matchesMajor) return false;
+    }
+
+    // Search query filter
+    if (activeResourcesSearch) {
+      const q = activeResourcesSearch.toLowerCase();
+      const matchTitle = doc.title.toLowerCase().includes(q);
+      const matchSub = doc.subtitle.toLowerCase().includes(q);
+      const matchAuthor = doc.mentorName.toLowerCase().includes(q);
+      const matchUni = doc.mentorUniversity.toLowerCase().includes(q);
+      const matchCategory = (doc.category || '').toLowerCase().includes(q);
+      const matchBullets = (doc.previewBullets || []).some(b => b.toLowerCase().includes(q));
+      if (!matchTitle && !matchSub && !matchAuthor && !matchUni && !matchCategory && !matchBullets) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+function getFilteredDocsHtml() {
+  const filtered = getFilteredDocs();
+  if (filtered.length === 0) {
+    return `
+      <div class="docs-empty-state" style="grid-column: 1 / -1; padding: 48px 24px; text-align: center;">
+        <span style="font-size: 40px; display: block; margin-bottom: 12px;">🔍</span>
+        <h3 style="font-family: var(--font-display); font-size: 20px; color: var(--color-charcoal); margin-bottom: 6px;">no resources match your criteria</h3>
+        <p style="font-size: 14.5px; opacity: 0.7; margin-bottom: 18px;">Try clearing your search query or selecting a different subject.</p>
+        <button class="pill-btn pill-btn--small" onclick="window.resetResourcesFilters()">reset filters</button>
+      </div>
+    `;
+  }
+  return filtered.map(doc => renderDocCard(doc, null, true)).join('');
+}
+
+function renderResourcesHub() {
+  trackEvent('resources_hub_view');
+  const allDocs = getAllDocs();
+  const freeCount = allDocs.filter(d => d.type === 'free').length;
+  const paidCount = allDocs.filter(d => d.type === 'paid').length;
+  const filtered = getFilteredDocs();
+
+  return `
+    <div class="page-view resources-page">
+      <!-- Resources Hero Banner -->
+      <section class="resources-hero">
+        <div class="resources-hero__tape"></div>
+        <div class="page-container" style="text-align: center; position: relative;">
+          <div class="hero__badge" style="margin-bottom: 12px; display: inline-flex;">
+            <span>📚 student knowledge marketplace</span>
+            <span class="hero__badge-dot"></span>
+            <span style="font-weight: 700; color: var(--color-marker-orange);">freabies + playbooks</span>
+          </div>
+          <h1 class="resources-hero__title">
+            the UK student doc vault <span class="handwritten" style="color: var(--color-marker-orange); font-size: 0.9em;">& freabies 🎁</span>
+          </h1>
+          <p class="resources-hero__lead">
+            battle-tested lecture summaries, ATS-crushing CV templates, interview cheat sheets, and exam bibles from senior high-achievers across the Russell Group.
+          </p>
+
+          <!-- Search Bar -->
+          <div class="resources-search-wrap">
+            <span class="resources-search-icon">🔍</span>
+            <input 
+              type="text" 
+              id="resources-search-input" 
+              class="resources-search-input" 
+              placeholder="Search by module (e.g. Concurrency, Tort, Macro), keyword, or mentor..."
+              value="${activeResourcesSearch}"
+              oninput="window.handleResourcesSearch(this.value)"
+            >
+            ${activeResourcesSearch ? `<button class="resources-search-clear" onclick="window.clearResourcesSearch()">✕</button>` : ''}
+          </div>
+
+          <!-- Quick Filters: Type (Freabies vs Paid) and Subjects -->
+          <div class="resources-filter-container">
+            <!-- Type Pill Selector (Hick's Law: 3 primary options) -->
+            <div class="resources-type-selector">
+              <button class="resources-type-btn ${activeResourcesType === 'all' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('all')">
+                ✨ all resources (${allDocs.length})
+              </button>
+              <button class="resources-type-btn ${activeResourcesType === 'free' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('free')">
+                🎁 100% freabies (${freeCount})
+              </button>
+              <button class="resources-type-btn ${activeResourcesType === 'paid' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('paid')">
+                ⚡ student playbooks (${paidCount})
+              </button>
+            </div>
+
+            <!-- Subject Pills -->
+            <div class="resources-subject-pills">
+              ${SUBJECTS.map(subj => `
+                <button class="filter-pill filter-pill--compact ${activeResourcesSubject === subj ? 'active' : ''}" onclick="window.setResourcesSubjectFilter('${subj}')">
+                  ${subj === 'all' ? '✨ all subjects' : subj}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Docs Grid Container -->
+      <section class="page-container" style="padding-top: 36px; padding-bottom: 60px;">
+        <div class="resources-count-bar">
+          <span id="resources-count-badge" class="resources-count-badge">showing ${filtered.length} resource${filtered.length === 1 ? '' : 's'}</span>
+          <span style="font-size: 13.5px; opacity: 0.7;">download instantly · lifetime access saved in browser</span>
+        </div>
+
+        <div class="docs-grid" id="resources-docs-grid">
+          ${getFilteredDocsHtml()}
+        </div>
+
+        <!-- Creator Monetisation CTA Callout -->
+        <div class="resources-creator-banner">
+          <div class="resources-creator-banner__tape"></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;">
+            <div style="max-width: 620px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span style="font-size: 24px;">💡</span>
+                <h3 style="font-family: var(--font-display); font-size: 22px; margin: 0; color: var(--color-charcoal);">Got a 1st class exam bible or interview roadmap?</h3>
+              </div>
+              <p style="font-size: 15px; opacity: 0.85; margin: 0; line-height: 1.5;">
+                Join frea as a senior mentor. Publish free freabies to build your personal brand or set student-friendly prices (£2.99–£5.99) to earn directly from your hard work. Zero commission, 100% impact.
+              </p>
+            </div>
+            <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/become-a-mentor')">
+              <span class="pill-btn__inner">
+                <span>become a mentor & author</span>
+                <span class="pill-btn__arrow">🎓</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      ${renderFooter()}
+    </div>
+  `;
+}
+window.renderResourcesHub = renderResourcesHub;
+
+function updateResourcesGrid() {
+  const grid = document.getElementById('resources-docs-grid');
+  const badge = document.getElementById('resources-count-badge');
+  const filtered = getFilteredDocs();
+
+  if (badge) {
+    badge.innerText = `showing ${filtered.length} resource${filtered.length === 1 ? '' : 's'}`;
+  }
+
+  if (grid) {
+    grid.innerHTML = getFilteredDocsHtml();
+  }
+}
+
+function handleResourcesSearch(query) {
+  activeResourcesSearch = query;
+  updateResourcesGrid();
+  trackEvent('resources_searched', { query: activeResourcesSearch });
+}
+window.handleResourcesSearch = handleResourcesSearch;
+
+function clearResourcesSearch() {
+  activeResourcesSearch = '';
+  const input = document.getElementById('resources-search-input');
+  if (input) input.value = '';
+  updateResourcesGrid();
+}
+window.clearResourcesSearch = clearResourcesSearch;
+
+function setResourcesTypeFilter(type) {
+  activeResourcesType = type;
+  document.querySelectorAll('.resources-type-btn').forEach(btn => {
+    const text = btn.innerText.toLowerCase();
+    const isTarget = (type === 'all' && text.includes('all')) ||
+                     (type === 'free' && text.includes('freabies')) ||
+                     (type === 'paid' && text.includes('playbooks'));
+    btn.classList.toggle('active', isTarget);
+  });
+  updateResourcesGrid();
+  trackEvent('resources_type_filtered', { type });
+}
+window.setResourcesTypeFilter = setResourcesTypeFilter;
+
+function setResourcesSubjectFilter(subjectId) {
+  activeResourcesSubject = subjectId;
+  const pillsWrap = document.querySelector('.resources-subject-pills');
+  if (pillsWrap) {
+    pillsWrap.querySelectorAll('.filter-pill').forEach(btn => {
+      const onClickStr = btn.getAttribute('onclick') || '';
+      btn.classList.toggle('active', onClickStr.includes(`'${subjectId}'`));
+    });
+  }
+  updateResourcesGrid();
+  trackEvent('resources_subject_filtered', { subjectId });
+}
+window.setResourcesSubjectFilter = setResourcesSubjectFilter;
+
+function resetResourcesFilters() {
+  activeResourcesType = 'all';
+  activeResourcesSubject = 'all';
+  activeResourcesSearch = '';
+  const input = document.getElementById('resources-search-input');
+  if (input) input.value = '';
+  document.querySelectorAll('.resources-type-btn').forEach((btn, idx) => {
+    btn.classList.toggle('active', idx === 0);
+  });
+  const pillsWrap = document.querySelector('.resources-subject-pills');
+  if (pillsWrap) {
+    pillsWrap.querySelectorAll('.filter-pill').forEach((btn, idx) => {
+      btn.classList.toggle('active', idx === 0);
+    });
+  }
+  updateResourcesGrid();
+}
+window.resetResourcesFilters = resetResourcesFilters;
+
+// ─── Toast Notification (Peak-End Rule & Doherty Feedback) ─────
+
+function showToast(message) {
+  let toast = document.getElementById('frea-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'frea-toast';
+    toast.className = 'frea-toast';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `
+    <div class="frea-toast__inner">
+      <span>${message}</span>
+      <button class="frea-toast__close" onclick="this.closest('.frea-toast').classList.remove('show')">✕</button>
+    </div>
+  `;
+  toast.classList.add('show');
+  clearTimeout(window.__toastTimeout);
+  window.__toastTimeout = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 4500);
+}
+window.showToast = showToast;
+
+// ─── Modals: Preview & Instant Checkout ─────
+
+function openDocPreviewModal(docId) {
+  const doc = getDocById(docId);
+  if (!doc) return;
+
+  const isUnlocked = isDocUnlocked(doc.id);
+  const isPaid = doc.type === 'paid';
+
+  trackEvent('doc_preview_opened', { docId: doc.id, title: doc.title, isPaid, isUnlocked });
+
+  const modal = document.getElementById('modal-content');
+  if (!modal) return;
+
+  modal.innerHTML = `
+    <button class="modal__close" onclick="closeModal()">✕</button>
+    <div class="doc-modal">
+      <div class="doc-modal__header">
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+          ${isUnlocked ? '<span class="doc-badge doc-badge--unlocked">unlocked ✓</span>' : (isPaid ? `<span class="doc-badge doc-badge--paid">£${doc.price.toFixed(2)}</span>` : '<span class="doc-badge doc-badge--free">freabie 🎁</span>')}
+          <span class="doc-format-badge">${doc.format} · ${doc.pages}</span>
+          <span class="doc-category-badge">${doc.category || 'Study Resource'}</span>
+          <span style="font-size: 13px; font-weight: 600; opacity: 0.7; margin-left: auto;">⭐ ${doc.rating.toFixed(1)} (${doc.downloads} downloads)</span>
+        </div>
+        <h2 class="doc-modal__title">${doc.title}</h2>
+        <p class="doc-modal__subtitle">${doc.subtitle}</p>
+
+        <div class="doc-modal__author-banner" onclick="closeModal(); window.navigateTo('/mentor/${doc.mentorId}')">
+          <div class="doc-modal__avatar" style="flex-shrink: 0;">
+            ${getMentorAvatar(doc.mentorId, 44)}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 700; font-size: 15px; color: var(--color-charcoal); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span>${doc.mentorName}</span>
+              <span class="hero__pass-verified" style="font-size: 11px; padding: 2px 6px;">verified senior</span>
+            </div>
+            <div style="font-size: 13px; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${doc.mentorYear} · ${doc.mentorMajor} · ${doc.mentorUniversity}</div>
+          </div>
+          <span class="doc-modal__author-link" style="flex-shrink: 0;">view mentor profile →</span>
+        </div>
+      </div>
+
+      <div class="doc-modal__body">
+        <h4 style="font-family: var(--font-display); font-size: 17px; margin-bottom: 10px; color: var(--color-charcoal);">What's inside this resource:</h4>
+        <div class="doc-modal__outline-list">
+          ${(doc.previewBullets || []).map((bullet, idx) => `
+            <div class="doc-modal__outline-item" style="display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px;">
+              <span style="font-family: var(--font-display); font-weight: 800; color: var(--color-marker-orange); font-size: 13px;">0${idx + 1}</span>
+              <span style="font-size: 14px; color: var(--color-cocoa-ink); line-height: 1.5;">${bullet}</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="doc-modal__callout">
+          <span style="font-size: 20px;">💡</span>
+          <div>
+            <strong>frea student guarantee:</strong> All freabies and paid resources are created and used by verified senior students. Fair student pricing (£2.99–£5.99) goes straight to the student creator.
+          </div>
+        </div>
+      </div>
+
+      <div class="doc-modal__footer">
+        <div class="doc-modal__pricing">
+          ${isUnlocked ? `
+            <span class="doc-modal__price" style="color: #22c55e;">Purchased ✓</span>
+            <span class="doc-modal__price-sub">Lifetime access saved to this browser</span>
+          ` : (isPaid ? `
+            <span class="doc-modal__price">£${doc.price.toFixed(2)}</span>
+            <span class="doc-modal__price-sub">One-off payment · Instant download & access</span>
+          ` : `
+            <span class="doc-modal__price" style="color: var(--color-marker-orange);">100% Free</span>
+            <span class="doc-modal__price-sub">No credit card or catch · Pay it forward</span>
+          `)}
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button class="pill-btn pill-btn--subtle" onclick="closeModal()">close</button>
+          ${isUnlocked || !isPaid ? `
+            <button class="pill-btn pill-btn--animated" onclick="window.downloadDoc('${doc.id}')">
+              <span class="pill-btn__inner">
+                <span>download ${doc.format.split(' ')[0]}</span>
+                <span class="pill-btn__arrow">📥</span>
+              </span>
+            </button>
+          ` : `
+            <button class="pill-btn pill-btn--animated" onclick="window.openDocCheckoutModal('${doc.id}')">
+              <span class="pill-btn__inner">
+                <span>unlock now (£${doc.price.toFixed(2)})</span>
+                <span class="pill-btn__arrow">🚀</span>
+              </span>
+            </button>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window.openDocPreviewModal = openDocPreviewModal;
+
+function openDocCheckoutModal(docId) {
+  const doc = getDocById(docId);
+  if (!doc) return;
+
+  trackEvent('doc_checkout_opened', { docId: doc.id, title: doc.title, price: doc.price });
+
+  const modal = document.getElementById('modal-content');
+  if (!modal) return;
+
+  modal.innerHTML = `
+    <button class="modal__close" onclick="closeModal()">✕</button>
+    <div class="doc-modal">
+      <div class="doc-modal__header" style="border-bottom: none; padding-bottom: 8px;">
+        <span class="doc-badge doc-badge--paid" style="margin-bottom: 8px;">1-click student checkout</span>
+        <h2 class="doc-modal__title" style="font-size: 24px;">unlock ${doc.title}</h2>
+        <p class="doc-modal__subtitle" style="font-size: 14px;">by <strong>${doc.mentorName}</strong> (${doc.mentorUniversity})</p>
+      </div>
+
+      <div class="doc-modal__checkout-box">
+        <!-- Transparent breakdown adhering to Law of Prägnanz -->
+        <div class="doc-checkout-summary">
+          <div class="doc-checkout-row">
+            <span>Resource (${doc.format} · ${doc.pages})</span>
+            <span>£${doc.price.toFixed(2)}</span>
+          </div>
+          <div class="doc-checkout-row">
+            <span>Student creator support (100% to mentor)</span>
+            <span style="color: #22c55e;">Directly to ${doc.mentorName.split(' ')[0]}</span>
+          </div>
+          <div class="doc-checkout-row">
+            <span>frea platform fee</span>
+            <span>£0.00 (Free)</span>
+          </div>
+          <div class="doc-checkout-divider"></div>
+          <div class="doc-checkout-row doc-checkout-row--total">
+            <span>Total due today</span>
+            <span class="doc-checkout-total">£${doc.price.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <form id="doc-checkout-form" onsubmit="window.processDocCheckout(event, '${doc.id}')">
+          <div class="mentor-form-group" style="margin-bottom: 14px;">
+            <label class="mentor-form-label" style="font-size: 13px;">Your .ac.uk Student Email <span>* (for download link & receipt)</span></label>
+            <input type="email" id="checkout-email" class="mentor-form-input" required placeholder="e.g. yourname@university.ac.uk" style="padding: 10px 14px;">
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label class="mentor-form-label" style="font-size: 13px; margin-bottom: 8px;">Instant Payment Method (Mock Sandbox)</label>
+            <div class="payment-methods-grid">
+              <button type="button" class="payment-method-btn active" onclick="window.selectPaymentMethod(this, 'apple_pay')">
+                <span>🍎 Apple Pay</span>
+              </button>
+              <button type="button" class="payment-method-btn" onclick="window.selectPaymentMethod(this, 'google_pay')">
+                <span>🌐 Google Pay</span>
+              </button>
+              <button type="button" class="payment-method-btn" onclick="window.selectPaymentMethod(this, 'card')">
+                <span>💳 Card</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="checkout-guarantee">
+            <span>🔒</span>
+            <span>256-bit encrypted · Instant lifetime access · Doherty responsive</span>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button type="button" class="pill-btn pill-btn--subtle" onclick="window.openDocPreviewModal('${doc.id}')">← back to preview</button>
+            <button type="submit" id="checkout-submit-btn" class="pill-btn pill-btn--animated" style="flex: 1; padding: 13px 20px;">
+              <span class="pill-btn__inner" style="justify-content: center;">
+                <span>pay £${doc.price.toFixed(2)} & unlock</span>
+                <span class="pill-btn__arrow">⚡</span>
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window.openDocCheckoutModal = openDocCheckoutModal;
+
+function selectPaymentMethod(btn, method) {
+  document.querySelectorAll('.payment-method-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trackEvent('checkout_payment_method_selected', { method });
+}
+window.selectPaymentMethod = selectPaymentMethod;
+
+function processDocCheckout(e, docId) {
+  e.preventDefault();
+  const doc = getDocById(docId);
+  if (!doc) return;
+
+  const email = document.getElementById('checkout-email')?.value.trim();
+  const submitBtn = document.getElementById('checkout-submit-btn');
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span>processing securely... ⚡</span>`;
+  }
+
+  // Simulate ultra-fast payment (<320ms to meet Doherty threshold standard)
+  setTimeout(() => {
+    unlockDoc(doc.id);
+    trackEvent('doc_purchased', { docId: doc.id, title: doc.title, price: doc.price, email });
+
+    const modal = document.getElementById('modal-content');
+    if (!modal) return;
+
+    modal.innerHTML = `
+      <button class="modal__close" onclick="closeModal()">✕</button>
+      <div class="modal--confirmation" style="padding: 30px 20px;">
+        <div class="modal__celebration">🎉 📚 ✨</div>
+        <h2 class="modal__title" style="font-size: 26px;">playbook unlocked!</h2>
+        <p class="modal__body" style="max-width: 480px; margin: 0 auto 20px auto;">
+          congrats! You now have lifetime access to <strong>${doc.title}</strong> by ${doc.mentorName}.
+          A confirmation copy has been sent to <strong>${email || 'your student inbox'}</strong>.
+        </p>
+
+        <div style="background: var(--color-warm-card); border: 1.5px solid rgba(23, 23, 23, 0.15); border-radius: 12px; padding: 16px 20px; max-width: 480px; margin: 0 auto 24px auto; text-align: left;">
+          <div style="font-weight: 700; color: var(--color-charcoal); display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span>💡</span> Mentorship Synergy
+          </div>
+          <p style="font-size: 13.5px; opacity: 0.8; line-height: 1.5; margin: 0;">
+            Want personalised feedback directly on your work? ${doc.mentorName.split(' ')[0]} offers <strong>free 20-min 1-on-1 calls</strong> on frea!
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+          <button class="pill-btn pill-btn--animated" onclick="window.downloadDoc('${doc.id}'); closeModal();">
+            <span class="pill-btn__inner">
+              <span>download guide now 📥</span>
+              <span class="pill-btn__arrow">→</span>
+            </span>
+          </button>
+          <button class="pill-btn pill-btn--subtle" onclick="closeModal(); window.navigateTo('/mentor/${doc.mentorId}');">
+            <span>book free 20-min chat with ${doc.mentorName.split(' ')[0]} 🎓</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    refreshDocCardsUI();
+  }, 320);
+}
+window.processDocCheckout = processDocCheckout;
+
+function downloadDoc(docId) {
+  const doc = getDocById(docId);
+  if (!doc) return;
+
+  trackEvent('doc_downloaded', { docId: doc.id, title: doc.title, type: doc.type });
+
+  const content = `# ${doc.title}
+Subtitle: ${doc.subtitle}
+Author: ${doc.mentorName} (${doc.mentorYear}, ${doc.mentorMajor}, ${doc.mentorUniversity})
+Format: ${doc.format} · ${doc.pages}
+Published via frea (https://frea.co.uk) — Free UK Peer Mentoring Platform
+Rating: ${doc.rating} / 5.0 (${doc.downloads} downloads)
+
+==================================================
+DOCUMENT SUMMARY & KEY TAKEAWAYS:
+==================================================
+${(doc.previewBullets || []).map((b, i) => `${i + 1}. ${b}`).join('\n')}
+
+==================================================
+MENTOR ADVICE & NEXT STEPS:
+==================================================
+"This resource was compiled to save you hundreds of hours of trial and error.
+If you have any questions or want 1-on-1 guidance on these techniques,
+book a 100% free 20-minute mentoring call with me on frea:
+https://frea.co.uk/#/mentor/${doc.mentorId}
+
+Good luck with your exams, applications, and term!"
+— ${doc.mentorName}
+`;
+
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const cleanFilename = doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  a.download = `${cleanFilename}-frea-resource.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(`📥 Downloading "${doc.title}"! Book a free chat with ${doc.mentorName.split(' ')[0]} on frea.`);
+}
+window.downloadDoc = downloadDoc;
+
+function refreshDocCardsUI() {
+  const unlocked = getUnlockedDocIds();
+  unlocked.forEach(docId => {
+    const card = document.getElementById(`doc-card-${docId}`);
+    if (card) {
+      card.classList.add('doc-card--unlocked');
+      const badge = card.querySelector('.doc-badge--paid');
+      if (badge) {
+        badge.outerHTML = `<span class="doc-badge doc-badge--unlocked">unlocked ✓</span>`;
+      }
+      const actionBtn = card.querySelector('.pill-btn--animated');
+      if (actionBtn) {
+        actionBtn.outerHTML = `
+          <button class="pill-btn pill-btn--small pill-btn--unlocked" onclick="window.downloadDoc('${docId}')" title="Download to device">
+            <span>download guide ✓</span>
+          </button>
+        `;
+      }
+    }
+  });
+}
+window.refreshDocCardsUI = refreshDocCardsUI;
+
 // ─── Footer Component ─────
 
 function renderFooter() {
@@ -1029,6 +1945,7 @@ function renderFooter() {
         </div>
         <div class="footer__links">
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/browse')">browse seniors</a>
+          <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/resources')">freabies & docs 📚</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')">become a mentor 🎓</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
         </div>
@@ -1608,6 +2525,8 @@ function renderPage() {
     app.innerHTML = renderLanding();
   } else if (route === '/browse') {
     app.innerHTML = renderBrowse();
+  } else if (route === '/resources' || route === '/docs' || route === '/freabies') {
+    app.innerHTML = renderResourcesHub();
   } else if (route === '/become-a-mentor') {
     app.innerHTML = renderBecomeMentor();
   } else if (route.startsWith('/mentor/')) {
@@ -1736,9 +2655,12 @@ function setupCustomCursor() {
     }
 
     if (dot) {
-      dot.style.left = `${mouseX}px`;
-      dot.style.top = `${mouseY}px`;
+      dot.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0) translate(-50%, -50%)`;
     }
+
+    // Dynamic contrast detection for footer / dark orange areas
+    const isOverDark = !!e.target.closest('.footer, .footer *, .velocity-strip-section, .velocity-strip-section *');
+    cursor.classList.toggle('on-dark', isOverDark);
   });
 
   window.addEventListener('mousedown', () => {
@@ -1763,6 +2685,9 @@ function setupCustomCursor() {
   const INTERACTIVE_SELECTORS = 'a, button, [role="button"], input, select, textarea, .mentor-card, .faq-item, .frea-cal__cell--available, .frea-cal__nav-btn, .filter-pill, .pill-btn, .navbar__brand, .chip, [onclick]';
 
   document.addEventListener('mouseover', (e) => {
+    const isOverDark = !!e.target.closest('.footer, .footer *, .velocity-strip-section, .velocity-strip-section *');
+    cursor.classList.toggle('on-dark', isOverDark);
+
     const target = e.target.closest(INTERACTIVE_SELECTORS);
     if (target && !isHovering) {
       isHovering = true;
@@ -1780,14 +2705,13 @@ function setupCustomCursor() {
     }
   });
 
-  // Smooth lerp loop for the trailing ring
+  // Smooth lerp loop for the trailing ring (runs on compositor thread via translate3d)
   function renderCursor() {
     if (isVisible) {
-      ringX += (mouseX - ringX) * 0.18;
-      ringY += (mouseY - ringY) * 0.18;
+      ringX += (mouseX - ringX) * 0.22;
+      ringY += (mouseY - ringY) * 0.22;
       if (ring) {
-        ring.style.left = `${ringX}px`;
-        ring.style.top = `${ringY}px`;
+        ring.style.transform = `translate3d(${ringX}px, ${ringY}px, 0) translate(-50%, -50%)`;
       }
     }
     requestAnimationFrame(renderCursor);

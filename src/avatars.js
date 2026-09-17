@@ -1,282 +1,462 @@
 // ─────────────────────────────────────────────
-// frea — Handcrafted Mentor Illustrated Avatars
+// frea — Handcrafted Modern Vector Mentor Avatars & Photo System
 // ─────────────────────────────────────────────
 
 export const MENTOR_AVATARS = {
-  // 1. Aanya Sharma: Wavy dark hair, round glasses, navy knit, warm smile, sparkle
+  // 1. Aanya Sharma (Female) — Dark shoulder lob, wireframe specs, navy knit
   1: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#e8f0fe"/>
-      <path d="M18 100c2-22 16-30 32-30s30 8 32 30" fill="#1e293b" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
-      <path d="M42 70l8 10 8-10" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="60" width="14" height="14" fill="#f4c095" stroke="#171717" stroke-width="2"/>
-      <path d="M26 36c0-16 10-26 24-26s24 10 24 26c0 14-2 28-6 34-3 5-7 5-10 1-4-5-4-5-8 0-3 4-7 4-10-1-4-6-6-20-6-34z" fill="#2d1b10" stroke="#171717" stroke-width="2.5"/>
-      <ellipse cx="50" cy="46" rx="19" ry="21" fill="#f4c095" stroke="#171717" stroke-width="2.5"/>
-      <path d="M31 38c3-12 12-18 22-18 12 0 18 6 18 12 0 8-5 10-9 10-6 0-9-5-14-3-4 1-8 5-10 8l-7-9z" fill="#2d1b10" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
-      <circle cx="42" cy="46" r="6.5" stroke="#ff6f1e" stroke-width="2.5" fill="#ffffff" fill-opacity="0.2"/>
-      <circle cx="58" cy="46" r="6.5" stroke="#ff6f1e" stroke-width="2.5" fill="#ffffff" fill-opacity="0.2"/>
-      <path d="M48.5 46h3" stroke="#ff6f1e" stroke-width="2.5"/>
-      <circle cx="42" cy="46" r="2" fill="#171717"/>
-      <circle cx="58" cy="46" r="2" fill="#171717"/>
-      <circle cx="43" cy="45" r="0.6" fill="#ffffff"/>
-      <circle cx="59" cy="45" r="0.6" fill="#ffffff"/>
-      <path d="M44 57c2 3 10 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <ellipse cx="36" cy="51" rx="3" ry="1.5" fill="#ff66cf" opacity="0.5"/>
-      <ellipse cx="64" cy="51" rx="3" ry="1.5" fill="#ff66cf" opacity="0.5"/>
+      <rect width="100" height="100" rx="18" fill="#e0f2fe"/>
+      <!-- Torso & Navy Knit -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#1e293b" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 79 L58 70" fill="#ffffff" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#f4c095" stroke="#171717" stroke-width="2"/>
+      <!-- Back Hair -->
+      <path d="M26 40 C 24 64, 28 80, 36 82 C 37 72, 36 56, 36 46" fill="#2d1b10" stroke="#171717" stroke-width="2"/>
+      <path d="M74 40 C 76 64, 72 80, 64 82 C 63 72, 64 56, 64 46" fill="#2d1b10" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#f4c095" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#f4c095" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="21" fill="#f4c095" stroke="#171717" stroke-width="2.2"/>
+      <!-- Front Hair & Bangs -->
+      <path d="M29 42 C 29 25, 40 18, 50 18 C 60 18, 71 25, 71 42 C 66 32, 57 28, 50 28 C 43 28, 34 32, 29 42 Z" fill="#2d1b10" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Thin Wireframe Glasses -->
+      <circle cx="41" cy="45" r="7.5" stroke="#ff6f1e" stroke-width="1.8" fill="#ffffff" fill-opacity="0.2"/>
+      <circle cx="59" cy="45" r="7.5" stroke="#ff6f1e" stroke-width="1.8" fill="#ffffff" fill-opacity="0.2"/>
+      <path d="M48.5 45 L 51.5 45" stroke="#ff6f1e" stroke-width="1.8"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="41" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="59" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="42" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="60" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Smile & Cheeks -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="36" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="64" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `,
 
-  // 2. Rohan Mehta: Side part, square glasses, olive hoodie, pencil behind ear
+  // 2. Callum Davies (Male) — Side part, olive crewneck, crisp white collar
   2: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fef3c7"/>
-      <path d="M16 100c3-22 18-30 34-30s31 8 34 30" fill="#3f6212" stroke="#171717" stroke-width="2.5" stroke-linejoin="round"/>
-      <path d="M43 70c0 8 7 14 7 14s7-6 7-14" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="60" width="14" height="13" fill="#e0a97c" stroke="#171717" stroke-width="2"/>
-      <rect x="65" y="32" width="22" height="4" rx="1" transform="rotate(-30 65 32)" fill="#ff6f1e" stroke="#171717" stroke-width="1.5"/>
-      <path d="M32 44c0-12 8-20 18-20s18 8 18 20c0 14-8 21-18 21s-18-7-18-21z" fill="#e0a97c" stroke="#171717" stroke-width="2.5"/>
-      <path d="M30 36c1-14 12-18 24-18 8 0 16 3 16 9 0 4-4 6-10 6-8 0-14-1-20 4l-10-1z" fill="#1f1813" stroke="#171717" stroke-width="2.5"/>
-      <rect x="36" y="40" width="11" height="9" rx="2" stroke="#171717" stroke-width="2" fill="#ffffff" fill-opacity="0.3"/>
-      <rect x="53" y="40" width="11" height="9" rx="2" stroke="#171717" stroke-width="2" fill="#ffffff" fill-opacity="0.3"/>
-      <path d="M47 44h6" stroke="#171717" stroke-width="2"/>
-      <circle cx="41.5" cy="44.5" r="1.8" fill="#171717"/>
-      <circle cx="58.5" cy="44.5" r="1.8" fill="#171717"/>
-      <path d="M46 55c2 2 7 2 9-1" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#fef3c7"/>
+      <!-- Torso & Olive Sweatshirt -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#3f6212" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M41 70 C 41 76, 59 76, 59 70" fill="#fdfbf9" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#e0a97c" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#e0a97c" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#e0a97c" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#e0a97c" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Classic styled side part -->
+      <path d="M30 42 C 29 26, 36 19, 50 19 C 64 19, 71 27, 71 39 C 68 33, 62 30, 52 30 C 40 30, 32 34, 30 42 Z" fill="#382314" stroke="#171717" stroke-width="2.2"/>
+      <path d="M30 38 C 34 32, 42 29, 50 29" stroke="#171717" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <!-- Eyebrows -->
+      <path d="M38 39 Q 43 37 47 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <path d="M53 39 Q 57 37 62 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Friendly confident smile -->
+      <path d="M44 56 Q 50 61 56 56" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 3. Priya Nair: Topknot messy bun, warm smile, cute earrings, lavender turtleneck
+  // 3. Priya Nair (Female) — High bun topknot, lavender ribbed turtleneck, gold hoops
   3: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fce7f3"/>
-      <!-- Shoulders & Lavender Turtleneck -->
-      <path d="M16 100c2-20 16-28 34-28s32 8 34 28" fill="#c084fc" stroke="#171717" stroke-width="2.5"/>
-      <rect x="42" y="60" width="16" height="14" rx="3" fill="#a855f7" stroke="#171717" stroke-width="2"/>
-      <rect x="44" y="52" width="12" height="10" fill="#d99564" stroke="#171717" stroke-width="2"/>
-      <!-- Topknot Bun with Hair Tie -->
-      <circle cx="50" cy="16" r="10" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
-      <path d="M45 16c2-2 8-2 10 0" stroke="#ff6f1e" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#fce7f3"/>
+      <!-- Torso & Lavender Turtleneck -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#c084fc" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <rect x="42" y="60" width="16" height="14" rx="4" fill="#a855f7" stroke="#171717" stroke-width="2"/>
+      <!-- Neck -->
+      <rect x="44" y="52" width="12" height="12" fill="#d99564" stroke="#171717" stroke-width="1.8"/>
+      <!-- Topknot Bun -->
+      <circle cx="50" cy="16" r="10" fill="#1c1917" stroke="#171717" stroke-width="2.2"/>
+      <path d="M45 16 C 47 14, 53 14, 55 16" stroke="#ff6f1e" stroke-width="2" stroke-linecap="round"/>
+      <!-- Ears & Gold Hoop Earrings -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#d99564" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#d99564" stroke="#171717" stroke-width="1.8"/>
+      <circle cx="30" cy="51" r="3.2" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
+      <circle cx="70" cy="51" r="3.2" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
       <!-- Head -->
-      <ellipse cx="50" cy="45" rx="18" ry="19" fill="#d99564" stroke="#171717" stroke-width="2.5"/>
-      <!-- Hair Bangs & Frame (shows full forehead and eyes naturally) -->
-      <path d="M32 38c0-14 9-20 18-20s18 6 18 20c-3-2-7-3-12-1-4 2-8 1-12-2-5 3-9 4-12 3z" fill="#1c1917" stroke="#171717" stroke-width="2.5"/>
-      <!-- Cute small hoop earrings at the ears -->
-      <circle cx="31" cy="47" r="2.5" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
-      <circle cx="69" cy="47" r="2.5" stroke="#ff6f1e" stroke-width="1.8" fill="none"/>
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#d99564" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair Bangs -->
+      <path d="M30 40 C 30 25, 41 22, 50 22 C 59 22, 70 25, 70 40 C 64 33, 56 31, 50 31 C 44 31, 36 33, 30 40 Z" fill="#1c1917" stroke="#171717" stroke-width="2.2"/>
       <!-- Eyebrows -->
-      <path d="M38 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M54 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <!-- Friendly Cartoon Eyes with pupil highlights -->
-      <circle cx="42" cy="43" r="2.2" fill="#171717"/>
-      <circle cx="58" cy="43" r="2.2" fill="#171717"/>
-      <circle cx="43" cy="42" r="0.8" fill="#ffffff"/>
-      <circle cx="59" cy="42" r="0.8" fill="#ffffff"/>
-      <!-- Rosy Cheeks -->
-      <ellipse cx="37" cy="48" rx="2.8" ry="1.5" fill="#f43f5e" opacity="0.35"/>
-      <ellipse cx="63" cy="48" rx="2.8" ry="1.5" fill="#f43f5e" opacity="0.35"/>
-      <!-- Warm, Happy Smile -->
-      <path d="M44 52c2 3 10 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <path d="M38 39 Q 42 37 46 39" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 39 Q 58 37 62 39" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Cheeks & Smile -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="37" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="63" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `,
 
-  // 4. Arjun Patel: Fade cut, bomber jacket, approachable smirk, airpod
+  // 4. Noah Adebayo (Male) — Sharp taper fade, deep tone, bomber jacket, airpod
   4: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#dcfce7"/>
-      <path d="M16 100c2-22 17-29 34-29s32 7 34 29" fill="#1f2937" stroke="#171717" stroke-width="2.5"/>
-      <path d="M44 71l6 14 6-14" fill="#ffffff" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="58" width="14" height="14" fill="#c88b56" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="44" rx="18" ry="20" fill="#c88b56" stroke="#171717" stroke-width="2.5"/>
-      <path d="M32 38c0-12 8-18 18-18s18 6 18 18c-2 0-7-4-18-4s-16 4-18 4z" fill="#18181b" stroke="#171717" stroke-width="2.5"/>
-      <rect x="67" y="44" width="3" height="7" rx="1.5" fill="#fdfbf9" stroke="#171717" stroke-width="1.5"/>
-      <path d="M38 37c2-1 6-1 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M54 37c2-1 6-1 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="42" cy="42" r="2" fill="#171717"/>
-      <circle cx="58" cy="42" r="2" fill="#171717"/>
-      <path d="M44 52c2 3 9 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M40 56c3 5 17 5 20 0" stroke="#a06330" stroke-width="1.5" stroke-dasharray="2 2"/>
+      <rect width="100" height="100" rx="18" fill="#dcfce7"/>
+      <!-- Torso & Bomber Jacket -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#1e293b" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M43 70 L50 82 L57 70" fill="#ffffff" stroke="#171717" stroke-width="2"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#8c5836" stroke="#171717" stroke-width="2"/>
+      <!-- Ears & Airpod -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#8c5836" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#8c5836" stroke="#171717" stroke-width="1.8"/>
+      <rect x="68" y="47" width="3" height="6" rx="1.5" fill="#ffffff" stroke="#171717" stroke-width="1.2"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#8c5836" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Clean fade -->
+      <path d="M30 42 C 30 26, 38 20, 50 20 C 62 20, 70 26, 70 42 C 68 34, 60 32, 50 32 C 40 32, 32 34, 30 42 Z" fill="#18181b" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 39 Q 43 37 47 39" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <path d="M53 39 Q 57 37 62 39" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Warm smirk & neat chin contour -->
+      <path d="M44 56 Q 50 61 56 56" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 5. Meera Krishnan: Curly hair, teal knit, big round specs
+  // 5. Oliver Zhang (Male) — Neat parted hair, thin metal glasses, Oxford shirt
   5: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#e0e7ff"/>
-      <path d="M18 100c2-22 16-30 32-30s30 8 32 30" fill="#0f766e" stroke="#171717" stroke-width="2.5"/>
-      <rect x="42" y="60" width="16" height="12" fill="#c27d48" stroke="#171717" stroke-width="2"/>
-      <circle cx="34" cy="36" r="14" fill="#1e1b18"/>
-      <circle cx="66" cy="36" r="14" fill="#1e1b18"/>
-      <circle cx="50" cy="24" r="14" fill="#1e1b18"/>
-      <circle cx="30" cy="48" r="12" fill="#1e1b18"/>
-      <circle cx="70" cy="48" r="12" fill="#1e1b18"/>
-      <ellipse cx="50" cy="48" rx="18" ry="20" fill="#c27d48" stroke="#171717" stroke-width="2.5"/>
-      <path d="M36 34c3 3 8 0 10-3 3 4 8 3 10-1 4 4 9 1 10-4" stroke="#171717" stroke-width="2.5" fill="none"/>
-      <circle cx="41" cy="47" r="7" stroke="#171717" stroke-width="2.5" fill="#ffffff" fill-opacity="0.25"/>
-      <circle cx="59" cy="47" r="7" stroke="#171717" stroke-width="2.5" fill="#ffffff" fill-opacity="0.25"/>
-      <path d="M48 47h4" stroke="#171717" stroke-width="2.5"/>
-      <circle cx="41" cy="47" r="2" fill="#171717"/>
-      <circle cx="59" cy="47" r="2" fill="#171717"/>
-      <path d="M44 58c2 4 10 4 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#ede9fe"/>
+      <!-- Torso & Crisp Oxford Blue Shirt -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#2563eb" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 77 L58 70" fill="#ffffff" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#f2c8a2" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#f2c8a2" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#f2c8a2" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#f2c8a2" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Neat side-sweep -->
+      <path d="M30 42 C 29 27, 38 21, 50 21 C 62 21, 71 27, 71 40 C 67 34, 59 31, 50 31 C 41 31, 33 34, 30 42 Z" fill="#1e1e24" stroke="#171717" stroke-width="2.2"/>
+      <!-- Minimalist Rectangular Glasses -->
+      <rect x="35" y="41" width="12" height="9" rx="2.5" stroke="#171717" stroke-width="1.8" fill="#ffffff" fill-opacity="0.2"/>
+      <rect x="53" y="41" width="12" height="9" rx="2.5" stroke="#171717" stroke-width="1.8" fill="#ffffff" fill-opacity="0.2"/>
+      <path d="M47 45 L53 45" stroke="#171717" stroke-width="1.8"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="41" cy="45" r="2.2" fill="#171717"/>
+      <circle cx="59" cy="45" r="2.2" fill="#171717"/>
+      <circle cx="42" cy="44" r="0.7" fill="#ffffff"/>
+      <circle cx="60" cy="44" r="0.7" fill="#ffffff"/>
+      <!-- Calm scholarly smile -->
+      <path d="M44 56 Q 50 60 56 56" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 6. Kabir Singh: Orange beanie, black mock neck, creative smirk
+  // 6. Emily Watson (Female) — Auburn bob with fringe, teal cardigan
   6: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#ffedd5"/>
-      <path d="M16 100c2-22 17-29 34-29s32 7 34 29" fill="#18181b" stroke="#171717" stroke-width="2.5"/>
-      <rect x="42" y="62" width="16" height="10" rx="2" fill="#18181b" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="54" width="14" height="10" fill="#f0be92" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="46" rx="18" ry="19" fill="#f0be92" stroke="#171717" stroke-width="2.5"/>
-      <path d="M30 32c0-12 9-18 20-18s20 6 20 18c0 4-40 4-40 0z" fill="#ff6f1e" stroke="#171717" stroke-width="2.5"/>
-      <rect x="28" y="28" width="44" height="8" rx="3" fill="#ea580c" stroke="#171717" stroke-width="2"/>
-      <path d="M32 38c2 4 4 6 5 2M68 38c-2 4-4 6-5 2" stroke="#171717" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="41" cy="44" r="2" fill="#171717"/>
-      <circle cx="59" cy="44" r="2" fill="#171717"/>
-      <path d="M37 39c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M55 39c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M46 54c3 3 8 1 10-1" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#ffedd5"/>
+      <!-- Torso & Teal Cardigan -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#0f766e" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 80 L58 70" fill="#fef3c7" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#f8d7bb" stroke="#171717" stroke-width="2"/>
+      <!-- Back Bob Hair -->
+      <path d="M26 42 C 25 60, 28 68, 35 70" fill="#c2410c" stroke="#171717" stroke-width="2"/>
+      <path d="M74 42 C 75 60, 72 68, 65 70" fill="#c2410c" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#f8d7bb" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#f8d7bb" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#f8d7bb" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Chic auburn bob with fringe -->
+      <path d="M28 42 C 27 24, 38 18, 50 18 C 62 18, 73 24, 72 42 C 67 33, 58 30, 50 30 C 42 30, 33 33, 28 42 Z" fill="#c2410c" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
+      <!-- Warm smile & blush -->
+      <path d="M44 54 Q 50 59 56 54" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="37" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="63" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `,
 
-  // 7. Zara Ahmed: Dark bob cut, terracotta cardigan, delicate specs
+  // 7. Tariq Al-Mansoor (Male) — Dark hair, neat trimmed stubble line, burgundy scrub
   7: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fdf2f8"/>
-      <path d="M18 100c2-22 16-30 32-30s30 8 32 30" fill="#c2410c" stroke="#171717" stroke-width="2.5"/>
-      <path d="M44 70l6 15 6-15" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="60" width="14" height="12" fill="#eab38e" stroke="#171717" stroke-width="2"/>
-      <path d="M26 40c0-15 11-22 24-22s24 7 24 22c0 14-4 22-7 24-2-8-3-12-3-12-7 2-10-3-14-3s-7 5-14 3c0 0-1 4-3 12-3-2-7-10-7-24z" fill="#0f172a" stroke="#171717" stroke-width="2.5"/>
-      <ellipse cx="50" cy="46" rx="17" ry="19" fill="#eab38e" stroke="#171717" stroke-width="2.5"/>
-      <rect x="36" y="42" width="11" height="8" rx="3" stroke="#ff6f1e" stroke-width="1.8" fill="#ffffff" fill-opacity="0.3"/>
-      <rect x="53" y="42" width="11" height="8" rx="3" stroke="#ff6f1e" stroke-width="1.8" fill="#ffffff" fill-opacity="0.3"/>
-      <path d="M47 45h6" stroke="#ff6f1e" stroke-width="1.8"/>
-      <circle cx="41.5" cy="46" r="1.7" fill="#171717"/>
-      <circle cx="58.5" cy="46" r="1.7" fill="#171717"/>
-      <path d="M46 56c2 2 6 2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#ffe4e6"/>
+      <!-- Torso & Medical Scrub -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#991b1b" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M40 70 L50 82 L60 70" fill="#f8fafc" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#cca07e" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#cca07e" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#cca07e" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#cca07e" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Modern taper cut -->
+      <path d="M30 42 C 29 26, 38 20, 50 20 C 62 20, 71 26, 71 42 C 67 34, 59 32, 50 32 C 41 32, 33 34, 30 42 Z" fill="#171717" stroke="#171717" stroke-width="2.2"/>
+      <!-- Trimmed Beard Contour -->
+      <path d="M34 50 C 36 64, 44 67, 50 67 C 56 67, 64 64, 66 50" stroke="#171717" stroke-width="1.6" stroke-dasharray="2 2" fill="none"/>
+      <!-- Eyebrows -->
+      <path d="M38 39 Q 43 37 47 39" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <path d="M53 39 Q 57 37 62 39" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Friendly reassuring smile -->
+      <path d="M44 56 Q 50 60 56 56" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 8. Dev Malhotra: Sky blue oxford shirt, tidy textured hair, warm smile
+  // 8. Maya Tremblay (Female) — Blonde wavy hair, yellow jumper
   8: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#f0fdf4"/>
-      <path d="M16 100c2-22 17-29 34-29s32 7 34 29" fill="#38bdf8" stroke="#171717" stroke-width="2.5"/>
-      <path d="M38 71l12 8-5-16M62 71l-12 8 5-16" fill="#ffffff" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="58" width="14" height="14" fill="#dfa575" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="44" rx="18" ry="20" fill="#dfa575" stroke="#171717" stroke-width="2.5"/>
-      <path d="M31 36c1-13 10-18 20-18 8 0 16 3 18 10 0 4-4 6-12 4-6-1-10 1-16 6l-10-2z" fill="#262626" stroke="#171717" stroke-width="2.5"/>
-      <circle cx="42" cy="43" r="2" fill="#171717"/>
-      <circle cx="58" cy="43" r="2" fill="#171717"/>
-      <path d="M38 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M54 38c2-2 6-2 8 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M44 53c2 4 10 4 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#ccfbf1"/>
+      <!-- Torso & Yellow Knit -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#eab308" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M41 70 C 41 76, 59 76, 59 70" fill="#fef08a" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fed7aa" stroke="#171717" stroke-width="2"/>
+      <!-- Back Wavy Hair -->
+      <path d="M25 40 C 23 66, 27 82, 35 84" fill="#d97706" stroke="#171717" stroke-width="2"/>
+      <path d="M75 40 C 77 66, 73 82, 65 84" fill="#d97706" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fed7aa" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Blonde wavy front -->
+      <path d="M28 42 C 27 25, 38 18, 50 18 C 62 18, 73 25, 72 42 C 66 33, 58 30, 50 30 C 42 30, 34 33, 28 42 Z" fill="#d97706" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
+      <!-- Warm smile & blush -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="36" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="64" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `,
 
-  // 9. Ishita Reddy: High ponytail with pencil, smock apron, expressive eyes
+  // 9. Lucas Wright (Male) — Textured brown hair, forest green vintage sweater
   9: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fef9c3"/>
-      <path d="M18 100c2-22 16-30 32-30s30 8 32 30" fill="#4d7c0f" stroke="#171717" stroke-width="2.5"/>
-      <rect x="42" y="60" width="16" height="12" fill="#d29060" stroke="#171717" stroke-width="2"/>
-      <path d="M60 26c8-4 16-2 20 8 3 7 1 15-2 18-3-6-6-10-12-14l-6-12z" fill="#171717" stroke="#171717" stroke-width="2.5"/>
-      <line x1="52" y1="28" x2="68" y2="18" stroke="#ff6f1e" stroke-width="3" stroke-linecap="round"/>
-      <ellipse cx="50" cy="46" rx="18" ry="19" fill="#d29060" stroke="#171717" stroke-width="2.5"/>
-      <path d="M32 38c4-12 12-16 22-16 8 0 14 3 14 8 0 6-8 8-16 8-8 0-14 1-20 0z" fill="#171717" stroke="#171717" stroke-width="2.5"/>
-      <circle cx="41" cy="45" r="2.2" fill="#171717"/>
-      <circle cx="59" cy="45" r="2.2" fill="#171717"/>
-      <circle cx="42" cy="44" r="0.8" fill="#ffffff"/>
-      <circle cx="60" cy="44" r="0.8" fill="#ffffff"/>
-      <path d="M43 55c2 4 12 4 14 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#e0e7ff"/>
+      <!-- Torso & Forest Green Sweater -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#14532d" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 77 L58 70" fill="#f8fafc" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fed7aa" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#fed7aa" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Textured wavy crop -->
+      <path d="M30 42 C 28 26, 36 20, 50 20 C 64 20, 72 26, 70 42 C 67 34, 59 31, 50 31 C 41 31, 33 34, 30 42 Z" fill="#451a03" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 39 Q 43 37 47 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <path d="M53 39 Q 57 37 62 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Thoughtful smile -->
+      <path d="M44 56 Q 50 60 56 56" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 10. Aarav Joshi: Studio headphones around neck, charcoal crewneck, broad grin
+  // 10. Sophia Taylor (Female) — Curly textured hair / puff, stylish black mock-neck
   10: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#f1f5f9"/>
-      <path d="M16 100c2-22 17-29 34-29s32 7 34 29" fill="#334155" stroke="#171717" stroke-width="2.5"/>
-      <rect x="43" y="58" width="14" height="14" fill="#bb7b4c" stroke="#171717" stroke-width="2"/>
-      <path d="M30 68c0 10 10 14 20 14s20-4 20-14" stroke="#ff6f1e" stroke-width="4" stroke-linecap="round" fill="none"/>
-      <rect x="26" y="60" width="8" height="12" rx="4" fill="#171717" stroke="#ff6f1e" stroke-width="1.5"/>
-      <rect x="66" y="60" width="8" height="12" rx="4" fill="#171717" stroke="#ff6f1e" stroke-width="1.5"/>
-      <ellipse cx="50" cy="44" rx="18" ry="19" fill="#bb7b4c" stroke="#171717" stroke-width="2.5"/>
-      <path d="M32 38c0-12 9-18 18-18s18 6 18 18c-3-2-7-3-12-1-4 2-8 1-12-2-4 3-8 4-12 3z" fill="#09090b" stroke="#171717" stroke-width="2.5"/>
-      <circle cx="42" cy="43" r="2" fill="#171717"/>
-      <circle cx="58" cy="43" r="2" fill="#171717"/>
-      <path d="M42 52c2 6 14 6 16 0" fill="#fdfbf9" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#fef9c3"/>
+      <!-- Torso & Black Mock Neck -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#18181b" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <rect x="42" y="60" width="16" height="12" rx="3" fill="#18181b" stroke="#171717" stroke-width="2"/>
+      <!-- Neck -->
+      <rect x="43" y="53" width="14" height="12" fill="#78350f" stroke="#171717" stroke-width="1.8"/>
+      <!-- Hair Afro Puff / Volume behind head -->
+      <circle cx="34" cy="36" r="13" fill="#18181b"/>
+      <circle cx="66" cy="36" r="13" fill="#18181b"/>
+      <circle cx="50" cy="24" r="13" fill="#18181b"/>
+      <circle cx="30" cy="48" r="11" fill="#18181b"/>
+      <circle cx="70" cy="48" r="11" fill="#18181b"/>
+      <!-- Ears & Gold Studs -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#78350f" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#78350f" stroke="#171717" stroke-width="1.8"/>
+      <circle cx="30" cy="49" r="1.5" fill="#f59e0b"/>
+      <circle cx="70" cy="49" r="1.5" fill="#f59e0b"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#78350f" stroke="#171717" stroke-width="2.2"/>
+      <!-- Front Hairline -->
+      <path d="M32 40 C 36 32, 43 30, 50 30 C 57 30, 64 32, 68 40" stroke="#171717" stroke-width="2.2" fill="none"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
+      <!-- Warm smile -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 11. Tara Bose: Afro puffs, mustard knit, sparkling eyes
+  // 11. Liam Fletcher (Male) — Energetic wavy hair, modern grey hoodie
   11: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fef08a"/>
-      <path d="M18 100c2-22 16-30 32-30s30 8 32 30" fill="#eab308" stroke="#171717" stroke-width="2.5"/>
-      <rect x="42" y="60" width="16" height="12" fill="#8d4925" stroke="#171717" stroke-width="2"/>
-      <circle cx="28" cy="28" r="14" fill="#18181b" stroke="#171717" stroke-width="2"/>
-      <circle cx="72" cy="28" r="14" fill="#18181b" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="46" rx="18" ry="20" fill="#8d4925" stroke="#171717" stroke-width="2.5"/>
-      <path d="M33 36c4-8 10-12 17-12s13 4 17 12c-4-2-8-3-17-3s-13 1-17 3z" fill="#18181b" stroke="#171717" stroke-width="2.5"/>
-      <path d="M30 48l1 2 2 0-1.5 1.5 0.5 2-2-1-2 1 0.5-2L27 50l2 0z" fill="#ff6f1e"/>
-      <path d="M70 48l1 2 2 0-1.5 1.5 0.5 2-2-1-2 1 0.5-2L67 50l2 0z" fill="#ff6f1e"/>
-      <circle cx="41" cy="45" r="2.2" fill="#171717"/>
-      <circle cx="59" cy="45" r="2.2" fill="#171717"/>
-      <circle cx="42" cy="44" r="0.8" fill="#ffffff"/>
-      <circle cx="60" cy="44" r="0.8" fill="#ffffff"/>
-      <path d="M43 56c2 4 12 4 14 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#e2e8f0"/>
+      <!-- Torso & Grey Hoodie -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#475569" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M44 71 C 44 78, 56 78, 56 71" fill="#f8fafc" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fed7aa" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="47" rx="19" ry="20" fill="#fed7aa" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Modern energetic crop -->
+      <path d="M30 42 C 28 26, 36 20, 50 20 C 64 20, 72 26, 70 42 C 67 34, 59 31, 50 31 C 41 31, 33 34, 30 42 Z" fill="#b45309" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 39 Q 43 37 47 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <path d="M53 39 Q 57 37 62 39" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.8" fill="#ffffff"/>
+      <!-- Bright friendly grin -->
+      <path d="M43 56 Q 50 62 57 56" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
-  // 12. Nikhil Verma: Shaggy skater hair, navy hoodie, Band-Aid on cheek
+  // 12. Chloe Jenkins (Female) — Sleek dark ponytail, rose-gold wire specs, sky blue cardigan
   12: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#e2e8f0"/>
-      <path d="M16 100c2-22 17-29 34-29s32 7 34 29" fill="#1e3a8a" stroke="#171717" stroke-width="2.5"/>
-      <path d="M44 71c0 6 6 12 6 12s6-6 6-12" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
-      <rect x="43" y="58" width="14" height="14" fill="#dfa575" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="45" rx="18" ry="19" fill="#dfa575" stroke="#171717" stroke-width="2.5"/>
-      <path d="M30 36c2-12 11-18 20-18 11 0 19 6 20 16 0 4-4 8-8 10-2-6-4-10-10-8-5 1-8 7-12 1-4-2-6 5-10 1l0-2z" fill="#451a03" stroke="#171717" stroke-width="2.5"/>
-      <rect x="58" y="50" width="8" height="4" rx="1" transform="rotate(-15 58 50)" fill="#fecdd3" stroke="#ff6f1e" stroke-width="1.2"/>
-      <circle cx="41" cy="43" r="2" fill="#171717"/>
-      <circle cx="59" cy="43" r="2" fill="#171717"/>
-      <path d="M38 38c2-1 6 0 7 2" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M55 40c2-2 6-1 7 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <path d="M43 54c3 3 10 1 12-2" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
+      <rect width="100" height="100" rx="18" fill="#fae8ff"/>
+      <!-- Torso & Sky Blue Cardigan -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#0284c7" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 79 L58 70" fill="#ffffff" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fed7aa" stroke="#171717" stroke-width="2"/>
+      <!-- Ponytail at side -->
+      <path d="M68 40 C 76 44, 82 56, 80 66 C 76 64, 73 52, 70 46" fill="#18181b" stroke="#171717" stroke-width="2"/>
+      <circle cx="70" cy="42" r="3" fill="#ff6f1e"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fed7aa" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Sleek back -->
+      <path d="M29 42 C 29 25, 40 18, 50 18 C 60 18, 71 25, 71 42 C 66 32, 57 28, 50 28 C 43 28, 34 32, 29 42 Z" fill="#18181b" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Delicate Wireframe Specs -->
+      <circle cx="41" cy="45" r="7" stroke="#e11d48" stroke-width="1.6" fill="#ffffff" fill-opacity="0.2"/>
+      <circle cx="59" cy="45" r="7" stroke="#e11d48" stroke-width="1.6" fill="#ffffff" fill-opacity="0.2"/>
+      <path d="M48 45 L52 45" stroke="#e11d48" stroke-width="1.6"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="41" cy="45" r="2.2" fill="#171717"/>
+      <circle cx="59" cy="45" r="2.2" fill="#171717"/>
+      <circle cx="42" cy="44" r="0.7" fill="#ffffff"/>
+      <circle cx="60" cy="44" r="0.7" fill="#ffffff"/>
+      <!-- Warm smile & blush -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="36" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="64" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `,
 
-  // 13. Hannah Clarke: Wavy blonde hair, tortoiseshell glasses, warm terracotta sweater, creative smile
+  // 13. Hannah Clarke (Female) — Wavy warm hair, orange cardigan
   13: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="16" fill="#fef3c7"/>
-      <path d="M16 100c2-20 16-28 34-28s32 8 34 28" fill="#ea580c" stroke="#171717" stroke-width="2.5"/>
-      <path d="M44 72l6 9 6-9" fill="#fdfbf9" stroke="#171717" stroke-width="2"/>
-      <rect x="42" y="60" width="16" height="13" fill="#fbd5b5" stroke="#171717" stroke-width="2"/>
-      <!-- Long wavy hair background -->
-      <path d="M26 38c-2 18 2 34 6 42 2-8 3-20 3-26" fill="#d97706" stroke="#171717" stroke-width="2"/>
-      <path d="M74 38c2 18-2 34-6 42-2-8-3-20-3-26" fill="#d97706" stroke="#171717" stroke-width="2"/>
-      <ellipse cx="50" cy="46" rx="18" ry="20" fill="#fbd5b5" stroke="#171717" stroke-width="2.5"/>
-      <!-- Hair top & bangs -->
-      <path d="M30 38c0-14 10-22 20-22s20 8 20 22c0 4-2 7-6 8-4-8-7-10-14-10s-10 2-14 10c-4-1-6-4-6-8z" fill="#d97706" stroke="#171717" stroke-width="2.5"/>
-      <!-- Glasses -->
-      <rect x="35" y="41" width="12" height="10" rx="3" stroke="#78350f" stroke-width="2.2" fill="#ffffff" fill-opacity="0.25"/>
-      <rect x="53" y="41" width="12" height="10" rx="3" stroke="#78350f" stroke-width="2.2" fill="#ffffff" fill-opacity="0.25"/>
-      <path d="M47 45h6" stroke="#78350f" stroke-width="2.2"/>
-      <circle cx="41" cy="46" r="1.8" fill="#171717"/>
-      <circle cx="59" cy="46" r="1.8" fill="#171717"/>
-      <circle cx="42" cy="45" r="0.6" fill="#ffffff"/>
-      <circle cx="60" cy="45" r="0.6" fill="#ffffff"/>
-      <!-- Warm smile and cheek blush -->
-      <path d="M44 56c2 3 10 3 12 0" stroke="#171717" stroke-width="2" stroke-linecap="round"/>
-      <ellipse cx="37" cy="52" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
-      <ellipse cx="63" cy="52" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
+      <rect width="100" height="100" rx="18" fill="#fef3c7"/>
+      <!-- Torso & Orange Cardigan -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#ea580c" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 78 L58 70" fill="#ffffff" stroke="#171717" stroke-width="1.8"/>
+      <!-- Neck -->
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fbd5b5" stroke="#171717" stroke-width="2"/>
+      <!-- Back Waves -->
+      <path d="M26 40 C 24 62, 28 78, 36 80" fill="#b45309" stroke="#171717" stroke-width="2"/>
+      <path d="M74 40 C 76 62, 72 78, 64 80" fill="#b45309" stroke="#171717" stroke-width="2"/>
+      <!-- Ears -->
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
+      <!-- Head -->
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fbd5b5" stroke="#171717" stroke-width="2.2"/>
+      <!-- Front Hair -->
+      <path d="M29 42 C 29 25, 40 18, 50 18 C 60 18, 71 25, 71 42 C 66 32, 57 28, 50 28 C 43 28, 34 32, 29 42 Z" fill="#b45309" stroke="#171717" stroke-width="2.2"/>
+      <!-- Eyebrows -->
+      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <!-- Eyes & Catchlights -->
+      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
+      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
+      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
+      <!-- Cheeks & Smile -->
+      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="36" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <ellipse cx="64" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `
 };
 
-export function getMentorAvatar(mentorId, size = 80) {
+/**
+ * Render mentor avatar: Supports custom user-uploaded photo URL or vector SVG illustration
+ * @param {number|object} mentorOrId - Mentor ID or mentor object
+ * @param {number} size - Dimension in px (default 80)
+ * @param {string|null} photoUrl - Optional direct photo URL or base64 data string
+ */
+export function getMentorAvatar(mentorOrId, size = 80, photoUrl = null) {
+  let mentorId = 1;
+  let resolvedPhoto = photoUrl;
+
+  if (typeof mentorOrId === 'object' && mentorOrId !== null) {
+    mentorId = mentorOrId.id || 1;
+    resolvedPhoto = mentorOrId.photoUrl || resolvedPhoto;
+  } else if (typeof mentorOrId === 'number') {
+    mentorId = mentorOrId;
+  }
+
+  // If user uploaded a custom profile picture, render high-res image
+  if (resolvedPhoto && typeof resolvedPhoto === 'string' && (resolvedPhoto.startsWith('data:') || resolvedPhoto.startsWith('http') || resolvedPhoto.startsWith('/'))) {
+    return `<img src="${resolvedPhoto}" alt="Mentor avatar" class="mentor-avatar-img" width="${size}" height="${size}" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;" loading="lazy">`;
+  }
+
+  // Otherwise, render standard clean vector SVG
   const avatarFn = MENTOR_AVATARS[mentorId];
   if (avatarFn) {
     return avatarFn(size);

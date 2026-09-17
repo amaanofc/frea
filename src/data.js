@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-// frea — UK Senior Mentors & Data System
+// frea — UK Senior Mentors & Data System with Docs & Freabies
 // ─────────────────────────────────────────────
 
 export const MENTORS = [
@@ -27,7 +27,43 @@ export const MENTORS = [
       { day: "Wed 23 Sep", slots: ["11:00 AM", "3:00 PM"] },
       { day: "Fri 25 Sep", slots: ["9:30 AM", "1:00 PM", "5:00 PM"] }
     ],
-    color: "blue"
+    color: "blue",
+    docs: [
+      {
+        id: "doc-1-1",
+        title: "The 2-Project Tech CV Template",
+        subtitle: "Single-column LaTeX & Notion resume template that secured technical screens at Stripe, Palantir & Meta",
+        type: "free",
+        price: 0,
+        format: "Notion & LaTeX",
+        pages: "2 templates · 8pg guide",
+        downloads: 512,
+        rating: 4.9,
+        category: "Tech",
+        previewBullets: [
+          "ATS-optimized single-column layout tested against Greenhouse & Lever systems",
+          "Word-for-word action verbs to quantify undergraduate side-projects without sounding amateur",
+          "Full editable Notion duplicate link + GitHub Overleaf LaTeX source code ready to fork"
+        ]
+      },
+      {
+        id: "doc-1-2",
+        title: "Imperial Year 2 Systems & Concurrency Bible",
+        subtitle: "Annotated lecture walkthroughs, memory race condition diagrams & past exam traps solved",
+        type: "paid",
+        price: 4.99,
+        format: "PDF",
+        pages: "76 pages",
+        downloads: 168,
+        rating: 5.0,
+        category: "Tech",
+        previewBullets: [
+          "POSIX pthreads, semaphores, mutexes and deadlock prevention demystified with code snippets",
+          "14 past exam questions solved with official Imperial marker commentary and pitfalls",
+          "Visual memory layout diagrams of CPU virtual memory paging, TLB, and cache coherence"
+        ]
+      }
+    ]
   },
   {
     id: 2,
@@ -52,7 +88,43 @@ export const MENTORS = [
       { day: "Thu 24 Sep", slots: ["2:00 PM", "4:30 PM", "6:00 PM"] },
       { day: "Sat 26 Sep", slots: ["11:00 AM", "1:30 PM"] }
     ],
-    color: "orange"
+    color: "orange",
+    docs: [
+      {
+        id: "doc-2-1",
+        title: "Spring Week Cold Outreach Email Pack",
+        subtitle: "The 3 exact email templates that converted into phone chats with Goldman Sachs and Morgan Stanley MDs",
+        type: "free",
+        price: 0,
+        format: "PDF & Word",
+        pages: "5 templates · 6 pages",
+        downloads: 640,
+        rating: 4.9,
+        category: "Economics & Finance",
+        previewBullets: [
+          "The 60-word rule for reaching senior bankers without getting flagged as corporate spam",
+          "Follow-up cadence checklist that landed 3 Spring Week interviews from non-target outreach",
+          "Subject lines with 68%+ verified response rates from junior analysts and VPs"
+        ]
+      },
+      {
+        id: "doc-2-2",
+        title: "LSE 1st-Year Micro & Macro High-First Master Pack",
+        subtitle: "Complete mathematical proofs, exam essay frameworks, and numerical problem bank",
+        type: "paid",
+        price: 5.50,
+        format: "PDF",
+        pages: "92 pages",
+        downloads: 215,
+        rating: 4.9,
+        category: "Economics & Finance",
+        previewBullets: [
+          "Utility maximization, Lagrangian multipliers and Nash equilibrium worked step-by-step",
+          "IS-LM and AS-AD models with examiner essay critique and mark schemes",
+          "Comprehensive formula cheatsheets for summer exams with proofs and assumptions"
+        ]
+      }
+    ]
   },
   {
     id: 3,
@@ -78,7 +150,43 @@ export const MENTORS = [
       { day: "Wed 23 Sep", slots: ["6:00 PM", "7:00 PM"] },
       { day: "Sun 27 Sep", slots: ["10:00 AM", "11:30 AM", "1:00 PM"] }
     ],
-    color: "pink"
+    color: "pink",
+    docs: [
+      {
+        id: "doc-3-1",
+        title: "Figma Case Study Deck: The Trade-Offs Framework",
+        subtitle: "Clean interactive Figma presentation template designed for FAANG UX research & design rounds",
+        type: "free",
+        price: 0,
+        format: "Figma File",
+        pages: "18 artboards",
+        downloads: 480,
+        rating: 5.0,
+        category: "Tech",
+        previewBullets: [
+          "Componentized presentation deck ready to duplicate directly into your personal Figma",
+          "How to frame user research constraints and business metrics without fluff",
+          "Interview slide structure recommended by senior Google and Monzo product designers"
+        ]
+      },
+      {
+        id: "doc-3-2",
+        title: "Non-CS to UX Tech Transition Blueprint",
+        subtitle: "How I switched from BSc Psychology into a Google UX role without a computer science degree",
+        type: "paid",
+        price: 5.99,
+        format: "PDF & Video",
+        pages: "48 pages · 25m video",
+        downloads: 132,
+        rating: 4.9,
+        category: "Tech",
+        previewBullets: [
+          "Step-by-step 9-month self-taught syllabus for user research, heuristics & prototyping",
+          "How to pitch student society voluntary redesigns as production-grade user experience",
+          "Word-for-word scripts for answering 'why didn't you study CS?' in final interview loops"
+        ]
+      }
+    ]
   },
   {
     id: 4,
@@ -103,7 +211,43 @@ export const MENTORS = [
       { day: "Thu 24 Sep", slots: ["3:00 PM", "5:00 PM"] },
       { day: "Sat 26 Sep", slots: ["10:00 AM", "2:00 PM"] }
     ],
-    color: "green"
+    color: "green",
+    docs: [
+      {
+        id: "doc-4-1",
+        title: "Active Recall Revision Cadence Spreadsheet",
+        subtitle: "The automated Google Sheet system I used to bounce back from 38% to an 81% 1st-class degree",
+        type: "free",
+        price: 0,
+        format: "Google Sheets",
+        pages: "Spreadsheet tool",
+        downloads: 720,
+        rating: 4.9,
+        category: "Engineering",
+        previewBullets: [
+          "Automated spaced repetition intervals (1 day, 3 days, 1 week, 3 weeks) with date math",
+          "Confidence scoring algorithm to prioritize high-yield weak sub-topics",
+          "Weekly revision velocity tracker to prevent pre-exam cramming and panic"
+        ]
+      },
+      {
+        id: "doc-4-2",
+        title: "Thermofluids & Solid Mechanics Worked Solutions Vault",
+        subtitle: "10 past papers fully solved with handwritten annotations and common marking trap warnings",
+        type: "paid",
+        price: 4.50,
+        format: "PDF",
+        pages: "105 pages",
+        downloads: 185,
+        rating: 5.0,
+        category: "Engineering",
+        previewBullets: [
+          "Navier-Stokes simplifications, Bernoulli traps, and Mohr's circle stress transforms",
+          "Common algebraic and sign pitfalls that cost students 10-15 marks per examination",
+          "Dyson graduate scheme technical assessment problem breakdowns"
+        ]
+      }
+    ]
   },
   {
     id: 5,
@@ -128,7 +272,43 @@ export const MENTORS = [
       { day: "Wed 23 Sep", slots: ["10:00 AM", "2:00 PM"] },
       { day: "Fri 25 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
-    color: "blue"
+    color: "blue",
+    docs: [
+      {
+        id: "doc-5-1",
+        title: "Watson Glaser Critical Thinking Drill Set",
+        subtitle: "30 realistic practice questions with detailed logical deduction commentary for magic circle law firms",
+        type: "free",
+        price: 0,
+        format: "PDF",
+        pages: "24 pages",
+        downloads: 550,
+        rating: 4.9,
+        category: "Law",
+        previewBullets: [
+          "Inferences, assumptions, deductions, interpretations and argument evaluation",
+          "The exact subtle traps test makers use to distinguish top 5% candidates from average",
+          "Timed diagnostic test with score conversion benchmarks for training contracts"
+        ]
+      },
+      {
+        id: "doc-5-2",
+        title: "Oxford Tutorial Essay Architecture (72+ Marks)",
+        subtitle: "The argumentative structure and rhetorical techniques needed for high first-class law essays",
+        type: "paid",
+        price: 6.50,
+        format: "PDF",
+        pages: "52 pages",
+        downloads: 140,
+        rating: 5.0,
+        category: "Law",
+        previewBullets: [
+          "Why passive summaries fail tutorials and how to state an unambiguous thesis in sentence one",
+          "Case law deployment: ratio decidendi vs obiter dicta under time pressure",
+          "3 annotated 1st-class essays in Tort and Constitutional Law with tutor marginalia"
+        ]
+      }
+    ]
   },
   {
     id: 6,
@@ -153,7 +333,42 @@ export const MENTORS = [
       { day: "Tue 22 Sep", slots: ["6:30 PM", "7:30 PM"] },
       { day: "Sat 26 Sep", slots: ["11:00 AM", "12:30 PM", "2:00 PM"] }
     ],
-    color: "orange"
+    color: "orange",
+    docs: [
+      {
+        id: "doc-6-1",
+        title: "Automotive & Hardware Placement Tracker",
+        subtitle: "Pre-populated database of 40+ UK automotive and engineering schemes with opening dates and links",
+        type: "free",
+        price: 0,
+        format: "Notion Template",
+        pages: "Database template",
+        downloads: 380,
+        rating: 4.8,
+        category: "Engineering",
+        previewBullets: [
+          "Key opening dates, direct HR portal links, and portfolio requirements for McLaren, Williams, Dyson, Rolls-Royce",
+          "Checklist for physical prototype photography requirements in digital PDF submissions"
+        ]
+      },
+      {
+        id: "doc-6-2",
+        title: "McLaren Placement Winning Portfolio Breakdown",
+        subtitle: "The complete 24-page physical & CAD portfolio that landed the McLaren Automotive placement",
+        type: "paid",
+        price: 6.00,
+        format: "PDF",
+        pages: "64 pages",
+        downloads: 110,
+        rating: 4.9,
+        category: "Engineering",
+        previewBullets: [
+          "Full high-res scans of winning submission deck with technical design annotations",
+          "How to present FEA stress analysis and DFM (design for manufacturing) to senior engineers",
+          "Studio project trade-off defense scripts during interview panels"
+        ]
+      }
+    ]
   },
   {
     id: 7,
@@ -178,7 +393,43 @@ export const MENTORS = [
       { day: "Thu 24 Sep", slots: ["10:00 AM", "4:00 PM"] },
       { day: "Sun 27 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
-    color: "pink"
+    color: "pink",
+    docs: [
+      {
+        id: "doc-7-1",
+        title: "Pre-Clinical Med School High-Yield Anki Deck",
+        subtitle: "1,200 curated cards for Anatomy & Pharmacology with Netter diagrams and clinical mnemonics",
+        type: "free",
+        price: 0,
+        format: "Anki Deck (.apkg)",
+        pages: "1,200 cards",
+        downloads: 920,
+        rating: 5.0,
+        category: "Medicine & Life Sciences",
+        previewBullets: [
+          "High-yield autonomic nervous system receptors, cranial nerve pathways, and dermatomes",
+          "Tested on 3 consecutive cohort top-decile exams with zero bloated cards",
+          "Pre-configured optimal FSRS / SM-2 spaced repetition settings for busy medics"
+        ]
+      },
+      {
+        id: "doc-7-2",
+        title: "OSCE Clinical Station Mark Schemes & Pitfalls Vault",
+        subtitle: "45 realistic patient scenarios with examiner grading sheets and communication scripts",
+        type: "paid",
+        price: 7.50,
+        format: "PDF & Checklists",
+        pages: "118 pages",
+        downloads: 240,
+        rating: 5.0,
+        category: "Medicine & Life Sciences",
+        previewBullets: [
+          "Cardiovascular, respiratory, abdominal, and neurological physical exams broken down by second",
+          "How to manage angry or anxious actors without losing clinical rapport marks",
+          "Post-examination examiner question bank with textbook diagnostic rationales"
+        ]
+      }
+    ]
   },
   {
     id: 8,
@@ -203,7 +454,43 @@ export const MENTORS = [
       { day: "Wed 23 Sep", slots: ["9:00 AM", "11:30 AM", "5:00 PM"] },
       { day: "Fri 25 Sep", slots: ["2:00 PM", "4:00 PM"] }
     ],
-    color: "green"
+    color: "green",
+    docs: [
+      {
+        id: "doc-8-1",
+        title: "Quant Interview 30-Day Mental Math Workout",
+        subtitle: "Daily drills and probability speed tricks used to pass Jane Street and Citadel mental math screens",
+        type: "free",
+        price: 0,
+        format: "PDF",
+        pages: "32 pages",
+        downloads: 510,
+        rating: 4.9,
+        category: "Math",
+        previewBullets: [
+          "Squaring 2-digit numbers instantly, fractions-to-decimals speed table, cross-multiplication shortcuts",
+          "30-day timetable mapped to Zetamac score targets of 55+",
+          "Expected value coin-toss and dice game rapid calculation mental shortcuts"
+        ]
+      },
+      {
+        id: "doc-8-2",
+        title: "Probability & Brainteaser Master Vault",
+        subtitle: "85 quantitative finance interview puzzles with step-by-step rigorous solutions",
+        type: "paid",
+        price: 7.99,
+        format: "PDF",
+        pages: "96 pages",
+        downloads: 195,
+        rating: 4.9,
+        category: "Math",
+        previewBullets: [
+          "Bayes' theorem in disguise, Markov chains, random walks, and stopping times",
+          "The exact trading desk brainteasers asked in London and Amsterdam proprietary trading firms",
+          "Derivations explained intuitively without excessive measure theory jargon"
+        ]
+      }
+    ]
   },
   {
     id: 9,
@@ -228,7 +515,42 @@ export const MENTORS = [
       { day: "Thu 24 Sep", slots: ["6:00 PM", "7:00 PM"] },
       { day: "Sat 26 Sep", slots: ["10:30 AM", "12:00 PM"] }
     ],
-    color: "blue"
+    color: "blue",
+    docs: [
+      {
+        id: "doc-9-1",
+        title: "The 3-Hour Supervision Reading Triage System",
+        subtitle: "How to extract the core thesis from 500 pages of academic history books in under 3 hours",
+        type: "free",
+        price: 0,
+        format: "PDF & Notion",
+        pages: "14 pages",
+        downloads: 360,
+        rating: 4.8,
+        category: "Humanities & Politics",
+        previewBullets: [
+          "Intro & conclusion skimming protocol: pinpointing historiographical debates in 15 minutes",
+          "Note-taking template that formats arguments directly for weekly essay writing"
+        ]
+      },
+      {
+        id: "doc-9-2",
+        title: "UK Civil Service Fast Stream Master Guide",
+        subtitle: "Situational judgement, work simulation, and assessment centre walkthrough from an offer holder",
+        type: "paid",
+        price: 4.99,
+        format: "PDF",
+        pages: "58 pages",
+        downloads: 125,
+        rating: 4.9,
+        category: "Humanities & Politics",
+        previewBullets: [
+          "Deconstructing Civil Service Success Profiles (Behaviours, Strengths & Ability)",
+          "Video interview rubric: scoring top marks on 'Seeing the Big Picture' and 'Delivering at Pace'",
+          "Annotated written brief exercise from the final virtual assessment centre"
+        ]
+      }
+    ]
   },
   {
     id: 10,
@@ -254,7 +576,41 @@ export const MENTORS = [
       { day: "Wed 23 Sep", slots: ["8:00 PM"] },
       { day: "Sat 26 Sep", slots: ["10:00 AM", "11:30 AM", "1:00 PM"] }
     ],
-    color: "orange"
+    color: "orange",
+    docs: [
+      {
+        id: "doc-10-1",
+        title: "Undergrad Machine Learning Research Roadmap",
+        subtitle: "The 12 foundational papers to read to get into AI labs as an undergraduate, with plain-English notes",
+        type: "free",
+        price: 0,
+        format: "Notion & PDF",
+        pages: "Notion database",
+        downloads: 580,
+        rating: 5.0,
+        category: "Tech",
+        previewBullets: [
+          "Annotated breakdowns of Transformers, LoRA, ResNets, and Diffusion basics",
+          "Template email for reaching out to PhD candidates and postdocs for research assistant work"
+        ]
+      },
+      {
+        id: "doc-10-2",
+        title: "PyTorch & Deep Learning Exam & Project Code Vault",
+        subtitle: "Production-ready training loops, LLM fine-tuning scripts, and exam theory proofs",
+        type: "paid",
+        price: 5.99,
+        format: "Code Repo & PDF",
+        pages: "72 pages · GitHub repo",
+        downloads: 170,
+        rating: 4.9,
+        category: "Tech",
+        previewBullets: [
+          "Clean modular PyTorch boilerplate with Weights & Biases logging and mixed precision",
+          "Backpropagation manual derivations and optimizer math (Adam, SGD with momentum)"
+        ]
+      }
+    ]
   },
   {
     id: 11,
@@ -280,7 +636,25 @@ export const MENTORS = [
       { day: "Fri 25 Sep", slots: ["10:00 AM", "11:30 AM"] },
       { day: "Sat 26 Sep", slots: ["3:00 PM", "4:30 PM"] }
     ],
-    color: "green"
+    color: "green",
+    docs: [
+      {
+        id: "doc-11-1",
+        title: "Freshers Student Hardware & Hackathon Starter Guide",
+        subtitle: "UK component suppliers, fast turnaround PCB prototyping, and student grant application templates",
+        type: "free",
+        price: 0,
+        format: "PDF",
+        pages: "20 pages",
+        downloads: 310,
+        rating: 4.8,
+        category: "Engineering",
+        previewBullets: [
+          "JLCPCB & Mouser ordering tricks to minimize shipping delays for student competitions",
+          "How our Durham team secured £1,500 in clean-tech student innovation grants in term 1"
+        ]
+      }
+    ]
   },
   {
     id: 12,
@@ -306,9 +680,108 @@ export const MENTORS = [
       { day: "Thu 24 Sep", slots: ["11:00 AM", "1:30 PM"] },
       { day: "Sun 27 Sep", slots: ["4:00 PM", "5:30 PM"] }
     ],
-    color: "pink"
+    color: "pink",
+    docs: [
+      {
+        id: "doc-12-1",
+        title: "Cold Emailing Lab PIs for Summer Research (That Actually Converts)",
+        subtitle: "The exact email that landed summer placements at the Francis Crick Institute and Oxford",
+        type: "free",
+        price: 0,
+        format: "PDF",
+        pages: "16 pages",
+        downloads: 440,
+        rating: 4.9,
+        category: "Medicine & Life Sciences",
+        previewBullets: [
+          "The 3-paragraph formula that proves you actually read their latest lab paper",
+          "How to ask for funding without sounding presumptuous or high-maintenance"
+        ]
+      },
+      {
+        id: "doc-12-2",
+        title: "Biochemistry Metabolic Pathways High-Yield Mindmaps",
+        subtitle: "Every major metabolic pathway mapped out with regulatory steps, enzymes & past exam essays",
+        type: "paid",
+        price: 4.50,
+        format: "PDF",
+        pages: "54 pages",
+        downloads: 135,
+        rating: 5.0,
+        category: "Medicine & Life Sciences",
+        previewBullets: [
+          "Color-coded enzyme cofactors and high-energy phosphate tracking for Glycolysis, TCA & Beta-Oxidation",
+          "Rate-limiting step flash sheets with allosteric activators and inhibitors",
+          "Annotated past exam essay questions on enzyme kinetics (Michaelis-Menten & Lineweaver-Burk)"
+        ]
+      }
+    ]
   }
 ];
+
+// Flattened helper to retrieve all docs with their mentor attached
+export function getAllDocs() {
+  const list = [];
+  MENTORS.forEach(m => {
+    if (m.docs && Array.isArray(m.docs)) {
+      m.docs.forEach(d => {
+        list.push({
+          ...d,
+          mentorId: m.id,
+          mentorName: m.name,
+          mentorUniversity: m.university,
+          mentorMajor: m.major,
+          mentorYear: m.year,
+          mentorRating: m.rating,
+          mentorPhotoUrl: m.photoUrl || null,
+          mentorAvatarColor: m.color || 'blue',
+          mentor: {
+            id: m.id,
+            name: m.name,
+            university: m.university,
+            major: m.major,
+            year: m.year,
+            rating: m.rating,
+            photoUrl: m.photoUrl || null
+          }
+        });
+      });
+    }
+  });
+  return list;
+}
+
+// Find a single doc by ID
+export function getDocById(docId) {
+  for (const m of MENTORS) {
+    if (m.docs) {
+      const found = m.docs.find(d => d.id === docId);
+      if (found) {
+        return {
+          ...found,
+          mentorId: m.id,
+          mentorName: m.name,
+          mentorUniversity: m.university,
+          mentorMajor: m.major,
+          mentorYear: m.year,
+          mentorRating: m.rating,
+          mentorPhotoUrl: m.photoUrl || null,
+          mentorAvatarColor: m.color || 'blue',
+          mentor: {
+            id: m.id,
+            name: m.name,
+            university: m.university,
+            major: m.major,
+            year: m.year,
+            rating: m.rating,
+            photoUrl: m.photoUrl || null
+          }
+        };
+      }
+    }
+  }
+  return null;
+}
 
 // Standardized Achievement Tags with Category & Matching Semantic Icons
 export const ACHIEVEMENTS = {
