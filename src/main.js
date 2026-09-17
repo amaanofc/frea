@@ -7,7 +7,6 @@ import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSI
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent, getGrowthMetrics } from './analytics.js';
 import { fetchMentors, fetchMentor, fetchMonthlySlots, submitBooking, submitMentorApplication, fetchStats } from './api.js';
-import './mount-calendar.tsx';
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -97,6 +96,50 @@ function starRating(rating) {
   return stars;
 }
 
+// ─── Pitch Video Embed Helper ─────
+
+function renderPitchVideoEmbed(url) {
+  if (!url) return '';
+
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch && ytMatch[1]) {
+    return `
+      <div class="video-embed-wrap">
+        <iframe src="https://www.youtube-nocookie.com/embed/${ytMatch[1]}" title="Mentor 2-minute pitch" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    `;
+  }
+
+  // Loom
+  const loomMatch = url.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
+  if (loomMatch && loomMatch[1]) {
+    return `
+      <div class="video-embed-wrap">
+        <iframe src="https://www.loom.com/embed/${loomMatch[1]}" title="Mentor intro on Loom" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>
+      </div>
+    `;
+  }
+
+  // Google Drive
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch && driveMatch[1]) {
+    return `
+      <div class="video-embed-wrap">
+        <iframe src="https://drive.google.com/file/d/${driveMatch[1]}/preview" title="Mentor intro video" frameborder="0" allow="autoplay" allowfullscreen></iframe>
+      </div>
+    `;
+  }
+
+  // External Video Fallback
+  return `
+    <div class="video-embed-fallback">
+      <span>📹 Mentor submitted external video pitch:</span>
+      <a href="${url}" target="_blank" rel="noopener noreferrer" class="pill-btn pill-btn--small">watch 2-min intro ↗</a>
+    </div>
+  `;
+}
+
 // ─── Mentor Card Component with Top-Tip Post-It Note ─────
 
 function mentorCard(mentor) {
@@ -108,7 +151,14 @@ function mentorCard(mentor) {
           ${getMentorAvatar(mentor.id, 52)}
         </div>
         <div class="mentor-card__identity">
-          <div class="mentor-card__name">${mentor.name}</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+            <div class="mentor-card__name">${mentor.name}</div>
+            ${mentor.linkedin ? `
+              <a href="${mentor.linkedin}" target="_blank" rel="noopener noreferrer" class="mentor-card__linkedin" onclick="event.stopPropagation()" title="View verified LinkedIn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 0 0-1.66 1.64 1.63 1.63 0 0 0 1.66 1.63 1.63 1.63 0 0 0 1.65-1.63A1.64 1.64 0 0 0 7.83 6.2Z"/></svg>
+              </a>
+            ` : ''}
+          </div>
           <div class="mentor-card__meta">
             <span>${mentor.year}</span>
             <span class="mentor-card__meta-divider">·</span>
@@ -165,9 +215,6 @@ function howStep(number, label, desc, iconSvg) {
 // ─── PAGE: Landing ─────
 
 function renderLanding() {
-  const tickerItems = [...LIVE_QUESTIONS, ...LIVE_QUESTIONS];
-  const metrics = getGrowthMetrics();
-
   return `
     <div class="page-view">
       <!-- Hero -->
@@ -181,8 +228,18 @@ function renderLanding() {
             </p>
             <div class="hero__cta-group">
               <div style="display: flex; gap: 14px; flex-wrap: wrap;">
-                <button class="pill-btn" onclick="window.navigateTo('/browse')">find your senior mentor →</button>
-                <button class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/become-a-mentor')">become a mentor 🎓</button>
+                <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+                  <span class="pill-btn__inner">
+                    <span>find your senior mentor</span>
+                    <span class="pill-btn__arrow">→</span>
+                  </span>
+                </button>
+                <button class="pill-btn pill-btn--subtle pill-btn--animated-subtle" onclick="window.navigateTo('/become-a-mentor')">
+                  <span class="pill-btn__inner">
+                    <span>become a mentor</span>
+                    <span>🎓</span>
+                  </span>
+                </button>
               </div>
               <span class="hero__quiet-caption">☕ 20-min Google Meets · no sign-up fees · always free for UK students</span>
             </div>
@@ -247,20 +304,40 @@ function renderLanding() {
         </div>
       </section>
 
-      <!-- Live Questions Ticker -->
-      <div class="questions-ticker">
-        <div class="questions-ticker__inner">
-          <div class="questions-ticker__badge">🔥 freshers are asking:</div>
-          <div class="questions-ticker__track">
-            ${tickerItems.map(item => `
-              <div class="ticker-item">
-                <span>“${item.q}”</span>
-                <span class="ticker-item__tag">${item.tag}</span>
-              </div>
-            `).join('')}
+      <!-- Scroll Velocity Text Band -->
+      <section class="velocity-strip-section">
+        <div class="velocity-band">
+          <div class="velocity-band__track">
+            <span class="velocity-word">Tech</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Engineering</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Law</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Medicine</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Maths</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Finance</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Tech</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Engineering</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Law</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Medicine</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Maths</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Finance</span>
+            <span class="velocity-sep">✦</span>
           </div>
         </div>
-      </div>
+        <div class="velocity-static-badge">
+          <span class="handwritten handwritten--rotated">...and many more degrees & subjects</span>
+        </div>
+      </section>
 
       <!-- How It Works -->
       <section class="section page-container">
@@ -293,47 +370,50 @@ function renderLanding() {
           ${MENTORS.slice(0, 6).map(m => mentorCard(m)).join('')}
         </div>
         <div style="text-align: center; margin-top: 48px;" class="reveal">
-          <button class="pill-btn" onclick="window.navigateTo('/browse')">explore all 12 seniors →</button>
+          <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+            <span class="pill-btn__inner">
+              <span>explore all 12 seniors</span>
+              <span class="pill-btn__arrow">→</span>
+            </span>
+          </button>
         </div>
       </section>
 
-      <!-- Stats Band -->
+      <!-- Mission Section (Replaces Stats & Testimonials) -->
       <section class="section page-container">
-        <div class="stats-band reveal">
-          <div class="stats-band__grid">
-            <div class="stat-item">
-              <div class="stat-item__number">500+</div>
-              <div class="stat-item__label">verified UK seniors</div>
+        <div class="mission-section reveal">
+          <div class="washi-tape" style="top: -12px; left: 36px;"></div>
+          <div class="mission-section__badge">
+            <span class="handwritten handwritten--rotated" style="font-size: 24px; color: var(--color-marker-orange);">why we built this</span>
+          </div>
+          <h2 class="mission-section__quote">
+            “every student deserves a senior<br>who actually gives a damn.”
+          </h2>
+          <div class="mission-section__body">
+            <p class="mission-section__lead">
+              frea exists because the best university advice doesn't come from corporate career fairs or glossy company brochures — it comes from the student who survived that exact module, landed that exact role, and remembers exactly how confusing week 1 was.
+            </p>
+            <p class="mission-section__sub">
+              we connect younger students with elder peers who've been in their shoes. no £150/hr coaching fees. no corporate cringe. just honest, caffeinated 20-minute conversations.
+            </p>
+          </div>
+          <div class="mission-section__grid">
+            <div class="mission-card">
+              <div class="mission-card__icon">☕</div>
+              <h3 class="mission-card__title">honest peer talk</h3>
+              <p class="mission-card__desc">unfiltered truth about course modules, revision methods, and how assessment centres actually work.</p>
             </div>
-            <div class="stat-item">
-              <div class="stat-item__number">${(12000 + (metrics.bookingsCompleted || 0)).toLocaleString()}+</div>
-              <div class="stat-item__label">1-on-1 chats completed</div>
+            <div class="mission-card">
+              <div class="mission-card__icon">💸</div>
+              <h3 class="mission-card__title">100% free, always</h3>
+              <p class="mission-card__desc">zero hidden fees or subscription traps. built by UK students, for UK students with an active .ac.uk email.</p>
             </div>
-            <div class="stat-item">
-              <div class="stat-item__number">4.9★</div>
-              <div class="stat-item__label">average fresher rating</div>
+            <div class="mission-card">
+              <div class="mission-card__icon">🛡️</div>
+              <h3 class="mission-card__title">vetted seniors</h3>
+              <p class="mission-card__desc">every mentor is verified with their university email, verified on LinkedIn, and screened before joining.</p>
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- Testimonials -->
-      <section class="section page-container">
-        <span class="section__caption reveal">honest reviews from real freshers</span>
-        <h2 class="section__title reveal">what students say</h2>
-        <div class="testimonials__grid" style="margin-top: 32px;">
-          ${TESTIMONIALS.map(t => `
-            <div class="testimonial-card reveal">
-              <p class="testimonial-card__quote">${t.quote}</p>
-              <div class="testimonial-card__author">
-                <div class="testimonial-card__avatar">${t.name[0]}</div>
-                <div>
-                  <div class="testimonial-card__name">${t.name}</div>
-                  <div class="testimonial-card__detail">${t.detail}</div>
-                </div>
-              </div>
-            </div>
-          `).join('')}
         </div>
       </section>
 
@@ -485,7 +565,15 @@ function renderProfile(mentorId) {
 
           <div>
             <div class="profile__info-label">
-              <span class="hero__pass-verified" style="display: inline-block; margin-bottom: 8px;">✓ verified senior mentor</span>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                <span class="hero__pass-verified">✓ verified mentor</span>
+                ${mentor.linkedin ? `
+                  <a href="${mentor.linkedin}" target="_blank" rel="noopener noreferrer" class="profile__linkedin-badge" title="Verified LinkedIn Profile">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 0 0-1.66 1.64 1.63 1.63 0 0 0 1.66 1.63 1.63 1.63 0 0 0 1.65-1.63A1.64 1.64 0 0 0 7.83 6.2Z"/></svg>
+                    <span>LinkedIn verified ✓</span>
+                  </a>
+                ` : ''}
+              </div>
               <div class="profile__name">${mentor.name}</div>
               <div class="profile__meta">
                 <span>${mentor.year}</span>
@@ -495,6 +583,20 @@ function renderProfile(mentorId) {
                 <span>${mentor.university}</span>
               </div>
             </div>
+
+            <!-- Websites / Portfolios / Social Links -->
+            ${mentor.websites && mentor.websites.length > 0 ? `
+              <div class="profile__websites-row">
+                ${mentor.websites.map(site => `
+                  <a href="${site.url}" target="_blank" rel="noopener noreferrer" class="profile__website-chip">
+                    <span>🔗</span>
+                    <span>${site.label}</span>
+                    <span style="font-size: 11px; opacity: 0.6;">↗</span>
+                  </a>
+                `).join('')}
+              </div>
+            ` : ''}
+
             <div class="profile__achievements">
               ${mentor.achievements.map(a => achievementSticker(a)).join('')}
             </div>
@@ -521,6 +623,19 @@ function renderProfile(mentorId) {
           <p class="profile__bio" style="font-size: 19px; line-height: 1.65; color: var(--color-cocoa-ink);">“${mentor.bio}”</p>
         </div>
 
+        <!-- 2-Minute Pitch Video Embed (YouTube, Loom, Google Drive) -->
+        ${mentor.pitchVideoUrl ? `
+          <div class="profile__section">
+            <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+              <h3 class="profile__section-title" style="margin-bottom: 0;">2-min mentor pitch 📹</h3>
+              <span class="handwritten" style="font-size: 19px; color: var(--color-marker-orange);">hear directly from ${mentor.name.split(' ')[0]}</span>
+            </div>
+            <div class="profile__video-card">
+              ${renderPitchVideoEmbed(mentor.pitchVideoUrl)}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="profile__section">
           <h3 class="profile__section-title">what you can ask me about</h3>
           <div class="profile__tags">
@@ -528,25 +643,16 @@ function renderProfile(mentorId) {
           </div>
         </div>
 
-        <!-- Interactive Appointment Picker (calendar-03) -->
+        <!-- Interactive Clean Vanilla Month Calendar -->
         <div class="profile__section">
           <h3 class="profile__section-title">pick a date & time</h3>
-          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all slots are 20-min Google Meets · 100% free · select date on left, time on right</span>
+          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all sessions are 20-min Google Meets · 100% free · select an orange day, then choose your time</span>
 
-          <div id="profile-calendar-root" class="calendar-picker" style="min-height: 380px;">
+          <div id="profile-calendar-root" class="frea-cal-root">
             <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
               <span style="font-size: 26px;">📅</span>
-              <p style="margin-top: 8px; font-weight: 600;">loading appointment picker...</p>
+              <p style="margin-top: 8px; font-weight: 600;">loading calendar...</p>
             </div>
-          </div>
-
-          <!-- Sticky Booking Bar -->
-          <div class="profile__book-bar" id="book-bar" style="display: none; margin-top: 24px;">
-            <div>
-              <div class="profile__book-selected" id="book-selected-text"></div>
-              <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant Google Meet invite · verified UK student only</div>
-            </div>
-            <button class="pill-btn" onclick="openBookingModal(${mentor.id})">confirm chat 🚀</button>
           </div>
         </div>
       </div>
@@ -604,7 +710,8 @@ function renderBecomeMentor() {
             <div class="mentor-form-group">
               <label class="mentor-form-label">Year of Study <span>*</span></label>
               <select class="mentor-form-select" id="bm-year" required>
-                <option value="2nd year">2nd year</option>
+                <option value="1st year">1st year</option>
+                <option value="2nd year" selected>2nd year</option>
                 <option value="3rd year">3rd year</option>
                 <option value="4th year (MEng)">4th year (MEng / MSci)</option>
                 <option value="master's student">Master's student</option>
@@ -617,6 +724,36 @@ function renderBecomeMentor() {
             <label class="mentor-form-label">Official Student Email <span>* (must end in .ac.uk)</span></label>
             <input type="email" class="mentor-form-input" id="bm-email" required placeholder="e.g. yourname@imperial.ac.uk or s123456@ed.ac.uk">
             <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">We use .ac.uk validation to keep the platform free from commercial recruiters.</span>
+          </div>
+
+          <!-- LinkedIn Verification URL -->
+          <div class="mentor-form-group">
+            <label class="mentor-form-label">LinkedIn Profile URL <span>(strongly encouraged · unlocks verified badge)</span></label>
+            <input type="url" class="mentor-form-input" id="bm-linkedin" placeholder="https://www.linkedin.com/in/yourprofile">
+            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Adding your LinkedIn profile unlocks the "LinkedIn verified ✓" trust badge on your profile.</span>
+          </div>
+
+          <!-- Websites / Portfolio / GitHub Link -->
+          <div class="mentor-form-group">
+            <label class="mentor-form-label">Website, Portfolio or GitHub <span>(optional)</span></label>
+            <input type="url" class="mentor-form-input" id="bm-website" placeholder="https://github.com/yourhandle or https://yourportfolio.com">
+          </div>
+
+          <!-- 2-Minute Pitch Video -->
+          <div class="mentor-form-group">
+            <label class="mentor-form-label">2-Minute Pitch Video URL <span>(YouTube unlisted, Loom, or Google Drive)</span></label>
+            <input type="url" class="mentor-form-input" id="bm-pitch" placeholder="https://youtube.com/watch?v=... or https://loom.com/share/...">
+            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Record a brief 2-minute video introducing yourself, your background, and how you can guide younger students.</span>
+          </div>
+
+          <!-- Screening / Interview Notice -->
+          <div class="mentor-form-group">
+            <div style="background: var(--color-dew-drop); border: 1.5px dashed rgba(23, 23, 23, 0.25); border-radius: 12px; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start;">
+              <span style="font-size: 22px;">🤝</span>
+              <div style="font-size: 13.5px; line-height: 1.5; color: var(--color-cocoa-ink);">
+                <strong>Quality Assurance & Video Screen:</strong> To keep frea authentic and safe for UK freshers, our student team schedules a friendly 10-minute video intro with every applicant before profiles go live.
+              </div>
+            </div>
           </div>
 
           <!-- Achievements Selection -->
@@ -663,7 +800,12 @@ function renderBecomeMentor() {
           </div>
 
           <div style="margin-top: 36px; text-align: center;">
-            <button type="submit" class="pill-btn pill-btn--dark" style="padding: 14px 44px; font-size: 17px;">submit mentor application 🚀</button>
+            <button type="submit" class="pill-btn pill-btn--animated" style="padding: 14px 44px; font-size: 17px;">
+              <span class="pill-btn__inner">
+                <span>submit mentor application</span>
+                <span class="pill-btn__arrow">🚀</span>
+              </span>
+            </button>
             <div style="font-size: 13px; opacity: 0.65; margin-top: 10px;">no fees · we review and onboard verified UK students in under 24 hours</div>
           </div>
         </form>
@@ -706,12 +848,15 @@ async function handleBecomeMentorSubmit(e) {
   const major = document.getElementById('bm-major')?.value;
   const year = document.getElementById('bm-year')?.value;
   const email = document.getElementById('bm-email')?.value.trim().toLowerCase();
+  const linkedin = document.getElementById('bm-linkedin')?.value.trim() || '';
+  const website = document.getElementById('bm-website')?.value.trim() || '';
+  const pitchVideoUrl = document.getElementById('bm-pitch')?.value.trim() || '';
   const topTip = document.getElementById('bm-toptip')?.value;
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
   // Strict .ac.uk validation
   if (!email || !email.endsWith('.ac.uk')) {
-    alert('⚠️ frea requires a verified UK student email ending in ".ac.uk" (e.g. yourname@imperial.ac.uk, s123456@ed.ac.uk) to verify your senior student status.');
+    alert('⚠️ frea requires a verified UK student email ending in ".ac.uk" (e.g. yourname@imperial.ac.uk, s123456@ed.ac.uk) to verify your student status.');
     document.getElementById('bm-email')?.focus();
     return;
   }
@@ -733,6 +878,9 @@ async function handleBecomeMentorSubmit(e) {
       degree: major,
       year,
       email,
+      linkedin,
+      website,
+      pitchVideoUrl,
       achievements,
       topTip,
       topTipColor
@@ -750,13 +898,13 @@ async function handleBecomeMentorSubmit(e) {
     // Save to localStorage for client caching
     try {
       const apps = JSON.parse(localStorage.getItem('frea_mentor_applications') || '[]');
-      apps.push({ name, uni, major, year, email, topTip, submittedAt: new Date().toISOString() });
+      apps.push({ name, uni, major, year, email, linkedin, website, pitchVideoUrl, topTip, submittedAt: new Date().toISOString() });
       localStorage.setItem('frea_mentor_applications', JSON.stringify(apps));
     } catch (err) {
       console.warn(err);
     }
 
-    // Open confirmation modal
+    // Open confirmation modal with interview screening notice
     const modal = document.getElementById('modal-content');
     modal.innerHTML = `
       <button class="modal__close" onclick="closeModal()">✕</button>
@@ -764,10 +912,25 @@ async function handleBecomeMentorSubmit(e) {
         <div class="modal__celebration">🎓 ☕ 🌟</div>
         <h2 class="modal__title">application received!</h2>
         <p class="modal__body">
-          thank you, <strong>${name}</strong>! We've sent a verification link to <strong>${email}</strong>. Once confirmed, your profile and top-tip post-it note will go live on the directory.
+          thank you, <strong>${name}</strong>! We've sent a verification link to <strong>${email}</strong>.
         </p>
+
+        <div style="background: var(--color-dew-drop); border: 1.5px solid rgba(23, 23, 23, 0.2); border-radius: 12px; padding: 16px 20px; margin: 18px 0; text-align: left;">
+          <div style="font-weight: 700; color: var(--color-charcoal); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>🤝</span> Next Step: 10-Min Video Screen
+          </div>
+          <div style="font-size: 13.5px; opacity: 0.8; line-height: 1.5;">
+            Our student onboarding team will email your .ac.uk inbox to schedule a quick 10-minute video intro & screen. Once completed, your profile and top-tip post-it note will go live on the platform!
+          </div>
+        </div>
+
         <div style="margin-top: 20px;">
-          <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">explore other seniors</button>
+          <button class="pill-btn pill-btn--animated" onclick="closeModal(); window.navigateTo('/browse')">
+            <span class="pill-btn__inner">
+              <span>explore other seniors</span>
+              <span class="pill-btn__arrow">→</span>
+            </span>
+          </button>
         </div>
       </div>
     `;
@@ -789,8 +952,6 @@ window.handleBecomeMentorSubmit = handleBecomeMentorSubmit;
 // ─── Footer Component ─────
 
 function renderFooter() {
-  const metrics = getGrowthMetrics();
-
   return `
     <footer class="footer">
       <div class="footer__inner">
@@ -810,7 +971,6 @@ function renderFooter() {
         <div class="footer__links">
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/browse')">browse seniors</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')">become a mentor 🎓</a>
-          <a class="footer__link" href="#" onclick="event.preventDefault(); window.openGrowthModal()">growth & stats 📈</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
         </div>
       </div>
@@ -819,22 +979,15 @@ function renderFooter() {
         <span style="opacity: 0.85; font-size: 13px;">🛡️ .ac.uk verified · Jisc educational governance</span>
       </div>
     </footer>
-
-    <!-- Floating Live Growth Transparency Pill -->
-    <div class="growth-pill" onclick="window.openGrowthModal()" id="growth-tracker-pill">
-      <span class="growth-pill__dot"></span>
-      <span>📈 ${(12000 + (metrics.bookingsCompleted || 0)).toLocaleString()} chats booked · growth</span>
-    </div>
   `;
 }
 
-// ─── Monthly Calendar State & Slot Engine ─────
+// ─── Clean Vanilla Interactive Monthly Calendar ─────
 
 let calendarState = {
   mentorId: 1,
   year: 2026,
   month: 9,
-  viewMode: 'grid', // 'grid' | 'all'
   selectedDate: null,
   selectedSlot: null,
   selectedDisplayDate: '',
@@ -848,36 +1001,14 @@ async function loadMentorCalendar(mentorId, year, month) {
   calendarState.mentorId = parseInt(mentorId);
   calendarState.year = y;
   calendarState.month = m;
-
-  // Booking bar update handler called when a time button is clicked in the React Appointment Picker
-  window.__updateBookingBar = (displayDate, time) => {
-    const bookBar = document.getElementById('book-bar');
-    const bookText = document.getElementById('book-selected-text');
-    if (bookBar && bookText) {
-      if (displayDate && time) {
-        bookBar.style.display = 'flex';
-        bookText.innerHTML = `Selected: <span>${displayDate} at ${time} (BST)</span> · 20-min meet`;
-        bookBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } else {
-        bookBar.style.display = 'none';
-      }
-    }
-  };
-
-  // Mount shadcn React Appointment Picker (calendar-03)
-  if (window.mountAppointmentPicker) {
-    window.mountAppointmentPicker('profile-calendar-root', calendarState.mentorId);
-    return;
-  }
-
   calendarState.loading = true;
 
   const root = document.getElementById('profile-calendar-root');
   if (root && !calendarState.data) {
     root.innerHTML = `
-      <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
-        <span style="font-size: 26px;">📅</span>
-        <p style="margin-top: 8px; font-weight: 600;">loading calendar & open sessions...</p>
+      <div class="frea-cal frea-cal--loading">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">📅</span>
+        <p style="font-weight: 700; font-family: var(--font-display); color: var(--color-charcoal);">loading calendar...</p>
       </div>
     `;
   }
@@ -887,19 +1018,23 @@ async function loadMentorCalendar(mentorId, year, month) {
     calendarState.data = data;
     calendarState.loading = false;
 
-    // Check if previously selected date still exists in this month with open slots
-    const dayWithDate = data.days.find(d => d.date === calendarState.selectedDate && d.hasSlots);
-    if (!dayWithDate) {
-      // Pick first day with open slots by default
-      const firstWithSlots = data.days.find(d => d.hasSlots);
-      if (firstWithSlots) {
-        calendarState.selectedDate = firstWithSlots.date;
-        calendarState.selectedDisplayDate = firstWithSlots.displayDate;
-      } else {
-        calendarState.selectedDate = null;
-        calendarState.selectedDisplayDate = '';
-      }
-      calendarState.selectedSlot = null;
+    // Pick first day with open slots if none selected
+    let localBookings = [];
+    try {
+      localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
+    } catch (e) {
+      localBookings = [];
+    }
+    const bookedForMentor = localBookings.filter(b => b.mentorId === calendarState.mentorId);
+
+    const firstWithSlots = data.days.find(d => {
+      const booked = bookedForMentor.filter(b => b.date === d.date || b.date === d.displayDate).map(b => b.time);
+      return (d.slots || []).some(s => !booked.includes(s));
+    });
+
+    if (firstWithSlots && !calendarState.selectedDate) {
+      calendarState.selectedDate = firstWithSlots.date;
+      calendarState.selectedDisplayDate = firstWithSlots.displayDate;
     }
 
     renderCalendarDOM();
@@ -924,21 +1059,17 @@ function navigateMonth(delta) {
     y += 1;
   }
   trackEvent('calendar_month_navigated', { year: y, month: m });
+  calendarState.selectedDate = null;
+  calendarState.selectedSlot = null;
+  calendarState.selectedDisplayDate = '';
   loadMentorCalendar(calendarState.mentorId, y, m);
 }
 window.navigateMonth = navigateMonth;
 
-function setCalendarViewMode(mode) {
-  calendarState.viewMode = mode;
-  trackEvent('calendar_view_toggled', { mode });
-  renderCalendarDOM();
-}
-window.setCalendarViewMode = setCalendarViewMode;
-
 function selectCalendarMonthCell(dateStr) {
   if (!calendarState.data) return;
   const day = calendarState.data.days.find(d => d.date === dateStr);
-  if (!day || !day.hasSlots) return;
+  if (!day) return;
 
   calendarState.selectedDate = dateStr;
   calendarState.selectedDisplayDate = day.displayDate;
@@ -946,7 +1077,7 @@ function selectCalendarMonthCell(dateStr) {
   window.__selectedDay = day.displayDate;
   window.__selectedSlot = '';
 
-  trackEvent('calendar_day_selected', { date: dateStr, displayDate: day.displayDate });
+  trackEvent('calendar_day_selected', { date: dateStr, displayDate: day.displayDate, hasSlots: day.hasSlots });
   renderCalendarDOM();
 }
 window.selectCalendarMonthCell = selectCalendarMonthCell;
@@ -959,8 +1090,6 @@ function selectMonthSlotChip(time, dateStr, displayDate) {
   window.__selectedSlot = time;
 
   trackEvent('slot_selected', { date: dateStr, displayDate, slot: time });
-
-  // Update selection visually
   renderCalendarDOM();
 
   const bookBar = document.getElementById('book-bar');
@@ -969,17 +1098,6 @@ function selectMonthSlotChip(time, dateStr, displayDate) {
   }
 }
 window.selectMonthSlotChip = selectMonthSlotChip;
-
-function selectAllSlotsQuickBook(time, dateStr, displayDate) {
-  calendarState.selectedDate = dateStr;
-  calendarState.selectedDisplayDate = displayDate;
-  calendarState.selectedSlot = time;
-  window.__selectedDay = displayDate;
-  window.__selectedSlot = time;
-
-  openBookingModal(calendarState.mentorId);
-}
-window.selectAllSlotsQuickBook = selectAllSlotsQuickBook;
 
 function renderCalendarDOM() {
   const container = document.getElementById('profile-calendar-root');
@@ -992,138 +1110,132 @@ function renderCalendarDOM() {
   ];
   const fullMonthTitle = `${monthNamesFull[calendarState.month - 1]} ${calendarState.year}`;
 
-  const isGridView = calendarState.viewMode === 'grid';
-  const selectedDayObj = data.days.find(d => d.date === calendarState.selectedDate) || data.days.find(d => d.hasSlots) || null;
+  let localBookings = [];
+  try {
+    localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
+  } catch (e) {
+    localBookings = [];
+  }
+  const bookedForMentor = localBookings.filter(b => b.mentorId === calendarState.mentorId);
+
+  // Compute remaining availability: initial slots minus booked
+  const processedDays = data.days.map(d => {
+    const bookedTimesOnDay = bookedForMentor
+      .filter(b => b.date === d.date || b.date === d.displayDate)
+      .map(b => b.time);
+    const availableSlots = (d.slots || []).filter(s => !bookedTimesOnDay.includes(s));
+    return {
+      ...d,
+      slots: availableSlots,
+      hasSlots: availableSlots.length > 0,
+      slotCount: availableSlots.length
+    };
+  });
+
+  let selectedDayObj = processedDays.find(d => d.date === calendarState.selectedDate);
+  if (!selectedDayObj) {
+    selectedDayObj = processedDays.find(d => d.hasSlots) || processedDays[0];
+    if (selectedDayObj) {
+      calendarState.selectedDate = selectedDayObj.date;
+      calendarState.selectedDisplayDate = selectedDayObj.displayDate;
+    }
+  }
+
+  const totalOpenThisMonth = processedDays.reduce((acc, d) => acc + d.slotCount, 0);
 
   let contentHtml = `
-    <div class="month-calendar">
-      <!-- Calendar Controls & Navigation Header -->
-      <div class="month-calendar__header">
-        <div class="month-calendar__nav">
-          <button class="month-nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">←</button>
-          <div class="month-calendar__title">
-            <span>📅 ${fullMonthTitle}</span>
-          </div>
-          <button class="month-nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">→</button>
+    <div class="frea-cal">
+      <!-- Calendar Header & Navigation -->
+      <div class="frea-cal__header">
+        <div class="frea-cal__nav-wrap">
+          <button class="frea-cal__nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">←</button>
+          <div class="frea-cal__title">📅 ${fullMonthTitle}</div>
+          <button class="frea-cal__nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">→</button>
         </div>
-
-        <!-- View Mode Toggle: Grid vs All Open Slots -->
-        <div class="month-view-toggle">
-          <button class="view-toggle-btn ${isGridView ? 'active' : ''}" onclick="window.setCalendarViewMode('grid')">
-            📅 Month Grid
-          </button>
-          <button class="view-toggle-btn ${!isGridView ? 'active' : ''}" onclick="window.setCalendarViewMode('all')">
-            ⚡ All Open Slots (${data.totalOpenSlots})
-          </button>
+        <div class="frea-cal__legend">
+          <span class="frea-cal__legend-dot"></span>
+          <span><strong>${totalOpenThisMonth}</strong> open 20-min sessions (BST)</span>
         </div>
       </div>
 
-      <!-- Timezone & Availability Sub-bar -->
-      <div class="month-calendar__tz-bar">
-        <span>⏰ times shown in UK BST (London time)</span>
-        <span style="font-weight: 700; color: var(--color-marker-orange);">● <strong>${data.totalOpenSlots}</strong> available sessions this month</span>
+      <!-- Weekday Headers -->
+      <div class="frea-cal__weekdays">
+        <div class="frea-cal__weekday">Mon</div>
+        <div class="frea-cal__weekday">Tue</div>
+        <div class="frea-cal__weekday">Wed</div>
+        <div class="frea-cal__weekday">Thu</div>
+        <div class="frea-cal__weekday">Fri</div>
+        <div class="frea-cal__weekday">Sat</div>
+        <div class="frea-cal__weekday">Sun</div>
       </div>
+
+      <!-- Clean 7-Column Days Grid -->
+      <div class="frea-cal__grid">
   `;
 
-  if (isGridView) {
-    // 7-Column Grid View
-    contentHtml += `
-      <!-- Weekday column labels (Monday to Sunday) -->
-      <div class="month-calendar__weekdays">
-        <div class="month-weekday">Mon</div>
-        <div class="month-weekday">Tue</div>
-        <div class="month-weekday">Wed</div>
-        <div class="month-weekday">Thu</div>
-        <div class="month-weekday">Fri</div>
-        <div class="month-weekday">Sat</div>
-        <div class="month-weekday">Sun</div>
-      </div>
+  // Offset empty days before 1st of month
+  for (let i = 0; i < data.firstWeekdayOffset; i++) {
+    contentHtml += `<div class="frea-cal__cell frea-cal__cell--empty"></div>`;
+  }
 
-      <!-- Days Grid with Offset Empty Cells -->
-      <div class="month-calendar__grid">
-    `;
+  // Days in month
+  processedDays.forEach(day => {
+    const isSelected = selectedDayObj && selectedDayObj.date === day.date;
+    const hasSlots = day.hasSlots;
 
-    // Offset cells before the 1st of the month
-    for (let i = 0; i < data.firstWeekdayOffset; i++) {
-      contentHtml += `<div class="month-cell month-cell--empty"></div>`;
-    }
-
-    // Days in the month
-    data.days.forEach(day => {
-      const isSelected = selectedDayObj && selectedDayObj.date === day.date;
-      const hasSlots = day.hasSlots;
-      const cellClasses = [
-        'month-cell',
-        hasSlots ? 'month-cell--has-slots' : 'month-cell--no-slots',
-        isSelected ? 'active' : ''
-      ].filter(Boolean).join(' ');
-
-      const clickHandler = hasSlots ? `onclick="window.selectCalendarMonthCell('${day.date}')"` : '';
-
-      contentHtml += `
-        <div class="${cellClasses}" ${clickHandler} data-date="${day.date}">
-          <div class="month-cell__num">${day.dayNumber}</div>
-          <div>
-            ${hasSlots ? `<span class="month-cell__indicator">● ${day.slotCount} slot${day.slotCount > 1 ? 's' : ''}</span>` : '<span style="font-size: 11px; opacity: 0.35;">—</span>'}
-          </div>
-        </div>
-      `;
-    });
-
-    contentHtml += `</div>`;
-
-    // Slots Drawer for the Selected Day
-    if (selectedDayObj && selectedDayObj.hasSlots) {
-      contentHtml += `
-        <div class="month-slots-drawer">
-          <div class="month-slots-drawer__header">
-            <div class="month-slots-drawer__title">
-              Available 20-min slots for <strong>${selectedDayObj.displayDate}</strong> (${selectedDayObj.slots.length} available):
-            </div>
-            <span style="font-size: 12px; opacity: 0.65;">Select a time to book</span>
-          </div>
-
-          <div class="month-slots-chips">
-            ${selectedDayObj.slots.map(slot => {
-              const isSlotSelected = calendarState.selectedSlot === slot && calendarState.selectedDate === selectedDayObj.date;
-              return `
-                <button class="calendar-slot-chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${slot}', '${selectedDayObj.date}', '${selectedDayObj.displayDate}')">
-                  <span class="calendar-slot-chip__clock">🕒</span>
-                  <span>${slot}</span>
-                  <span class="calendar-slot-chip__duration">(20m)</span>
-                </button>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
+    let cellClass = 'frea-cal__cell';
+    if (isSelected) {
+      cellClass += ' frea-cal__cell--selected';
+    } else if (hasSlots) {
+      cellClass += ' frea-cal__cell--available';
     } else {
-      contentHtml += `
-        <div class="month-slots-drawer" style="text-align: center; opacity: 0.7;">
-          <p>No open slots for this day. Please click a date marked with <span style="color: #15803d; font-weight: 700;">● slots</span>.</p>
-        </div>
-      `;
+      cellClass += ' frea-cal__cell--unavailable';
     }
-  } else {
-    // "All Open Slots This Month" Chronological View
+
     contentHtml += `
-      <div class="month-all-slots-view">
-        ${data.allOpenSlots.length > 0 ? data.allOpenSlots.map(slot => `
-          <div class="all-slots-card">
-            <div>
-              <div class="all-slots-card__date">${slot.displayDate}</div>
-              <div class="all-slots-card__time">🕒 ${slot.time} (20 min)</div>
-            </div>
-            <button class="pill-btn pill-btn--small all-slots-card__action" onclick="window.selectAllSlotsQuickBook('${slot.time}', '${slot.date}', '${slot.displayDate}')">
-              book slot →
-            </button>
+      <div class="${cellClass}" onclick="window.selectCalendarMonthCell('${day.date}')" title="${hasSlots ? `${day.slotCount} open slot(s) on ${day.displayDate}` : `No availability on ${day.displayDate}`}">
+        <span class="frea-cal__num">${day.dayNumber}</span>
+      </div>
+    `;
+  });
+
+  contentHtml += `</div>`;
+
+  // Slot Selection Section
+  if (selectedDayObj && selectedDayObj.hasSlots) {
+    contentHtml += `
+      <div class="frea-cal__slots-wrap">
+        <div class="frea-cal__slots-header">
+          <div class="frea-cal__slots-title">
+            Open slots for <strong>${selectedDayObj.displayDate}</strong>:
           </div>
-        `).join('') : '<p style="padding: 20px; text-align: center; opacity: 0.7;">No open slots this month.</p>'}
+          <span class="frea-cal__slots-sub">click a time to book (20m Google Meet)</span>
+        </div>
+        <div class="frea-cal__chips">
+          ${selectedDayObj.slots.map(slot => {
+            const isSlotSelected = calendarState.selectedSlot === slot && calendarState.selectedDate === selectedDayObj.date;
+            return `
+              <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${slot}', '${selectedDayObj.date}', '${selectedDayObj.displayDate}')">
+                <span>🕒 ${slot}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  } else if (selectedDayObj) {
+    contentHtml += `
+      <div class="frea-cal__no-slots">
+        <span style="font-size: 20px;">🗓️</span>
+        <div>
+          <div style="font-weight: 700; color: var(--color-charcoal); font-size: 15px;">No open availability on ${selectedDayObj.displayDate}</div>
+          <div style="font-size: 13px; opacity: 0.7; margin-top: 2px;">Please click any highlighted orange date on the calendar above to view open slots.</div>
+        </div>
       </div>
     `;
   }
 
-  // Booking Bar
+  // Booking Confirmation Bar
   const hasSelectedSlot = !!calendarState.selectedSlot;
   contentHtml += `
     <div class="profile__book-bar" id="book-bar" style="${hasSelectedSlot ? 'display: flex;' : 'display: none;'}">
@@ -1133,7 +1245,12 @@ function renderCalendarDOM() {
         </div>
         <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant Google Meet invite · verified UK student only</div>
       </div>
-      <button class="pill-btn" onclick="window.openBookingModal(${calendarState.mentorId})">confirm chat 🚀</button>
+      <button class="pill-btn pill-btn--animated" onclick="window.openBookingModal(${calendarState.mentorId})">
+        <span class="pill-btn__inner">
+          <span>confirm chat 🚀</span>
+          <span class="pill-btn__arrow">→</span>
+        </span>
+      </button>
     </div>
   </div>`;
 
@@ -1291,80 +1408,6 @@ function closeModal() {
   if (overlay) overlay.classList.remove('open');
   document.body.style.overflow = '';
 }
-
-// ─── Growth Analytics & Transparency Modal ─────
-
-async function openGrowthModal() {
-  const metrics = getGrowthMetrics();
-  trackEvent('growth_modal_viewed');
-
-  let stats = { totalBookings: 12048, verifiedMentors: 500, averageRating: 4.9 };
-  try {
-    stats = await fetchStats();
-  } catch (e) {
-    // local fallback
-  }
-
-  const totalBookingsCount = stats.totalBookings || (12000 + (metrics.bookingsCompleted || 0));
-  const mentorsCount = stats.verifiedMentors || 500;
-
-  const modal = document.getElementById('modal-content');
-  modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">✕</button>
-    <div style="text-align: left;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-        <span style="font-size: 24px;">📈</span>
-        <h2 class="modal__title" style="margin-bottom: 0;">frea growth & impact</h2>
-      </div>
-      <p class="modal__body" style="margin-bottom: 20px;">
-        real-time student impact metrics and transparent platform activity:
-      </p>
-
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 24px;">
-        <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
-          <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: var(--color-marker-orange);">
-            ${totalBookingsCount.toLocaleString()}
-          </div>
-          <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">1-on-1 chats booked</div>
-        </div>
-
-        <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
-          <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: #3b82f6;">
-            ${mentorsCount}+
-          </div>
-          <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">verified senior mentors</div>
-        </div>
-
-        <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
-          <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: #22c55e;">
-            ${(metrics.mentorApplications || 0) + 28}
-          </div>
-          <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">mentor applications in review</div>
-        </div>
-
-        <div style="background: var(--color-cream-paper); border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 14px;">
-          <div style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: var(--color-charcoal);">
-            100%
-          </div>
-          <div style="font-size: 13px; opacity: 0.7; font-weight: 600;">free for all UK students</div>
-        </div>
-      </div>
-
-      <div style="background: rgba(34, 197, 94, 0.08); border: 1.5px dashed rgba(34, 197, 94, 0.4); border-radius: 10px; padding: 12px 16px; font-size: 13.5px; line-height: 1.5;">
-        🛡️ <strong>Integrity & SEO:</strong> Every mentor profile is indexed with schema.org EducationalOrganization structured data, ensuring UK university students can find genuine senior guidance directly through organic search.
-      </div>
-
-      <div style="margin-top: 20px; text-align: right;">
-        <button class="pill-btn pill-btn--small" onclick="closeModal()">close stats</button>
-      </div>
-    </div>
-  `;
-
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-window.openGrowthModal = openGrowthModal;
 
 // ─── Filtering (Browse Page) ─────
 
@@ -1535,10 +1578,9 @@ window.confirmBooking = confirmBooking;
 window.closeModal = closeModal;
 window.loadMentorCalendar = loadMentorCalendar;
 window.navigateMonth = navigateMonth;
-window.setCalendarViewMode = setCalendarViewMode;
 window.selectCalendarMonthCell = selectCalendarMonthCell;
 window.selectMonthSlotChip = selectMonthSlotChip;
-window.selectAllSlotsQuickBook = selectAllSlotsQuickBook;
+
 
 // ─── Scroll Reveal Observer ─────
 

@@ -16,6 +16,12 @@ export const MENTORS = [
     helpsWith: ["tech interviews", "spring weeks", "side projects", "leetcoding"],
     rating: 4.9,
     callsCompleted: 47,
+    linkedin: "https://www.linkedin.com/in/aanya-sharma",
+    websites: [
+      { label: "GitHub", url: "https://github.com/aanyasharma" },
+      { label: "Portfolio", url: "https://aanya.dev" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Mon 21 Sep", slots: ["10:00 AM", "2:30 PM", "4:30 PM"] },
       { day: "Wed 23 Sep", slots: ["11:00 AM", "3:00 PM"] },
@@ -36,6 +42,11 @@ export const MENTORS = [
     helpsWith: ["spring weeks", "investment banking", "cv roast", "assessment centres"],
     rating: 4.8,
     callsCompleted: 62,
+    linkedin: "https://www.linkedin.com/in/callum-davies-lse",
+    websites: [
+      { label: "Substack", url: "https://callumd.substack.com" }
+    ],
+    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
     availability: [
       { day: "Tue 22 Sep", slots: ["10:30 AM", "12:00 PM"] },
       { day: "Thu 24 Sep", slots: ["2:00 PM", "4:30 PM", "6:00 PM"] },
@@ -56,6 +67,12 @@ export const MENTORS = [
     helpsWith: ["ux research", "career switching", "portfolio review", "tech transition"],
     rating: 5.0,
     callsCompleted: 31,
+    linkedin: "https://www.linkedin.com/in/priya-nair-ux",
+    websites: [
+      { label: "Portfolio", url: "https://priyanair.design" },
+      { label: "Medium", url: "https://medium.com/@priyanair" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Mon 21 Sep", slots: ["5:30 PM", "6:30 PM"] },
       { day: "Wed 23 Sep", slots: ["6:00 PM", "7:00 PM"] },
@@ -76,6 +93,11 @@ export const MENTORS = [
     helpsWith: ["gpa comeback", "revision systems", "engineering careers", "exam technique"],
     rating: 4.9,
     callsCompleted: 55,
+    linkedin: "https://www.linkedin.com/in/noah-adebayo-bristol",
+    websites: [
+      { label: "CAD Portfolio", url: "https://grabcad.com/noah.adebayo" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Tue 22 Sep", slots: ["9:30 AM", "11:00 AM"] },
       { day: "Thu 24 Sep", slots: ["3:00 PM", "5:00 PM"] },
@@ -96,6 +118,11 @@ export const MENTORS = [
     helpsWith: ["vacation schemes", "commercial law", "watson glaser", "essay technique"],
     rating: 4.8,
     callsCompleted: 38,
+    linkedin: "https://www.linkedin.com/in/oliver-zhang-oxford",
+    websites: [
+      { label: "Law Review", url: "https://oxfordlawreview.org" }
+    ],
+    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
     availability: [
       { day: "Mon 21 Sep", slots: ["4:00 PM", "5:30 PM"] },
       { day: "Wed 23 Sep", slots: ["10:00 AM", "2:00 PM"] },
@@ -116,6 +143,12 @@ export const MENTORS = [
     helpsWith: ["placement years", "cad & prototyping", "engineering portfolios", "automotive"],
     rating: 4.9,
     callsCompleted: 44,
+    linkedin: "https://www.linkedin.com/in/emily-watson-bath",
+    websites: [
+      { label: "Design Portfolio", url: "https://emilywatson.design" },
+      { label: "Behance", url: "https://behance.net/emilywatson" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Tue 22 Sep", slots: ["6:30 PM", "7:30 PM"] },
       { day: "Sat 26 Sep", slots: ["11:00 AM", "12:30 PM", "2:00 PM"] }
@@ -135,6 +168,11 @@ export const MENTORS = [
     helpsWith: ["med school survival", "anki workflows", "clinical osces", "audit projects"],
     rating: 5.0,
     callsCompleted: 29,
+    linkedin: "https://www.linkedin.com/in/tariq-al-mansoor",
+    websites: [
+      { label: "ResearchGate", url: "https://researchgate.net/profile/Tariq-Al-Mansoor" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Mon 21 Sep", slots: ["11:00 AM", "1:30 PM"] },
       { day: "Thu 24 Sep", slots: ["10:00 AM", "4:00 PM"] },
@@ -155,6 +193,12 @@ export const MENTORS = [
     helpsWith: ["quant trading", "mental maths", "probability puzzles", "maths modules"],
     rating: 4.9,
     callsCompleted: 51,
+    linkedin: "https://www.linkedin.com/in/maya-tremblay-warwick",
+    websites: [
+      { label: "GitHub", url: "https://github.com/mayatremblay" },
+      { label: "Blog", url: "https://mayatremblay.io" }
+    ],
+    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
     availability: [
       { day: "Wed 23 Sep", slots: ["9:00 AM", "11:30 AM", "5:00 PM"] },
       { day: "Fri 25 Sep", slots: ["2:00 PM", "4:00 PM"] }
@@ -174,6 +218,11 @@ export const MENTORS = [
     helpsWith: ["civil service", "essay writing", "reading lists", "supervision prep"],
     rating: 4.9,
     callsCompleted: 22,
+    linkedin: "https://www.linkedin.com/in/lucas-wright-cambridge",
+    websites: [
+      { label: "Policy Blog", url: "https://lucaswright.co.uk" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Tue 22 Sep", slots: ["5:30 PM", "6:30 PM"] },
       { day: "Thu 24 Sep", slots: ["6:00 PM", "7:00 PM"] },
@@ -194,6 +243,12 @@ export const MENTORS = [
     helpsWith: ["machine learning", "research abroad", "kaggle competitions", "python & pytorch"],
     rating: 4.9,
     callsCompleted: 73,
+    linkedin: "https://www.linkedin.com/in/sophia-taylor-ai",
+    websites: [
+      { label: "GitHub", url: "https://github.com/sophiataylor" },
+      { label: "HuggingFace", url: "https://huggingface.co/sophiataylor" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Mon 21 Sep", slots: ["7:00 PM", "8:30 PM"] },
       { day: "Wed 23 Sep", slots: ["8:00 PM"] },
@@ -204,16 +259,22 @@ export const MENTORS = [
   {
     id: 11,
     name: "Liam Fletcher",
-    year: "4th year (MEng)",
+    year: "1st year (MEng)",
     major: "Electrical Engineering",
     university: "Durham University",
-    bio: "captained Durham's Solar Car project and raced across Australia. secured clean-tech grant funding before graduating. let's brainstorm ambitious hardware projects, society leadership, and applying for innovation grants.",
+    bio: "won 1st place in Durham's freshers hackathon and captained our solar rover telemetry system in term 1. secured a clean-tech student grant. happy to chat about hitting the ground running in freshers term, hardware projects, and building momentum early.",
     topTip: "“join an ambitious student engineering society in week 2 of fresher's term. it'll teach you 10x more than lectures.”",
     topTipColor: "blush",
     achievements: ["startup-founder", "patent-filed", "society-president"],
     helpsWith: ["hardware projects", "hackathons", "funding grants", "engineering projects"],
     rating: 4.8,
     callsCompleted: 34,
+    linkedin: "https://www.linkedin.com/in/liam-fletcher-durham",
+    websites: [
+      { label: "GitHub", url: "https://github.com/liamfletcher" },
+      { label: "Hardware Lab", url: "https://liamfletcher.dev" }
+    ],
+    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
     availability: [
       { day: "Tue 22 Sep", slots: ["4:00 PM", "5:30 PM"] },
       { day: "Fri 25 Sep", slots: ["10:00 AM", "11:30 AM"] },
@@ -234,6 +295,12 @@ export const MENTORS = [
     helpsWith: ["phd applications", "cold emailing labs", "biochemistry revision", "personal statements"],
     rating: 5.0,
     callsCompleted: 31,
+    linkedin: "https://www.linkedin.com/in/chloe-jenkins-st-andrews",
+    websites: [
+      { label: "ORCID", url: "https://orcid.org/0000-0002-1825-0097" },
+      { label: "Research Lab", url: "https://chloejenkins.bio" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     availability: [
       { day: "Mon 21 Sep", slots: ["2:00 PM", "3:30 PM"] },
       { day: "Thu 24 Sep", slots: ["11:00 AM", "1:30 PM"] },
@@ -312,6 +379,7 @@ export const SUBJECT_MAP = {
 // UK University Year filter options
 export const YEAR_FILTERS = [
   "all years",
+  "1st year",
   "2nd year",
   "3rd year",
   "4th year (MEng)",

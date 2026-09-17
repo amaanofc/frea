@@ -49,6 +49,15 @@ export async function fetchMonthlySlots(mentorId, year, month) {
 
 export async function submitBooking({ mentorId, studentEmail, date, time }) {
   try {
+    // Record locally immediately so availability updates in real time
+    try {
+      const localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
+      localBookings.push({ mentorId: parseInt(mentorId), date, time, studentEmail, bookedAt: new Date().toISOString() });
+      localStorage.setItem('frea_local_bookings', JSON.stringify(localBookings));
+    } catch (storageErr) {
+      console.warn('[api] could not cache booking locally', storageErr);
+    }
+
     const res = await fetch(`${API_BASE}/bookings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,6 +148,13 @@ function generateClientMonthlySlots(mentorId, year, month) {
   const days = [];
   const allOpenSlots = [];
 
+  let localBookings = [];
+  try {
+    localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
+  } catch (e) {
+    localBookings = [];
+  }
+
   for (let day = 1; day <= daysInMonth; day++) {
     const d = new Date(targetYear, targetMonth - 1, day);
     const dayOfWeekIdx = d.getDay();
@@ -147,17 +163,24 @@ function generateClientMonthlySlots(mentorId, year, month) {
     const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const displayDate = `${dayOfWeek} ${day} ${monthName}`;
 
+    // Filter out already booked slots for this mentor
+    const bookedOnDay = localBookings
+      .filter(b => b.mentorId === parseInt(mentorId) && (b.date === dateStr || b.date === displayDate))
+      .map(b => b.time);
+
+    const availableSlots = recurring.filter(t => !bookedOnDay.includes(t));
+
     days.push({
       date: dateStr,
       dayNumber: day,
       dayOfWeek,
       displayDate,
-      slots: recurring,
-      hasSlots: recurring.length > 0,
-      slotCount: recurring.length
+      slots: availableSlots,
+      hasSlots: availableSlots.length > 0,
+      slotCount: availableSlots.length
     });
 
-    recurring.forEach(slot => {
+    availableSlots.forEach(slot => {
       allOpenSlots.push({
         date: dateStr,
         displayDate,
