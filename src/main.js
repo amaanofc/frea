@@ -305,79 +305,62 @@ function renderLanding() {
       </section>
 
       <!-- Section 1: Disciplines Velocity Band -->
-      <section class="velocity-strip-section">
+      <section class="velocity-strip-section velocity-strip-section--disciplines">
         <div class="velocity-band">
-          <!-- Row 1: Core Disciplines (Moving Left) -->
-          <div class="velocity-band__row">
-            <div class="velocity-band__track">
-              <span class="velocity-word">Tech</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Engineering</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Law</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Medicine</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Maths</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Finance</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Economics</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Architecture</span>
-              <span class="velocity-sep">✦</span>
-              <!-- Seamless Loop Clone -->
-              <span class="velocity-word">Tech</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Engineering</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Law</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Medicine</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Maths</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Finance</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Economics</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Architecture</span>
-              <span class="velocity-sep">✦</span>
-            </div>
-          </div>
-          <!-- Row 2: Sub-disciplines & Notes (Moving Right) -->
-          <div class="velocity-band__row">
-            <div class="velocity-band__track velocity-band__track--reverse">
-              <span class="velocity-word velocity-word--subtle">...and many more degrees & subjects</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Computer Science</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Physics</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Biochemistry</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">PPE</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Data Science</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
-              <span class="velocity-sep">✦</span>
-              <!-- Seamless Loop Clone -->
-              <span class="velocity-word velocity-word--subtle">...and many more degrees & subjects</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">Computer Science</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Physics</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Biochemistry</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">PPE</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Data Science</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
-              <span class="velocity-sep">✦</span>
-            </div>
+          <div class="velocity-band__track">
+            <span class="velocity-word">Tech</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Engineering</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Law</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Medicine</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Maths</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Finance</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Economics</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Architecture</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Computer Science</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Biochemistry</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">PPE</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--script">...and many more degrees & subjects</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
+            <span class="velocity-sep">✦</span>
+            <!-- Seamless Loop Clone -->
+            <span class="velocity-word">Tech</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Engineering</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Law</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Medicine</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Maths</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Finance</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Economics</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Architecture</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Computer Science</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Biochemistry</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">PPE</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--script">...and many more degrees & subjects</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--highlight">100% free senior advice</span>
+            <span class="velocity-sep">✦</span>
           </div>
         </div>
       </section>
@@ -461,91 +444,66 @@ function renderLanding() {
       </section>
 
       <!-- Section 2: "Built by students, for students" Pride & University Band -->
-      <section class="velocity-strip-section velocity-strip-section--secondary">
+      <section class="velocity-strip-section velocity-strip-section--ethos">
         <div class="velocity-band">
-          <!-- Row 1: Platform Ethos & Pride (Moving Left) -->
-          <div class="velocity-band__row">
-            <div class="velocity-band__track">
-              <span class="velocity-word velocity-word--highlight">built by students, for students</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">100% free</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">zero corporate cringe</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">unfiltered advice</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">caffeinated 20-min chats</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">insider playbooks</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--subtle">the unwritten rules</span>
-              <span class="velocity-sep">✦</span>
-              <!-- Seamless Loop Clone -->
-              <span class="velocity-word velocity-word--highlight">built by students, for students</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">100% free</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">zero corporate cringe</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">unfiltered advice</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">caffeinated 20-min chats</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word">insider playbooks</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--subtle">the unwritten rules</span>
-              <span class="velocity-sep">✦</span>
-            </div>
-          </div>
-          <!-- Row 2: Top UK Universities & Real Seniors (Moving Right) -->
-          <div class="velocity-band__row">
-            <div class="velocity-band__track velocity-band__track--reverse">
-              <span class="velocity-word">Imperial</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">LSE</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Oxford</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">UCL</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Cambridge</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Bristol</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Edinburgh</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Warwick</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Manchester</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">King's College</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--subtle">elder peers who actually care</span>
-              <span class="velocity-sep">✦</span>
-              <!-- Seamless Loop Clone -->
-              <span class="velocity-word">Imperial</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">LSE</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Oxford</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">UCL</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Cambridge</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Bristol</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Edinburgh</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Warwick</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">Manchester</span>
-              <span class="velocity-sep">·</span>
-              <span class="velocity-word">King's College</span>
-              <span class="velocity-sep">✦</span>
-              <span class="velocity-word velocity-word--subtle">elder peers who actually care</span>
-              <span class="velocity-sep">✦</span>
-            </div>
+          <div class="velocity-band__track">
+            <span class="velocity-word velocity-word--script-accent">built by students, for students</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">100% free</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">zero corporate cringe</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">unfiltered advice</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Imperial</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">LSE</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Oxford</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">UCL</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Cambridge</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Bristol</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Edinburgh</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Warwick</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">caffeinated 20-min chats</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--script-accent">elder peers who actually care</span>
+            <span class="velocity-sep">✦</span>
+            <!-- Seamless Loop Clone -->
+            <span class="velocity-word velocity-word--script-accent">built by students, for students</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">100% free</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">zero corporate cringe</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">unfiltered advice</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">Imperial</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">LSE</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Oxford</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">UCL</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Cambridge</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Bristol</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Edinburgh</span>
+            <span class="velocity-sep">·</span>
+            <span class="velocity-word">Warwick</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word">caffeinated 20-min chats</span>
+            <span class="velocity-sep">✦</span>
+            <span class="velocity-word velocity-word--script-accent">elder peers who actually care</span>
+            <span class="velocity-sep">✦</span>
           </div>
         </div>
       </section>
@@ -1766,6 +1724,109 @@ function setupNavLinks() {
   });
 }
 
+// ─── frea Custom Fluid Cursor Component ─────
+
+function setupCustomCursor() {
+  // Only activate on devices with a fine pointer (desktop mouse/trackpad)
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    return;
+  }
+
+  // Create cursor container if not present
+  let cursor = document.getElementById('frea-cursor');
+  if (!cursor) {
+    cursor = document.createElement('div');
+    cursor.id = 'frea-cursor';
+    cursor.className = 'frea-cursor';
+    cursor.setAttribute('aria-hidden', 'true');
+    cursor.innerHTML = `
+      <div class="frea-cursor__dot"></div>
+      <div class="frea-cursor__ring"></div>
+    `;
+    document.body.appendChild(cursor);
+  }
+
+  const dot = cursor.querySelector('.frea-cursor__dot');
+  const ring = cursor.querySelector('.frea-cursor__ring');
+
+  let mouseX = -100;
+  let mouseY = -100;
+  let ringX = -100;
+  let ringY = -100;
+  let isVisible = false;
+  let isHovering = false;
+
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    if (!isVisible) {
+      isVisible = true;
+      ringX = mouseX;
+      ringY = mouseY;
+      cursor.classList.add('visible');
+    }
+
+    if (dot) {
+      dot.style.left = `${mouseX}px`;
+      dot.style.top = `${mouseY}px`;
+    }
+  });
+
+  window.addEventListener('mousedown', () => {
+    cursor.classList.add('clicking');
+  });
+
+  window.addEventListener('mouseup', () => {
+    cursor.classList.remove('clicking');
+  });
+
+  document.addEventListener('mouseleave', () => {
+    isVisible = false;
+    cursor.classList.remove('visible');
+  });
+
+  document.addEventListener('mouseenter', () => {
+    isVisible = true;
+    cursor.classList.add('visible');
+  });
+
+  // Interactive element hover detection via event delegation
+  const INTERACTIVE_SELECTORS = 'a, button, [role="button"], input, select, textarea, .mentor-card, .faq-item, .frea-cal__cell--available, .frea-cal__nav-btn, .filter-pill, .pill-btn, .navbar__brand, .chip, [onclick]';
+
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target.closest(INTERACTIVE_SELECTORS);
+    if (target && !isHovering) {
+      isHovering = true;
+      cursor.classList.add('hovering');
+    }
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const target = e.target.closest(INTERACTIVE_SELECTORS);
+    if (target && isHovering) {
+      if (!e.relatedTarget || !e.relatedTarget.closest(INTERACTIVE_SELECTORS)) {
+        isHovering = false;
+        cursor.classList.remove('hovering');
+      }
+    }
+  });
+
+  // Smooth lerp loop for the trailing ring
+  function renderCursor() {
+    if (isVisible) {
+      ringX += (mouseX - ringX) * 0.18;
+      ringY += (mouseY - ringY) * 0.18;
+      if (ring) {
+        ring.style.left = `${ringX}px`;
+        ring.style.top = `${ringY}px`;
+      }
+    }
+    requestAnimationFrame(renderCursor);
+  }
+  requestAnimationFrame(renderCursor);
+}
+
 // ─── Initialize ─────
 
 function init() {
@@ -1774,6 +1835,7 @@ function init() {
   setupNavbarScroll();
   setupModalClose();
   setupNavLinks();
+  setupCustomCursor();
 
   window.addEventListener('hashchange', () => {
     renderPage();
