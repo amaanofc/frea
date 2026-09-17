@@ -1141,21 +1141,17 @@ function renderCalendarDOM() {
     }
   }
 
-  const totalOpenThisMonth = processedDays.reduce((acc, d) => acc + d.slotCount, 0);
-
   let contentHtml = `
     <div class="frea-cal">
-      <!-- Calendar Header & Navigation -->
+      <!-- Calendar Header: Symmetrical, fixed buttons & clean month title -->
       <div class="frea-cal__header">
-        <div class="frea-cal__nav-wrap">
-          <button class="frea-cal__nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">←</button>
-          <div class="frea-cal__title">📅 ${fullMonthTitle}</div>
-          <button class="frea-cal__nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">→</button>
-        </div>
-        <div class="frea-cal__legend">
-          <span class="frea-cal__legend-dot"></span>
-          <span><strong>${totalOpenThisMonth}</strong> open 20-min sessions (BST)</span>
-        </div>
+        <button class="frea-cal__nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <div class="frea-cal__title">${fullMonthTitle}</div>
+        <button class="frea-cal__nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
       </div>
 
       <!-- Weekday Headers -->
@@ -1207,16 +1203,16 @@ function renderCalendarDOM() {
       <div class="frea-cal__slots-wrap">
         <div class="frea-cal__slots-header">
           <div class="frea-cal__slots-title">
-            Open slots for <strong>${selectedDayObj.displayDate}</strong>:
+            Open slots for ${selectedDayObj.displayDate}
           </div>
-          <span class="frea-cal__slots-sub">click a time to book (20m Google Meet)</span>
+          <span class="frea-cal__slots-sub">select a 20-min session (BST)</span>
         </div>
         <div class="frea-cal__chips">
           ${selectedDayObj.slots.map(slot => {
             const isSlotSelected = calendarState.selectedSlot === slot && calendarState.selectedDate === selectedDayObj.date;
             return `
               <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${slot}', '${selectedDayObj.date}', '${selectedDayObj.displayDate}')">
-                <span>🕒 ${slot}</span>
+                <span>${slot}</span>
               </button>
             `;
           }).join('')}
@@ -1226,9 +1222,8 @@ function renderCalendarDOM() {
   } else if (selectedDayObj) {
     contentHtml += `
       <div class="frea-cal__no-slots">
-        <span style="font-size: 20px;">🗓️</span>
         <div>
-          <div style="font-weight: 700; color: var(--color-charcoal); font-size: 15px;">No open availability on ${selectedDayObj.displayDate}</div>
+          <div style="font-weight: 600; color: var(--color-charcoal); font-size: 14.5px;">No open availability on ${selectedDayObj.displayDate}</div>
           <div style="font-size: 13px; opacity: 0.7; margin-top: 2px;">Please click any highlighted orange date on the calendar above to view open slots.</div>
         </div>
       </div>

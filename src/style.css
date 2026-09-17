@@ -1695,76 +1695,60 @@ body {
 .frea-cal {
   background: #ffffff;
   border: 2px solid var(--color-charcoal);
-  border-radius: 20px;
-  padding: 26px 28px;
-  box-shadow: 4px 6px 0px var(--color-charcoal);
+  border-radius: 18px;
+  padding: 24px 26px;
+  box-shadow: 3px 4px 0px var(--color-charcoal);
   margin-top: 14px;
   max-width: 680px;
 }
 
+/* Symmetrical Header: Arrow - Centered Month Name - Arrow */
 .frea-cal__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  border-bottom: 1.5px solid rgba(23, 23, 23, 0.1);
-  padding-bottom: 18px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  border-bottom: 1.5px solid rgba(23, 23, 23, 0.08);
+  gap: 16px;
 }
 
-.frea-cal__nav-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.frea-cal__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-cocoa-ink);
+  text-align: center;
+  flex: 1;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .frea-cal__nav-btn {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  border: 1.5px solid var(--color-charcoal);
+  border-radius: 8px;
+  border: 1.5px solid rgba(23, 23, 23, 0.16);
   background: var(--color-cream-paper);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 800;
   color: var(--color-cocoa-ink);
   transition: all 0.15s ease;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .frea-cal__nav-btn:hover {
   background: var(--color-charcoal);
   color: #ffffff;
-  transform: scale(1.06);
+  border-color: var(--color-charcoal);
+  transform: scale(1.04);
 }
 
-.frea-cal__title {
-  font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 800;
-  color: var(--color-cocoa-ink);
-  letter-spacing: -0.01em;
-}
-
-.frea-cal__legend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--color-charcoal);
-  opacity: 0.85;
-}
-
-.frea-cal__legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ff6f1e;
-  box-shadow: 0 0 0 3px rgba(255, 111, 30, 0.2);
+.frea-cal__nav-btn svg {
+  display: block;
 }
 
 /* Weekday header (Mon–Sun) */
@@ -1774,18 +1758,19 @@ body {
   gap: 8px;
   text-align: center;
   margin-bottom: 10px;
-  border-bottom: 1.5px dashed rgba(23, 23, 23, 0.1);
+  border-bottom: 1px dashed rgba(23, 23, 23, 0.1);
   padding-bottom: 8px;
 }
 
 .frea-cal__weekday {
-  font-size: 12px;
-  font-weight: 800;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--color-charcoal);
   opacity: 0.55;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 /* 7-Column Days Grid */
@@ -1793,28 +1778,29 @@ body {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .frea-cal__cell {
   aspect-ratio: 1;
-  min-height: 48px;
-  border-radius: 12px;
+  min-height: 46px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.15s ease;
   user-select: none;
   position: relative;
   border: 1.5px solid transparent;
 }
 
 .frea-cal__num {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 700;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  font-weight: 600;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .frea-cal__cell--empty {
@@ -1829,17 +1815,17 @@ body {
   background: #ff6f1e;
   color: #ffffff;
   border-color: #ff6f1e;
-  box-shadow: 0 3px 8px rgba(255, 111, 30, 0.35);
 }
 
 .frea-cal__cell--available .frea-cal__num {
   color: #ffffff;
+  font-weight: 700;
 }
 
 .frea-cal__cell--available:hover {
-  transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 6px 14px rgba(255, 111, 30, 0.45);
-  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 111, 30, 0.35);
+  filter: brightness(1.04);
 }
 
 /* Selected Day (Solid Black) */
@@ -1847,48 +1833,50 @@ body {
   background: #171717 !important;
   color: #ffffff !important;
   border-color: #171717 !important;
-  transform: scale(1.08);
-  box-shadow: 0 6px 16px rgba(23, 23, 23, 0.35) !important;
+  transform: scale(1.06);
+  box-shadow: 0 4px 14px rgba(23, 23, 23, 0.3) !important;
   z-index: 2;
 }
 
 .frea-cal__cell--selected .frea-cal__num {
   color: #ffffff !important;
+  font-weight: 700;
 }
 
 /* Unavailable Day (Muted Grey, Clickable) */
 .frea-cal__cell--unavailable {
-  background: rgba(23, 23, 23, 0.03);
+  background: #fafaf9;
   color: rgba(43, 26, 7, 0.32);
-  border-color: rgba(23, 23, 23, 0.08);
+  border-color: rgba(23, 23, 23, 0.06);
 }
 
 .frea-cal__cell--unavailable .frea-cal__num {
-  color: rgba(43, 26, 7, 0.35);
+  color: rgba(43, 26, 7, 0.32);
+  font-weight: 500;
 }
 
 .frea-cal__cell--unavailable:hover {
-  background: rgba(23, 23, 23, 0.07);
-  border-color: rgba(23, 23, 23, 0.2);
-  color: rgba(43, 26, 7, 0.65);
+  background: rgba(23, 23, 23, 0.05);
+  border-color: rgba(23, 23, 23, 0.16);
+  color: rgba(43, 26, 7, 0.6);
 }
 
 .frea-cal__cell--unavailable:hover .frea-cal__num {
-  color: rgba(43, 26, 7, 0.65);
+  color: rgba(43, 26, 7, 0.6);
 }
 
 /* Slots Wrap for Selected Day */
 .frea-cal__slots-wrap {
   background: var(--color-dew-drop);
-  border: 1.5px dashed rgba(255, 111, 30, 0.45);
+  border: 1.5px dashed rgba(255, 111, 30, 0.4);
   border-radius: 14px;
-  padding: 18px 22px;
+  padding: 16px 20px;
   margin-top: 14px;
-  animation: calFadeIn 0.22s ease;
+  animation: calFadeIn 0.2s ease;
 }
 
 @keyframes calFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -1898,66 +1886,63 @@ body {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .frea-cal__slots-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--color-cocoa-ink);
 }
 
 .frea-cal__slots-sub {
-  font-size: 12.5px;
-  opacity: 0.65;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .frea-cal__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .frea-cal__chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
+  justify-content: center;
+  padding: 9px 18px;
   background: #ffffff;
-  border: 1.5px solid rgba(23, 23, 23, 0.2);
-  border-radius: var(--radius-tags);
+  border: 1.5px solid rgba(23, 23, 23, 0.18);
+  border-radius: 9999px;
   font-family: var(--font-body);
-  font-size: 14.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--color-charcoal);
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: all 0.15s ease;
 }
 
 .frea-cal__chip:hover {
   border-color: var(--color-marker-orange);
+  color: var(--color-marker-orange);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
 .frea-cal__chip.selected {
   border-color: #171717;
   background: #171717;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(23, 23, 23, 0.3);
-  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(23, 23, 23, 0.25);
+  transform: translateY(-1px);
 }
 
 .frea-cal__no-slots {
-  background: rgba(23, 23, 23, 0.03);
-  border: 1.5px dashed rgba(23, 23, 23, 0.18);
+  background: rgba(23, 23, 23, 0.02);
+  border: 1.5px dashed rgba(23, 23, 23, 0.15);
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: 14px 18px;
   margin-top: 14px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
   animation: calFadeIn 0.2s ease;
 }
 
