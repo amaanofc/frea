@@ -56,7 +56,7 @@ export function trackEvent(eventName, properties = {}) {
     localStorage.setItem(METRICS_KEY, JSON.stringify(metrics));
 
     // Console logging in dev mode
-    console.log(`[frea growth 📈] ${eventName}`, properties);
+    console.log(`[frea growth] ${eventName}`, properties);
 
     // If external trackers like Plausible or Google Analytics are installed on window:
     if (window.plausible) {

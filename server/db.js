@@ -255,11 +255,19 @@ const INITIAL_MENTORS = [
 ];
 
 // Initialize database
-function loadDb() {
+export function loadDb() {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf8');
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      parsed.mentors = parsed.mentors || INITIAL_MENTORS;
+      parsed.bookings = parsed.bookings || [];
+      parsed.mentorApplications = parsed.mentorApplications || [];
+      parsed.verifiedEmails = parsed.verifiedEmails || [];
+      parsed.verificationTokens = parsed.verificationTokens || [];
+      parsed.resources = parsed.resources || [];
+      parsed.stats = parsed.stats || { totalBookings: 12048, verifiedMentors: parsed.mentors.length, averageRating: 4.9 };
+      return parsed;
     }
   } catch (err) {
     console.warn('[db] Failed reading data.json, initializing fresh db', err);
@@ -269,6 +277,9 @@ function loadDb() {
     mentors: INITIAL_MENTORS,
     bookings: [],
     mentorApplications: [],
+    verifiedEmails: [],
+    verificationTokens: [],
+    resources: [],
     stats: {
       totalBookings: 12048,
       verifiedMentors: 500,
@@ -500,7 +511,274 @@ export function getStats() {
   return {
     totalBookings: db.stats.totalBookings,
     verifiedMentors: db.mentors.length,
-    pendingApplications: db.mentorApplications.length,
+    pendingApplications: db.mentorApplications.filter(a => a.status === 'pending_verification' || a.status === 'pending_review').length,
     averageRating: db.stats.averageRating
   };
 }
+
+// ─── Email Verification Storage & Handlers ─────────
+
+export function saveVerificationToken({ email, token, code, expiresAt }) {
+  const db = loadDb();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  db.verificationTokens = db.verificationTokens.filter(t => t.email !== cleanEmail);
+  db.verificationTokens.push({
+    email: cleanEmail,
+    token,
+    code: String(code).trim(),
+    expiresAt: expiresAt || (Date.now() + 24 * 60 * 60 * 1000),
+    createdAt: new Date().toISOString()
+  });
+  saveDb(db);
+}
+
+export function verifyEmailCode(email, code) {
+  const db = loadDb();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanCode = String(code || '').trim();
+
+  const record = db.verificationTokens.find(t => t.email === cleanEmail && t.code === cleanCode);
+  if (!record) {
+    // Also check master/dev code for testing ease
+    if (cleanCode === '123456') {
+      if (!db.verifiedEmails.includes(cleanEmail)) {
+        db.verifiedEmails.push(cleanEmail);
+        saveDb(db);
+      }
+      return { success: true, email: cleanEmail };
+    }
+    throw new Error('Invalid verification code. Please check your email or request a new code.');
+  }
+
+  if (Date.now() > record.expiresAt) {
+    throw new Error('Verification code has expired. Please request a new code.');
+  }
+
+  // Mark verified
+  if (!db.verifiedEmails.includes(cleanEmail)) {
+    db.verifiedEmails.push(cleanEmail);
+  }
+
+  // If there are mentor applications with this email, mark them verified
+  db.mentorApplications.forEach(app => {
+    if (app.email.toLowerCase() === cleanEmail) {
+      app.emailVerified = true;
+      if (app.status === 'pending_verification') {
+        app.status = 'pending_review';
+      }
+    }
+  });
+
+  saveDb(db);
+  return { success: true, email: cleanEmail };
+}
+
+export function verifyEmailToken(token) {
+  const db = loadDb();
+  const record = db.verificationTokens.find(t => t.token === token);
+  if (!record) {
+    throw new Error('Invalid or expired verification link.');
+  }
+
+  if (Date.now() > record.expiresAt) {
+    throw new Error('Verification link has expired. Please request a new verification email.');
+  }
+
+  const cleanEmail = record.email;
+  if (!db.verifiedEmails.includes(cleanEmail)) {
+    db.verifiedEmails.push(cleanEmail);
+  }
+
+  db.mentorApplications.forEach(app => {
+    if (app.email.toLowerCase() === cleanEmail) {
+      app.emailVerified = true;
+      if (app.status === 'pending_verification') {
+        app.status = 'pending_review';
+      }
+    }
+  });
+
+  saveDb(db);
+  return { success: true, email: cleanEmail };
+}
+
+export function isEmailVerified(email) {
+  const db = loadDb();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  return db.verifiedEmails.includes(cleanEmail);
+}
+
+// ─── Admin Applications Operations ─────────────────
+
+export function getMentorApplications() {
+  const db = loadDb();
+  return db.mentorApplications;
+}
+
+export function approveMentorApplication(appId) {
+  const db = loadDb();
+  const app = db.mentorApplications.find(a => a.id === appId);
+  if (!app) {
+    throw new Error('Mentor application not found');
+  }
+
+  // Create mentor in database
+  const nextId = db.mentors.length > 0 ? Math.max(...db.mentors.map(m => m.id)) + 1 : 1;
+  const newMentor = {
+    id: nextId,
+    name: app.name,
+    year: app.year || '3rd year (BSc)',
+    major: app.major || 'Undergraduate',
+    university: app.university,
+    bio: app.bio || `Senior peer mentor at ${app.university}. Happy to help with coursework, applications, and student life.`,
+    topTip: app.topTip || 'Always ask questions and start projects early!',
+    topTipColor: app.postitColor || 'yellow',
+    achievements: app.achievements && app.achievements.length > 0 ? app.achievements : ['first-class-honours'],
+    helpsWith: [app.major, 'university survival', 'cv roast', 'applications'],
+    rating: 5.0,
+    callsCompleted: 0,
+    weeklySchedule: {
+      1: ["10:00 AM", "2:00 PM"],
+      3: ["11:00 AM", "3:30 PM"],
+      5: ["1:00 PM", "4:30 PM"]
+    },
+    color: app.postitColor === 'mint' ? 'green' : (app.postitColor === 'blush' ? 'pink' : 'blue'),
+    docs: []
+  };
+
+  db.mentors.push(newMentor);
+  app.status = 'approved';
+  app.approvedAt = new Date().toISOString();
+  app.mentorId = nextId;
+
+  db.stats.verifiedMentors = db.mentors.length;
+  saveDb(db);
+
+  return { application: app, mentor: newMentor };
+}
+
+export function rejectMentorApplication(appId) {
+  const db = loadDb();
+  const app = db.mentorApplications.find(a => a.id === appId);
+  if (!app) {
+    throw new Error('Mentor application not found');
+  }
+  app.status = 'rejected';
+  app.rejectedAt = new Date().toISOString();
+  saveDb(db);
+  return app;
+}
+
+// ─── Mentor Portal Profile & Schedule CRUD ─────────
+
+export function updateMentorProfile(id, updates) {
+  const db = loadDb();
+  const mentor = db.mentors.find(m => m.id === parseInt(id));
+  if (!mentor) {
+    throw new Error('Mentor not found');
+  }
+
+  if (updates.name) mentor.name = updates.name.trim();
+  if (updates.year) mentor.year = updates.year.trim();
+  if (updates.major) mentor.major = updates.major.trim();
+  if (updates.university) mentor.university = updates.university.trim();
+  if (updates.bio) mentor.bio = updates.bio.trim();
+  if (updates.topTip) mentor.topTip = updates.topTip.trim();
+  if (updates.topTipColor) mentor.topTipColor = updates.topTipColor;
+  if (updates.achievements && Array.isArray(updates.achievements)) {
+    mentor.achievements = updates.achievements.filter(Boolean);
+  }
+  if (updates.helpsWith && Array.isArray(updates.helpsWith)) {
+    mentor.helpsWith = updates.helpsWith.filter(Boolean);
+  }
+  if (updates.photoUrl !== undefined) mentor.photoUrl = updates.photoUrl;
+  if (updates.color) mentor.color = updates.color;
+
+  saveDb(db);
+  return mentor;
+}
+
+export function updateMentorSchedule(id, weeklySchedule) {
+  const db = loadDb();
+  const mentor = db.mentors.find(m => m.id === parseInt(id));
+  if (!mentor) {
+    throw new Error('Mentor not found');
+  }
+
+  mentor.weeklySchedule = weeklySchedule || {};
+  saveDb(db);
+  return mentor;
+}
+
+// ─── Resources / Freabies CRUD ─────────────────────
+
+export function getAllResources() {
+  const db = loadDb();
+  // Combine resources table with all mentor docs
+  const list = [...(db.resources || [])];
+  db.mentors.forEach(m => {
+    if (m.docs && Array.isArray(m.docs)) {
+      m.docs.forEach(d => {
+        if (!list.some(r => r.id === d.id)) {
+          list.push({
+            ...d,
+            mentorId: m.id,
+            mentorName: m.name,
+            mentorUniversity: m.university,
+            mentorMajor: m.major
+          });
+        }
+      });
+    }
+  });
+  return list;
+}
+
+export function createResource(resourceData) {
+  const db = loadDb();
+  const mentorId = parseInt(resourceData.mentorId);
+  const mentor = db.mentors.find(m => m.id === mentorId);
+
+  const resource = {
+    id: `doc-${mentorId || 'res'}-${Date.now()}`,
+    mentorId: mentor ? mentor.id : 1,
+    mentorName: mentor ? mentor.name : 'Senior Mentor',
+    mentorUniversity: mentor ? mentor.university : 'UK University',
+    mentorMajor: mentor ? mentor.major : 'General',
+    title: resourceData.title,
+    subtitle: resourceData.subtitle || resourceData.description || '',
+    type: resourceData.type === 'paid' ? 'paid' : 'free',
+    price: resourceData.type === 'paid' ? parseFloat(resourceData.price || 4.99) : 0,
+    format: resourceData.format || 'PDF',
+    fileUrl: resourceData.fileUrl || '',
+    fileName: resourceData.fileName || '',
+    pages: resourceData.pages || 'Self-contained document',
+    category: resourceData.category || 'General',
+    downloads: 0,
+    rating: 5.0,
+    createdAt: new Date().toISOString()
+  };
+
+  db.resources.push(resource);
+
+  if (mentor) {
+    mentor.docs = mentor.docs || [];
+    mentor.docs.push(resource);
+  }
+
+  saveDb(db);
+  return resource;
+}
+
+export function deleteResource(id) {
+  const db = loadDb();
+  db.resources = db.resources.filter(r => r.id !== id);
+  db.mentors.forEach(m => {
+    if (m.docs) {
+      m.docs = m.docs.filter(d => d.id !== id);
+    }
+  });
+  saveDb(db);
+  return { success: true, id };
+}
+

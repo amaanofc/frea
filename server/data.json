@@ -6,11 +6,11 @@
       "year": "4th year (MEng)",
       "major": "Computer Science",
       "university": "Imperial College London",
-      "bio": "founded a dev tools startup in 2nd year that got backed by Y Combinator (S23). incoming software engineer at Stripe London. happy to roast your tech CV, do mock technical screens, or talk about launching a side project at uni.",
-      "topTip": "don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins.",
+      "bio": "founded a dev tools startup in 2nd year that got backed by Y Combinator (S23). incoming software engineer at Stripe London. happy to roast your tech CV, do mock technical interviews, or talk about launching a side project at uni.",
+      "topTip": "“don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins.”",
       "topTipColor": "yellow",
       "achievements": [
-        "yc-alumni",
+        "Incoming Software Engineer @ Google",
         "stripe-offer",
         "hackathon-winner"
       ],
@@ -473,5 +473,25 @@
     "totalBookings": 12050,
     "verifiedMentors": 500,
     "averageRating": 4.9
-  }
+  },
+  "verifiedEmails": [
+    "student@ox.ac.uk"
+  ],
+  "verificationTokens": [
+    {
+      "email": "student@ox.ac.uk",
+      "token": "06b8e6e1996d84133d2c1234c49aa0e9efcc527cd8551c64",
+      "code": "703239",
+      "expiresAt": 1789771270017,
+      "createdAt": "2026-09-17T22:41:10.019Z"
+    },
+    {
+      "email": "student@imperial.ac.uk",
+      "token": "21c6faae435235cb647133fe36ae06e1ddabce63447e1f39",
+      "code": "849215",
+      "expiresAt": 1789773949447,
+      "createdAt": "2026-09-17T23:25:49.448Z"
+    }
+  ],
+  "resources": []
 }

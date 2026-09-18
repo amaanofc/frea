@@ -41,9 +41,9 @@ export const MENTORS = [
         rating: 4.9,
         category: "Tech",
         previewBullets: [
-          "ATS-optimized single-column layout tested against Greenhouse & Lever systems",
-          "Word-for-word action verbs to quantify undergraduate side-projects without sounding amateur",
-          "Full editable Notion duplicate link + GitHub Overleaf LaTeX source code ready to fork"
+          "ATS-optimized single-column layout (Greenhouse & Lever tested)",
+          "Action verbs bank to quantify undergraduate side-projects",
+          "Editable Notion duplicate link + GitHub LaTeX source code"
         ]
       },
       {
@@ -58,9 +58,9 @@ export const MENTORS = [
         rating: 5.0,
         category: "Tech",
         previewBullets: [
-          "POSIX pthreads, semaphores, mutexes and deadlock prevention demystified with code snippets",
-          "14 past exam questions solved with official Imperial marker commentary and pitfalls",
-          "Visual memory layout diagrams of CPU virtual memory paging, TLB, and cache coherence"
+          "POSIX pthreads, semaphores & race condition fixes with code",
+          "14 past exam questions solved with official marker traps",
+          "Visual memory layout diagrams of CPU paging & cache coherence"
         ]
       }
     ]
@@ -102,9 +102,9 @@ export const MENTORS = [
         rating: 4.9,
         category: "Economics & Finance",
         previewBullets: [
-          "The 60-word rule for reaching senior bankers without getting flagged as corporate spam",
-          "Follow-up cadence checklist that landed 3 Spring Week interviews from non-target outreach",
-          "Subject lines with 68%+ verified response rates from junior analysts and VPs"
+          "60-word cold outreach scripts with 68%+ response rates",
+          "Follow-up cadence checklist that landed 3 Spring Weeks",
+          "Subject lines tested on investment banking analysts and VPs"
         ]
       },
       {
@@ -119,9 +119,9 @@ export const MENTORS = [
         rating: 4.9,
         category: "Economics & Finance",
         previewBullets: [
-          "Utility maximization, Lagrangian multipliers and Nash equilibrium worked step-by-step",
-          "IS-LM and AS-AD models with examiner essay critique and mark schemes",
-          "Comprehensive formula cheatsheets for summer exams with proofs and assumptions"
+          "Utility maximization & Lagrangian multipliers step-by-step",
+          "IS-LM & AS-AD models with examiner critique & mark schemes",
+          "Exam formula cheatsheets with mathematical proofs"
         ]
       }
     ]
@@ -164,9 +164,9 @@ export const MENTORS = [
         rating: 5.0,
         category: "Tech",
         previewBullets: [
-          "Componentized presentation deck ready to duplicate directly into your personal Figma",
-          "How to frame user research constraints and business metrics without fluff",
-          "Interview slide structure recommended by senior Google and Monzo product designers"
+          "Componentized slide deck ready to duplicate in Figma",
+          "Framework for articulating research trade-offs without fluff",
+          "Slide structure recommended by senior Google & Monzo designers"
         ]
       },
       {
@@ -181,9 +181,9 @@ export const MENTORS = [
         rating: 4.9,
         category: "Tech",
         previewBullets: [
-          "Step-by-step 9-month self-taught syllabus for user research, heuristics & prototyping",
-          "How to pitch student society voluntary redesigns as production-grade user experience",
-          "Word-for-word scripts for answering 'why didn't you study CS?' in final interview loops"
+          "9-month self-taught syllabus for UX heuristics & research",
+          "How to pitch student society redesigns as production UX",
+          "Scripts for answering 'why didn't you study CS?' in loops"
         ]
       }
     ]
@@ -312,7 +312,7 @@ export const MENTORS = [
   },
   {
     id: 6,
-    name: "Emily Watson",
+    name: "Fatima Al-Zahra",
     year: "recent grad (MEng)",
     major: "Product Design Engineering",
     university: "University of Bath",
@@ -433,7 +433,7 @@ export const MENTORS = [
   },
   {
     id: 8,
-    name: "Maya Tremblay",
+    name: "Layla Chen",
     year: "3rd year (BSc)",
     major: "Mathematics & Statistics",
     university: "University of Warwick",
@@ -716,6 +716,65 @@ export const MENTORS = [
         ]
       }
     ]
+  },
+  {
+    id: 13,
+    name: "Kiran Patel",
+    year: "3rd year (BSc)",
+    major: "Computer Science",
+    university: "University of Manchester",
+    bio: "survived the Kilburn building and 2nd year algorithms. incoming software engineer at Deliveroo London. created the definitive COMP26120 revision pack and helped 40+ Manchester CS students pass technical interviews.",
+    topTip: "“in COMP26120, don't just memorize Dijkstra and Red-Black trees. write them from memory on a blank whiteboard.”",
+    topTipColor: "yellow",
+    achievements: ["deliveroo-swe", "hackathon-winner", "first-class-honours"],
+    helpsWith: ["tech interviews", "algorithms & ds", "cv roast", "uom survival"],
+    rating: 5.0,
+    callsCompleted: 38,
+    linkedin: "https://www.linkedin.com/in/kiran-patel-uom",
+    websites: [
+      { label: "GitHub", url: "https://github.com/kiranpatel-uom" }
+    ],
+    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    availability: [
+      { day: "Tue 22 Sep", slots: ["11:00 AM", "2:00 PM", "4:30 PM"] },
+      { day: "Thu 24 Sep", slots: ["1:00 PM", "3:30 PM"] },
+      { day: "Sat 26 Sep", slots: ["11:30 AM", "1:00 PM"] }
+    ],
+    color: "blue",
+    docs: [
+      {
+        id: "doc-13-1",
+        title: "Manchester COMP26120 Algorithms Survival Pack",
+        subtitle: "Red-black tree rotations, dynamic programming memoization, and graph algorithms cheat sheet",
+        type: "free",
+        price: 0,
+        format: "Notion & Python",
+        pages: "18 pages · Python repo",
+        downloads: 430,
+        rating: 5.0,
+        category: "Tech",
+        previewBullets: [
+          "Red-black tree rotations & insertion rules drawn out with color diagrams",
+          "Top-down memoization vs bottom-up tabulation DP templates with code"
+        ]
+      },
+      {
+        id: "doc-13-2",
+        title: "Alliance Manchester Business School Placement Blueprint",
+        subtitle: "How Manchester students secure Tier-1 tech and consulting internships from North-West campus",
+        type: "paid",
+        price: 4.50,
+        format: "PDF",
+        pages: "52 pages",
+        downloads: 160,
+        rating: 4.9,
+        category: "Economics & Finance",
+        previewBullets: [
+          "Non-London networking playbook: setting up coffee chats when based in Manchester",
+          "Assessment centre group exercise frameworks and mock case interview scripts"
+        ]
+      }
+    ]
   }
 ];
 
@@ -795,6 +854,7 @@ export const ACHIEVEMENTS = {
   "quant-intern": { label: "jane street quant intern", icon: "lightning", category: "career", color: "sky" },
   "civil-service-offer": { label: "civil service fast stream", icon: "flag", category: "career", color: "sky" },
   "crick-institute-alum": { label: "francis crick institute intern", icon: "microscope", category: "career", color: "sky" },
+  "deliveroo-swe": { label: "deliveroo software engineer", icon: "code", category: "career", color: "sky" },
 
   // Academic Excellence (Amber Gold)
   "first-class-honours": { label: "first class honours (1st)", icon: "mortarboard", category: "academic", color: "amber" },
@@ -922,3 +982,43 @@ export const FAQ_ITEMS = [
     answer: "in the UK, '.ac.uk' domains are strictly controlled by Jisc and exclusively issued to verified higher education institutions. this ensures our community consists entirely of genuine university peers."
   }
 ];
+
+// ─── University Domain Mapping & Auto-Match Helper ─────────────
+
+export const EMAIL_UNI_MAP = {
+  "ic.ac.uk": "Imperial College London",
+  "imperial.ac.uk": "Imperial College London",
+  "ox.ac.uk": "University of Oxford",
+  "cam.ac.uk": "University of Cambridge",
+  "ucl.ac.uk": "UCL",
+  "lse.ac.uk": "LSE",
+  "bristol.ac.uk": "University of Bristol",
+  "warwick.ac.uk": "University of Warwick",
+  "manchester.ac.uk": "University of Manchester",
+  "bath.ac.uk": "University of Bath",
+  "ed.ac.uk": "University of Edinburgh",
+  "durham.ac.uk": "Durham University",
+  "st-andrews.ac.uk": "University of St Andrews",
+  "kcl.ac.uk": "King's College London",
+  "leeds.ac.uk": "University of Leeds",
+  "sheffield.ac.uk": "University of Sheffield",
+  "nottingham.ac.uk": "University of Nottingham",
+  "bham.ac.uk": "University of Birmingham",
+  "southampton.ac.uk": "University of Southampton",
+  "york.ac.uk": "University of York"
+};
+
+export function getUniversityFromEmail(email) {
+  if (!email || typeof email !== 'string') return null;
+  const clean = email.trim().toLowerCase();
+  const parts = clean.split('@');
+  if (parts.length < 2) return null;
+  const domain = parts[1];
+  for (const [key, uni] of Object.entries(EMAIL_UNI_MAP)) {
+    if (domain === key || domain.endsWith('.' + key)) {
+      return uni;
+    }
+  }
+  return null;
+}
+

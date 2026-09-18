@@ -167,37 +167,51 @@ export const MENTOR_AVATARS = {
     </svg>
   `,
 
-  // 6. Emily Watson (Female) — Auburn bob with fringe, teal cardigan
+  // 6. Fatima Al-Zahra (Female) — Modern draped pashmina hijab, soft sage tones, natural fabric folds & warm expression
   6: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="18" fill="#ffedd5"/>
-      <!-- Torso & Teal Cardigan -->
-      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#0f766e" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
-      <path d="M42 70 L50 80 L58 70" fill="#fef3c7" stroke="#171717" stroke-width="1.8"/>
-      <!-- Neck -->
-      <rect x="43" y="55" width="14" height="18" rx="4" fill="#f8d7bb" stroke="#171717" stroke-width="2"/>
-      <!-- Back Bob Hair -->
-      <path d="M26 42 C 25 60, 28 68, 35 70" fill="#c2410c" stroke="#171717" stroke-width="2"/>
-      <path d="M74 42 C 75 60, 72 68, 65 70" fill="#c2410c" stroke="#171717" stroke-width="2"/>
-      <!-- Ears -->
-      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#f8d7bb" stroke="#171717" stroke-width="1.8"/>
-      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#f8d7bb" stroke="#171717" stroke-width="1.8"/>
-      <!-- Head -->
-      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#f8d7bb" stroke="#171717" stroke-width="2.2"/>
-      <!-- Hair: Chic auburn bob with fringe -->
-      <path d="M28 42 C 27 24, 38 18, 50 18 C 62 18, 73 24, 72 42 C 67 33, 58 30, 50 30 C 42 30, 33 33, 28 42 Z" fill="#c2410c" stroke="#171717" stroke-width="2.2"/>
-      <!-- Eyebrows -->
-      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <!-- Eyes & Catchlights -->
-      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
-      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
-      <!-- Warm smile & blush -->
-      <path d="M44 54 Q 50 59 56 54" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
-      <ellipse cx="37" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
-      <ellipse cx="63" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <rect width="100" height="100" rx="18" fill="#f0fdf4"/>
+      
+      <!-- Torso: Elegant Ribbed Oatmeal Sweater -->
+      <path d="M14 100 C 16 78, 30 70, 50 70 C 70 70, 84 78, 86 100 Z" fill="#e2d9cc" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M42 70 L50 78 L58 70" fill="#f5f0eb" stroke="#171717" stroke-width="1.8"/>
+
+      <!-- Hijab: Back Volume & Natural Silhouette -->
+      <path d="M21 44 C 21 21, 33 14, 50 14 C 67 14, 79 21, 79 44 C 79 66, 75 82, 50 82 C 25 82, 21 66, 21 44 Z" fill="#2d5a4f" stroke="#171717" stroke-width="2.2"/>
+      
+      <!-- Hijab: Natural Shoulder & Chest Draping -->
+      <path d="M18 100 C 20 84, 30 72, 44 68 C 50 67, 56 68, 64 72 C 74 77, 80 88, 82 100 Z" fill="#2d5a4f" stroke="#171717" stroke-width="2.2"/>
+
+      <!-- Hijab Under-cap (Clean, subtle peek at forehead) -->
+      <path d="M36 34 C 42 30, 48 29, 54 31 C 59 33, 63 36, 65 40 C 61 36, 54 34, 48 34 C 42 34, 38 36, 36 34 Z" fill="#fef3c7" stroke="#171717" stroke-width="1.5"/>
+
+      <!-- Face Oval (Warm, softly framed by fabric wrap) -->
+      <path d="M34 46 C 34 33, 40 28, 50 28 C 60 28, 66 33, 66 46 C 66 59, 58 65, 50 65 C 42 65, 34 59, 34 46 Z" fill="#f4c095" stroke="#171717" stroke-width="2"/>
+
+      <!-- Hijab Overlap & Graceful Wrap under chin -->
+      <path d="M33 50 C 35 63, 42 68, 50 68 C 58 68, 67 63, 67 50 C 72 58, 69 74, 58 80 C 50 82, 42 81, 35 76 C 29 70, 29 58, 33 50 Z" fill="#366b5e" stroke="#171717" stroke-width="1.8"/>
+
+      <!-- Elegant Flowing Fold Lines (fabric depth) -->
+      <path d="M42 68 C 45 74, 52 82, 60 88" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M50 72 C 55 77, 66 84, 76 89" stroke="#171717" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+      <path d="M36 74 C 33 80, 29 88, 26 96" stroke="#171717" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+
+      <!-- Eyebrows (Neat, natural, softly curved) -->
+      <path d="M38 39 Q 42 37 46 39" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <path d="M54 39 Q 58 37 62 39" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+
+      <!-- Warm Eyes, Catchlights & Gentle Lashes -->
+      <circle cx="42" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="58" cy="45" r="2.5" fill="#171717"/>
+      <circle cx="43" cy="44" r="0.9" fill="#ffffff"/>
+      <circle cx="59" cy="44" r="0.9" fill="#ffffff"/>
+      <path d="M39 43 L41 42" stroke="#171717" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M61 43 L59 42" stroke="#171717" stroke-width="1.2" stroke-linecap="round"/>
+
+      <!-- Soft Blush & Kind Smile -->
+      <ellipse cx="37" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.3"/>
+      <ellipse cx="63" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.3"/>
+      <path d="M44 54 Q 50 59 56 54" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
     </svg>
   `,
 
@@ -232,37 +246,45 @@ export const MENTOR_AVATARS = {
     </svg>
   `,
 
-  // 8. Maya Tremblay (Female) — Blonde wavy hair, yellow jumper
+  // 8. Layla Chen (Female) — Double space buns, warm amber sweater, tendril bangs (no glasses)
   8: (size = 80) => `
     <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
       <rect width="100" height="100" rx="18" fill="#ccfbf1"/>
-      <!-- Torso & Yellow Knit -->
-      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#eab308" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
-      <path d="M41 70 C 41 76, 59 76, 59 70" fill="#fef08a" stroke="#171717" stroke-width="1.8"/>
+      <!-- Torso & Mustard Knit -->
+      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#d97706" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M41 70 C 41 76, 59 76, 59 70" fill="#fef3c7" stroke="#171717" stroke-width="1.8"/>
       <!-- Neck -->
-      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fed7aa" stroke="#171717" stroke-width="2"/>
-      <!-- Back Wavy Hair -->
-      <path d="M25 40 C 23 66, 27 82, 35 84" fill="#d97706" stroke="#171717" stroke-width="2"/>
-      <path d="M75 40 C 77 66, 73 82, 65 84" fill="#d97706" stroke="#171717" stroke-width="2"/>
+      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fbd5b5" stroke="#171717" stroke-width="2"/>
+      <!-- Space Buns (Top Left & Top Right) -->
+      <circle cx="28" cy="20" r="11" fill="#2d1b10" stroke="#171717" stroke-width="2.2"/>
+      <circle cx="28" cy="20" r="9" fill="#382314"/>
+      <circle cx="72" cy="20" r="11" fill="#2d1b10" stroke="#171717" stroke-width="2.2"/>
+      <circle cx="72" cy="20" r="9" fill="#382314"/>
+      <!-- Bun Scrunchies -->
+      <ellipse cx="30" cy="28" rx="5" ry="2.5" fill="#ff6f1e" stroke="#171717" stroke-width="1.5"/>
+      <ellipse cx="70" cy="28" rx="5" ry="2.5" fill="#ff6f1e" stroke="#171717" stroke-width="1.5"/>
       <!-- Ears -->
-      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
-      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fed7aa" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
+      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
       <!-- Head -->
-      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fed7aa" stroke="#171717" stroke-width="2.2"/>
-      <!-- Hair: Blonde wavy front -->
-      <path d="M28 42 C 27 25, 38 18, 50 18 C 62 18, 73 25, 72 42 C 66 33, 58 30, 50 30 C 42 30, 34 33, 28 42 Z" fill="#d97706" stroke="#171717" stroke-width="2.2"/>
+      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fbd5b5" stroke="#171717" stroke-width="2.2"/>
+      <!-- Hair: Center part with cute framing tendrils -->
+      <path d="M30 42 C 29 25, 38 20, 50 20 C 62 20, 71 25, 70 42 C 65 31, 57 28, 50 28 C 43 28, 35 31, 30 42 Z" fill="#2d1b10" stroke="#171717" stroke-width="2.2"/>
+      <!-- Tendril bangs framing cheeks -->
+      <path d="M32 40 C 31 52, 33 60, 36 62" stroke="#2d1b10" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path d="M68 40 C 69 52, 67 60, 64 62" stroke="#2d1b10" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       <!-- Eyebrows -->
       <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
       <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <!-- Eyes & Catchlights -->
-      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
-      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
-      <!-- Warm smile & blush -->
-      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
-      <ellipse cx="36" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
-      <ellipse cx="64" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
+      <!-- Eyes & Catchlights (No glasses) -->
+      <circle cx="42" cy="44" r="2.5" fill="#171717"/>
+      <circle cx="58" cy="44" r="2.5" fill="#171717"/>
+      <circle cx="43" cy="43" r="0.9" fill="#ffffff"/>
+      <circle cx="59" cy="43" r="0.9" fill="#ffffff"/>
+      <!-- Joyful smile & blush -->
+      <path d="M43 54 Q 50 60 57 54" stroke="#171717" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <ellipse cx="36" cy="50" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
+      <ellipse cx="64" cy="50" rx="3" ry="1.5" fill="#f43f5e" opacity="0.4"/>
     </svg>
   `,
 
@@ -396,40 +418,6 @@ export const MENTOR_AVATARS = {
       <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
       <ellipse cx="36" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
       <ellipse cx="64" cy="51" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
-    </svg>
-  `,
-
-  // 13. Hannah Clarke (Female) — Wavy warm hair, orange cardigan
-  13: (size = 80) => `
-    <svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mentor-avatar-svg">
-      <rect width="100" height="100" rx="18" fill="#fef3c7"/>
-      <!-- Torso & Orange Cardigan -->
-      <path d="M16 100 C 18 78, 32 70, 50 70 C 68 70, 82 78, 84 100 Z" fill="#ea580c" stroke="#171717" stroke-width="2.2" stroke-linejoin="round"/>
-      <path d="M42 70 L50 78 L58 70" fill="#ffffff" stroke="#171717" stroke-width="1.8"/>
-      <!-- Neck -->
-      <rect x="43" y="55" width="14" height="18" rx="4" fill="#fbd5b5" stroke="#171717" stroke-width="2"/>
-      <!-- Back Waves -->
-      <path d="M26 40 C 24 62, 28 78, 36 80" fill="#b45309" stroke="#171717" stroke-width="2"/>
-      <path d="M74 40 C 76 62, 72 78, 64 80" fill="#b45309" stroke="#171717" stroke-width="2"/>
-      <!-- Ears -->
-      <ellipse cx="31" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
-      <ellipse cx="69" cy="48" rx="3.5" ry="5" fill="#fbd5b5" stroke="#171717" stroke-width="1.8"/>
-      <!-- Head -->
-      <ellipse cx="50" cy="46" rx="19" ry="20" fill="#fbd5b5" stroke="#171717" stroke-width="2.2"/>
-      <!-- Front Hair -->
-      <path d="M29 42 C 29 25, 40 18, 50 18 C 60 18, 71 25, 71 42 C 66 32, 57 28, 50 28 C 43 28, 34 32, 29 42 Z" fill="#b45309" stroke="#171717" stroke-width="2.2"/>
-      <!-- Eyebrows -->
-      <path d="M38 38 Q 42 36 46 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <path d="M54 38 Q 58 36 62 38" stroke="#171717" stroke-width="1.8" stroke-linecap="round" fill="none"/>
-      <!-- Eyes & Catchlights -->
-      <circle cx="42" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="58" cy="44" r="2.4" fill="#171717"/>
-      <circle cx="43" cy="43" r="0.8" fill="#ffffff"/>
-      <circle cx="59" cy="43" r="0.8" fill="#ffffff"/>
-      <!-- Cheeks & Smile -->
-      <path d="M44 55 Q 50 60 56 55" stroke="#171717" stroke-width="2" stroke-linecap="round" fill="none"/>
-      <ellipse cx="36" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
-      <ellipse cx="64" cy="50" rx="2.8" ry="1.4" fill="#f43f5e" opacity="0.35"/>
     </svg>
   `
 };

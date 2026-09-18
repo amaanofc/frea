@@ -127,6 +127,166 @@ export async function fetchStats() {
   }
 }
 
+// ─── Real Document Upload ──────────────────────────
+export async function uploadDocument(file) {
+  const formData = new FormData();
+  formData.append('document', file);
+
+  const res = await fetch(`${API_BASE}/upload/document`, {
+    method: 'POST',
+    body: formData
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to upload document.');
+  }
+  return json;
+}
+
+// ─── Email Verification ────────────────────────────
+export async function sendEmailVerification(email, universityName = '') {
+  const res = await fetch(`${API_BASE}/auth/send-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, universityName })
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to send verification email.');
+  }
+  return json;
+}
+
+export async function verifyEmailCode(email, code) {
+  const res = await fetch(`${API_BASE}/auth/verify-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code })
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Invalid verification code.');
+  }
+  return json;
+}
+
+export async function verifyEmailToken(token) {
+  const res = await fetch(`${API_BASE}/auth/verify?token=${encodeURIComponent(token)}`);
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Invalid or expired verification link.');
+  }
+  return json;
+}
+
+export async function checkEmailVerification(email) {
+  try {
+    const res = await fetch(`${API_BASE}/auth/status?email=${encodeURIComponent(email)}`);
+    const json = await res.json();
+    return json.verified || false;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ─── Admin Dashboard Applications ─────────────────
+export async function fetchAdminApplications() {
+  try {
+    const res = await fetch(`${API_BASE}/admin/applications`);
+    const json = await res.json();
+    return json.data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function approveMentorApplication(id) {
+  const res = await fetch(`${API_BASE}/admin/applications/${id}/approve`, {
+    method: 'POST'
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to approve application.');
+  }
+  return json;
+}
+
+export async function rejectMentorApplication(id) {
+  const res = await fetch(`${API_BASE}/admin/applications/${id}/reject`, {
+    method: 'POST'
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to reject application.');
+  }
+  return json;
+}
+
+// ─── Mentor Portal Profile & Schedule CRUD ─────────
+export async function updateMentorProfile(id, profileData) {
+  const res = await fetch(`${API_BASE}/mentors/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profileData)
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to update profile.');
+  }
+  return json.data;
+}
+
+export async function updateMentorSchedule(id, weeklySchedule) {
+  const res = await fetch(`${API_BASE}/mentors/${id}/schedule`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ weeklySchedule })
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to update schedule.');
+  }
+  return json.data;
+}
+
+// ─── Resources CRUD ────────────────────────────────
+export async function fetchResources() {
+  try {
+    const res = await fetch(`${API_BASE}/resources`);
+    const json = await res.json();
+    return json.data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function createResource(resourceData) {
+  const res = await fetch(`${API_BASE}/resources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(resourceData)
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to create resource.');
+  }
+  return json.data;
+}
+
+export async function deleteResource(id) {
+  const res = await fetch(`${API_BASE}/resources/${id}`, {
+    method: 'DELETE'
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || 'Failed to delete resource.');
+  }
+  return json;
+}
+
 // Client-side fallback dynamic calendar generator in case network is disconnected
 function generateClientMonthlySlots(mentorId, year, month) {
   const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
