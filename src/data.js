@@ -5,6 +5,7 @@
 export const MENTORS = [
   {
     id: 1,
+    email: "aanya@imperial.ac.uk",
     name: "Aanya Sharma",
     year: "4th year (MEng)",
     major: "Computer Science",
@@ -67,6 +68,7 @@ export const MENTORS = [
   },
   {
     id: 2,
+    email: "callum@lse.ac.uk",
     name: "Callum Davies",
     year: "3rd year (BSc)",
     major: "Economics & Finance",
@@ -128,6 +130,7 @@ export const MENTORS = [
   },
   {
     id: 3,
+    email: "priya@ucl.ac.uk",
     name: "Priya Nair",
     year: "recent grad (MSc)",
     major: "Human-Computer Interaction",
@@ -190,6 +193,7 @@ export const MENTORS = [
   },
   {
     id: 4,
+    email: "noah@bristol.ac.uk",
     name: "Noah Adebayo",
     year: "4th year (MEng)",
     major: "Mechanical Engineering",
@@ -251,6 +255,7 @@ export const MENTORS = [
   },
   {
     id: 5,
+    email: "oliver@ox.ac.uk",
     name: "Oliver Zhang",
     year: "3rd year (BA)",
     major: "Law (Jurisprudence)",
@@ -312,6 +317,7 @@ export const MENTORS = [
   },
   {
     id: 6,
+    email: "fatima@bath.ac.uk",
     name: "Fatima Al-Zahra",
     year: "recent grad (MEng)",
     major: "Product Design Engineering",
@@ -372,6 +378,7 @@ export const MENTORS = [
   },
   {
     id: 7,
+    email: "tariq@cam.ac.uk",
     name: "Tariq Al-Mansoor",
     year: "4th year (MBChB)",
     major: "Medicine",
@@ -433,6 +440,7 @@ export const MENTORS = [
   },
   {
     id: 8,
+    email: "layla@kcl.ac.uk",
     name: "Layla Chen",
     year: "3rd year (BSc)",
     major: "Mathematics & Statistics",
@@ -494,6 +502,7 @@ export const MENTORS = [
   },
   {
     id: 9,
+    email: "lucas@warwick.ac.uk",
     name: "Lucas Wright",
     year: "4th year (BA)",
     major: "History & Politics",
@@ -554,6 +563,7 @@ export const MENTORS = [
   },
   {
     id: 10,
+    email: "sophia@ed.ac.uk",
     name: "Sophia Taylor",
     year: "3rd year (BSc)",
     major: "Data Science & AI",
@@ -614,6 +624,7 @@ export const MENTORS = [
   },
   {
     id: 11,
+    email: "liam@manchester.ac.uk",
     name: "Liam Fletcher",
     year: "1st year (MEng)",
     major: "Electrical Engineering",
@@ -658,6 +669,7 @@ export const MENTORS = [
   },
   {
     id: 12,
+    email: "chloe@durham.ac.uk",
     name: "Chloe Jenkins",
     year: "recent grad (BSc)",
     major: "Biochemistry",
@@ -719,6 +731,7 @@ export const MENTORS = [
   },
   {
     id: 13,
+    email: "kiran@ox.ac.uk",
     name: "Kiran Patel",
     year: "3rd year (BSc)",
     major: "Computer Science",

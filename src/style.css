@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 /* ─────────────────────────────────────────────
    frea — Design System (Superr.ai aesthetic)
    ───────────────────────────────────────────── */
@@ -27,7 +25,7 @@
   --radius: 0.65rem;
 }
 
-@theme {
+:root {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -226,6 +224,11 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  /* Must wrap: the row cannot shrink below min-content, and body has
+     overflow-x:hidden, so without this the primary CTA is clipped off the
+     right edge on a phone and becomes unreachable rather than scrollable. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .navbar__pill-tag {
@@ -260,6 +263,44 @@ body {
 
 @media (max-width: 640px) {
   .navbar__pill-tag {
+    display: none;
+  }
+}
+
+/* Phone widths: let the bar become two rows and tighten the buttons so the
+   "find a senior mentor" CTA always stays on screen and tappable. */
+@media (max-width: 760px) {
+  .navbar {
+    flex-wrap: wrap;
+    row-gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .navbar__actions {
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .navbar__actions .nav-btn {
+    height: 34px;
+    padding: 0 11px;
+    font-size: 12.5px;
+  }
+  .navbar__name {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .navbar__actions .nav-btn {
+    height: 32px;
+    padding: 0 9px;
+    font-size: 12px;
+    gap: 5px;
+  }
+  /* Keep every control tappable at the smallest width by dropping the icons,
+     not the buttons. */
+  .navbar__actions .nav-btn > svg:not(.dropdown-chevron) {
     display: none;
   }
 }
@@ -4822,6 +4863,10 @@ body {
 }
 
 .portal-tab-btn {
+  /* Sits in an overflow-x:auto strip, so it must scroll rather than wrap
+     mid-word — without these the three labels break across lines. */
+  white-space: nowrap;
+  flex-shrink: 0;
   padding: 12px 20px;
   font-size: 15px;
   font-weight: 700;
@@ -4869,4 +4914,238 @@ body {
 .cal-sync-btn--ics:hover {
   border-color: #10B981;
   color: #059669;
+}
+
+/* ─────────────────────────────────────────────
+   Pitch video — record in-app or upload
+   ───────────────────────────────────────────── */
+
+.pitch-video__tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.pitch-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--color-charcoal);
+  background: #fff;
+  border: 1.5px solid rgba(23, 23, 23, 0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.pitch-tab:hover:not(:disabled) {
+  border-color: var(--color-charcoal);
+}
+
+.pitch-tab.active {
+  background: var(--color-charcoal);
+  border-color: var(--color-charcoal);
+  color: #fff;
+}
+
+.pitch-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pitch-panel.hidden {
+  display: none;
+}
+
+.pitch-video__stage {
+  position: relative;
+  max-width: 420px;
+}
+
+/* Recording indicator, pinned inside the preview so it reads as "live". */
+.pitch-video__timer {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(4px);
+}
+
+.pitch-video__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: pitch-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pitch-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch-video__dot { animation: none; }
+}
+
+/* Upload drop target */
+.pitch-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 420px;
+  padding: 30px 20px;
+  text-align: center;
+  background: var(--color-dew-drop);
+  border: 1.5px dashed rgba(23, 23, 23, 0.28);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pitch-drop:hover {
+  border-color: var(--color-marker-orange);
+  background: #fff7ed;
+}
+
+.video-embed-wrap--native {
+  overflow: hidden;
+}
+
+@media (max-width: 520px) {
+  .pitch-video__stage,
+  .pitch-drop {
+    max-width: 100%;
+  }
+  .pitch-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* Report trigger — discoverable but never competing with the content. */
+.report-link {
+  background: none;
+  border: none;
+  padding: 0 0 0 4px;
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.45;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.report-link:hover,
+.report-link:focus-visible {
+  opacity: 1;
+  color: #dc2626;
+}
+
+/* ─────────────────────────────────────────────
+   Payout setup card
+   ───────────────────────────────────────────── */
+
+.payout-card {
+  background: #fff;
+  border: 1.5px solid var(--color-charcoal);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 2px 2px 0 var(--color-charcoal);
+}
+
+.payout-card--ready {
+  border-color: #16a34a;
+  box-shadow: 2px 2px 0 #16a34a;
+  background: #f0fdf4;
+}
+
+.payout-card--muted {
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+.payout-card__head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.payout-card__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-marker-orange);
+}
+
+.payout-card__title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-charcoal);
+  margin-bottom: 3px;
+}
+
+.payout-card__sub {
+  font-size: 13.5px;
+  line-height: 1.55;
+  opacity: 0.78;
+}
+
+.payout-card__todo {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  opacity: 0.8;
+}
+
+.payout-card__fine {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.6;
+  margin: 12px 0 0;
+}
+
+@media (max-width: 520px) {
+  .payout-card {
+    padding: 16px;
+  }
+  .payout-card__head {
+    gap: 10px;
+  }
+}
+
+/* Mentor name is a real link so crawlers can reach profiles; it should look
+   exactly like the heading it replaced. */
+.mentor-card__name-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mentor-card__name-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

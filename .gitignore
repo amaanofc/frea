@@ -22,3 +22,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment
+
+# Runtime data & uploads
+server/data.json
+server/uploads/
+
+# Agent tooling installed locally
+.agents/
+
+# Local dev tooling (Stripe CLI binary)
+tools/
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+.env
+.env.*
+!.env.example

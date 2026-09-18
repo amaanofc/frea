@@ -1,10 +1,167 @@
 // ─────────────────────────────────────────────
-// frea — Frontend API Client (with offline fallback)
+// frea — Frontend API client
 // ─────────────────────────────────────────────
+//
+// Every authenticated call carries the session token issued when the student
+// or mentor proved their .ac.uk email. Access decisions live on the server;
+// this file only asks.
 
 import { MENTORS } from './data.js';
 
 const API_BASE = '/api';
+const SESSION_KEY = 'frea_session';
+
+// ─── Session ────────────────────────────────────────────
+
+export function getSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+export function setSession(session) {
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch (e) {
+    console.warn('[api] could not persist session', e);
+  }
+}
+
+export function getSessionToken() {
+  return getSession()?.sessionToken || null;
+}
+
+export function clearSession() {
+  setSession(null);
+}
+
+/** Core fetch wrapper: attaches the token, unwraps { success, data }. */
+async function request(path, { method = 'GET', body, raw = false, formData } = {}) {
+  const headers = {};
+  const token = getSessionToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: formData || (body ? JSON.stringify(body) : undefined)
+  });
+
+  if (raw) return res;
+
+  let json;
+  try {
+    json = await res.json();
+  } catch (e) {
+    throw new Error(`The server returned an unexpected response (${res.status}).`);
+  }
+
+  if (!res.ok || json.success === false) {
+    const err = new Error(json.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    // Flags the UI branches on.
+    if (json.needsVerification) err.needsVerification = true;
+    if (json.requiresPurchase) err.requiresPurchase = true;
+    if (json.notRegistered) err.notRegistered = true;
+    // A dead session should not leave the UI looking signed in.
+    if (res.status === 401 && token) clearSession();
+    throw err;
+  }
+
+  return json;
+}
+
+// ─── Auth ───────────────────────────────────────────────
+
+export async function sendEmailVerification(email, universityName = '') {
+  return request('/auth/send-verification', { method: 'POST', body: { email, universityName } });
+}
+
+export async function verifyEmailCode(email, code) {
+  const json = await request('/auth/verify-code', { method: 'POST', body: { email, code } });
+  setSession({
+    email: json.email,
+    sessionToken: json.sessionToken,
+    isMentor: json.isMentor,
+    isAdmin: json.isAdmin,
+    mentorId: json.mentor?.id || null,
+    name: json.mentor?.name || null,
+    university: json.mentor?.university || null
+  });
+  return json;
+}
+
+export async function verifyEmailToken(token) {
+  const json = await request(`/auth/verify?token=${encodeURIComponent(token)}`);
+  setSession({
+    email: json.email,
+    sessionToken: json.sessionToken,
+    isMentor: json.isMentor,
+    isAdmin: json.isAdmin,
+    mentorId: json.mentor?.id || null,
+    name: json.mentor?.name || null,
+    university: json.mentor?.university || null
+  });
+  return json;
+}
+
+/** Re-checks the stored session against the server. Null if it has expired. */
+export async function fetchMe() {
+  if (!getSessionToken()) return null;
+  try {
+    const json = await request('/auth/me');
+    if (!json.session) {
+      clearSession();
+      return null;
+    }
+    const current = getSession() || {};
+    setSession({
+      ...current,
+      email: json.session.email,
+      isMentor: json.session.isMentor,
+      isAdmin: json.session.isAdmin,
+      mentorId: json.session.mentorId,
+      name: json.mentor?.name || current.name || null,
+      university: json.mentor?.university || current.university || null
+    });
+    return json;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function signOut() {
+  try {
+    await request('/auth/signout', { method: 'POST' });
+  } catch (e) {
+    /* the local session is cleared regardless */
+  }
+  clearSession();
+}
+
+export async function requestMentorLoginOTP(email) {
+  return request('/auth/mentor-login', { method: 'POST', body: { email } });
+}
+
+export async function verifyMentorLogin(email, code) {
+  const json = await request('/auth/mentor-verify', { method: 'POST', body: { email, code } });
+  setSession({
+    email,
+    sessionToken: json.sessionToken,
+    isMentor: true,
+    isAdmin: json.isAdmin,
+    mentorId: json.mentor.id,
+    name: json.mentor.name,
+    university: json.mentor.university
+  });
+  return json;
+}
+
+// ─── Mentors ────────────────────────────────────────────
 
 export async function fetchMentors(filters = {}) {
   try {
@@ -12,358 +169,273 @@ export async function fetchMentors(filters = {}) {
     if (filters.search) params.set('search', filters.search);
     if (filters.university) params.set('university', filters.university);
     if (filters.subject) params.set('subject', filters.subject);
-
-    const res = await fetch(`${API_BASE}/mentors?${params.toString()}`);
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    const data = await res.json();
-    return data.data || MENTORS;
+    const json = await request(`/mentors?${params.toString()}`);
+    return json.data || MENTORS;
   } catch (err) {
-    console.warn('[api] fetchMentors fallback to local data', err);
+    console.warn('[api] fetchMentors — falling back to bundled data', err.message);
     return MENTORS;
   }
 }
 
 export async function fetchMentor(id) {
   try {
-    const res = await fetch(`${API_BASE}/mentors/${id}`);
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    const data = await res.json();
-    return data.data;
+    const json = await request(`/mentors/${id}`);
+    return json.data;
   } catch (err) {
-    console.warn('[api] fetchMentor fallback to local data', err);
     return MENTORS.find(m => m.id === parseInt(id)) || null;
   }
 }
 
-export async function fetchMonthlySlots(mentorId, year, month) {
-  try {
-    const res = await fetch(`${API_BASE}/mentors/${mentorId}/slots?year=${year}&month=${month}`);
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    const data = await res.json();
-    return data.data;
-  } catch (err) {
-    console.warn('[api] fetchMonthlySlots fallback to client-side date generator', err);
-    return generateClientMonthlySlots(mentorId, year, month);
-  }
-}
-
-export async function submitBooking({ mentorId, studentEmail, date, time }) {
-  try {
-    // Record locally immediately so availability updates in real time
-    try {
-      const localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
-      localBookings.push({ mentorId: parseInt(mentorId), date, time, studentEmail, bookedAt: new Date().toISOString() });
-      localStorage.setItem('frea_local_bookings', JSON.stringify(localBookings));
-    } catch (storageErr) {
-      console.warn('[api] could not cache booking locally', storageErr);
-    }
-
-    const res = await fetch(`${API_BASE}/bookings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mentorId, studentEmail, date, time })
-    });
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Failed to confirm booking');
-    }
-    return json.data;
-  } catch (err) {
-    // If backend is unreachable, handle gracefully client-side
-    console.warn('[api] submitBooking local fallback', err);
-    if (err.message && !err.message.includes('fetch')) {
-      throw err;
-    }
-    const meetId = Math.random().toString(36).substring(2, 6);
-    return {
-      id: `frea-local-${Date.now()}`,
-      mentorId,
-      studentEmail,
-      date,
-      time,
-      googleMeetUrl: `https://meet.google.com/fre-${meetId}-stu`,
-      status: 'confirmed'
-    };
-  }
-}
-
-export async function submitMentorApplication(appData) {
-  try {
-    const res = await fetch(`${API_BASE}/mentors/apply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appData)
-    });
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      throw new Error(json.error || 'Failed to submit mentor application');
-    }
-    return json.data;
-  } catch (err) {
-    console.warn('[api] submitMentorApplication fallback', err);
-    if (err.message && !err.message.includes('fetch')) {
-      throw err;
-    }
-    return {
-      id: `frea-app-local-${Date.now()}`,
-      ...appData,
-      status: 'pending_verification'
-    };
-  }
-}
-
-export async function fetchStats() {
-  try {
-    const res = await fetch(`${API_BASE}/stats`);
-    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    const data = await res.json();
-    return data.data;
-  } catch (err) {
-    return {
-      totalBookings: 12048,
-      verifiedMentors: 500,
-      averageRating: 4.9
-    };
-  }
-}
-
-// ─── Real Document Upload ──────────────────────────
-export async function uploadDocument(file) {
-  const formData = new FormData();
-  formData.append('document', file);
-
-  const res = await fetch(`${API_BASE}/upload/document`, {
-    method: 'POST',
-    body: formData
-  });
-
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to upload document.');
-  }
-  return json;
-}
-
-// ─── Email Verification ────────────────────────────
-export async function sendEmailVerification(email, universityName = '') {
-  const res = await fetch(`${API_BASE}/auth/send-verification`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, universityName })
-  });
-
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to send verification email.');
-  }
-  return json;
-}
-
-export async function verifyEmailCode(email, code) {
-  const res = await fetch(`${API_BASE}/auth/verify-code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code })
-  });
-
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Invalid verification code.');
-  }
-  return json;
-}
-
-export async function verifyEmailToken(token) {
-  const res = await fetch(`${API_BASE}/auth/verify?token=${encodeURIComponent(token)}`);
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Invalid or expired verification link.');
-  }
-  return json;
-}
-
-export async function checkEmailVerification(email) {
-  try {
-    const res = await fetch(`${API_BASE}/auth/status?email=${encodeURIComponent(email)}`);
-    const json = await res.json();
-    return json.verified || false;
-  } catch (e) {
-    return false;
-  }
-}
-
-// ─── Admin Dashboard Applications ─────────────────
-export async function fetchAdminApplications() {
-  try {
-    const res = await fetch(`${API_BASE}/admin/applications`);
-    const json = await res.json();
-    return json.data || [];
-  } catch (e) {
-    return [];
-  }
-}
-
-export async function approveMentorApplication(id) {
-  const res = await fetch(`${API_BASE}/admin/applications/${id}/approve`, {
-    method: 'POST'
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to approve application.');
-  }
-  return json;
-}
-
-export async function rejectMentorApplication(id) {
-  const res = await fetch(`${API_BASE}/admin/applications/${id}/reject`, {
-    method: 'POST'
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to reject application.');
-  }
-  return json;
-}
-
-// ─── Mentor Portal Profile & Schedule CRUD ─────────
 export async function updateMentorProfile(id, profileData) {
-  const res = await fetch(`${API_BASE}/mentors/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(profileData)
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to update profile.');
-  }
+  const json = await request(`/mentors/${id}`, { method: 'PUT', body: profileData });
   return json.data;
 }
 
 export async function updateMentorSchedule(id, weeklySchedule) {
-  const res = await fetch(`${API_BASE}/mentors/${id}/schedule`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ weeklySchedule })
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to update schedule.');
+  const json = await request(`/mentors/${id}/schedule`, { method: 'PUT', body: { weeklySchedule } });
+  return json.data;
+}
+
+export async function submitMentorApplication(appData) {
+  const json = await request('/mentors/apply', { method: 'POST', body: appData });
+  if (json.sessionToken) {
+    setSession({
+      email: json.mentor.email,
+      sessionToken: json.sessionToken,
+      isMentor: true,
+      isAdmin: false,
+      mentorId: json.mentor.id,
+      name: json.mentor.name,
+      university: json.mentor.university
+    });
   }
   return json.data;
 }
 
-// ─── Resources CRUD ────────────────────────────────
+// ─── Calendar & bookings ────────────────────────────────
+
+export async function fetchMonthlySlots(mentorId, year, month) {
+  const json = await request(`/mentors/${mentorId}/slots?year=${year}&month=${month}`);
+  return json.data;
+}
+
+export async function submitBooking({ mentorId, date, time }) {
+  const json = await request('/bookings', { method: 'POST', body: { mentorId, date, time } });
+  return json.data;
+}
+
+export async function fetchMyBookings() {
+  try {
+    const json = await request('/bookings/mine');
+    return json.data;
+  } catch (e) {
+    return { upcoming: [], past: [] };
+  }
+}
+
+export async function fetchMentorBookings(mentorId) {
+  try {
+    const json = await request(`/mentors/${mentorId}/bookings`);
+    return json.data;
+  } catch (e) {
+    console.warn('[api] fetchMentorBookings', e.message);
+    return { upcoming: [], past: [], cancelled: [], total: 0 };
+  }
+}
+
+export async function cancelBooking(bookingId, cancelToken = null) {
+  const json = await request(`/bookings/${bookingId}/cancel`, {
+    method: 'POST',
+    body: { cancelToken }
+  });
+  return json.data;
+}
+
+/** Authenticated .ics download, delivered as a blob so the token can be sent. */
+export async function downloadBookingIcs(bookingId, title = 'frea-session') {
+  const res = await request(`/bookings/${bookingId}/ics`, { raw: true });
+  if (!res.ok) throw new Error('Could not download the calendar invite.');
+  const blob = await res.blob();
+  triggerBlobDownload(blob, `${title}.ics`);
+}
+
+// ─── Resources ──────────────────────────────────────────
+
 export async function fetchResources() {
   try {
-    const res = await fetch(`${API_BASE}/resources`);
-    const json = await res.json();
-    return json.data || [];
+    const json = await request('/resources');
+    return { resources: json.data || [], entitlements: json.entitlements || [] };
   } catch (e) {
-    return [];
+    console.warn('[api] fetchResources', e.message);
+    return { resources: [], entitlements: [] };
   }
 }
 
 export async function createResource(resourceData) {
-  const res = await fetch(`${API_BASE}/resources`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(resourceData)
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to create resource.');
-  }
+  const json = await request('/resources', { method: 'POST', body: resourceData });
+  return json.data;
+}
+
+export async function updateResource(id, updates) {
+  const json = await request(`/resources/${id}`, { method: 'PUT', body: updates });
   return json.data;
 }
 
 export async function deleteResource(id) {
-  const res = await fetch(`${API_BASE}/resources/${id}`, {
-    method: 'DELETE'
-  });
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json.error || 'Failed to delete resource.');
-  }
-  return json;
+  return request(`/resources/${id}`, { method: 'DELETE' });
 }
 
-// Client-side fallback dynamic calendar generator in case network is disconnected
-function generateClientMonthlySlots(mentorId, year, month) {
-  const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
-  const targetYear = parseInt(year);
-  const targetMonth = parseInt(month);
-  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+/** Claims a freabie so it shows as unlocked everywhere, on any device. */
+export async function claimResource(id) {
+  const json = await request(`/resources/${id}/claim`, { method: 'POST' });
+  return json.data;
+}
 
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const monthName = monthNames[targetMonth - 1];
+/**
+ * Streams a resource file through the authorised endpoint and saves it.
+ * Throws with `requiresPurchase` if the student does not own a paid playbook.
+ */
+export async function downloadResource(id, title = 'frea-resource') {
+  const res = await request(`/resources/${id}/download`, { raw: true });
 
-  const defaultSchedule = {
-    1: ["10:00 AM", "2:30 PM", "4:30 PM"],
-    3: ["11:00 AM", "3:00 PM"],
-    5: ["9:30 AM", "1:00 PM", "5:00 PM"]
-  };
+  if (!res.ok) {
+    let json = {};
+    try { json = await res.json(); } catch (e) { /* non-JSON error body */ }
+    const err = new Error(json.error || 'Could not download this resource.');
+    err.status = res.status;
+    if (json.requiresPurchase) err.requiresPurchase = true;
+    if (res.status === 401) {
+      err.needsVerification = true;
+      clearSession();
+    }
+    throw err;
+  }
 
-  const schedule = mentor?.weeklySchedule || defaultSchedule;
-  const days = [];
-  const allOpenSlots = [];
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match
+    ? match[1]
+    : `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.pdf`;
 
-  let localBookings = [];
+  triggerBlobDownload(blob, filename);
+  return { filename };
+}
+
+export async function uploadDocument(file) {
+  const formData = new FormData();
+  formData.append('document', file);
+  return request('/upload/document', { method: 'POST', formData });
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke on the next tick so Safari has finished reading the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── Payments ───────────────────────────────────────────
+
+export async function fetchPaymentConfig() {
   try {
-    localBookings = JSON.parse(localStorage.getItem('frea_local_bookings') || '[]');
+    const json = await request('/payments/config');
+    return json.data;
   } catch (e) {
-    localBookings = [];
+    return { enabled: false, feeRatePercent: 5, currency: 'GBP' };
   }
+}
 
-  for (let day = 1; day <= daysInMonth; day++) {
-    const d = new Date(targetYear, targetMonth - 1, day);
-    const dayOfWeekIdx = d.getDay();
-    const dayOfWeek = dayNames[dayOfWeekIdx];
-    const recurring = schedule[dayOfWeekIdx] || [];
-    const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const displayDate = `${dayOfWeek} ${day} ${monthName}`;
+/** Opens Stripe Checkout for one playbook. Returns the hosted checkout URL. */
+export async function startCheckout(resourceId) {
+  const json = await request('/checkout', { method: 'POST', body: { resourceId } });
+  return json.data;
+}
 
-    // Filter out already booked slots for this mentor
-    const bookedOnDay = localBookings
-      .filter(b => b.mentorId === parseInt(mentorId) && (b.date === dateStr || b.date === displayDate))
-      .map(b => b.time);
+export async function fetchCheckoutStatus(orderId) {
+  const json = await request(`/checkout/${orderId}/status`);
+  return json.data;
+}
 
-    const availableSlots = recurring.filter(t => !bookedOnDay.includes(t));
+// ─── Mentor earnings ────────────────────────────────────
 
-    days.push({
-      date: dateStr,
-      dayNumber: day,
-      dayOfWeek,
-      displayDate,
-      slots: availableSlots,
-      hasSlots: availableSlots.length > 0,
-      slotCount: availableSlots.length
-    });
-
-    availableSlots.forEach(slot => {
-      allOpenSlots.push({
-        date: dateStr,
-        displayDate,
-        dayOfWeek,
-        dayNumber: day,
-        time: slot
-      });
-    });
+export async function fetchMentorOrders(mentorId) {
+  try {
+    const json = await request(`/mentors/${mentorId}/orders`);
+    return json.data;
+  } catch (err) {
+    console.warn('[api] fetchMentorOrders', err.message);
+    return {
+      totalOrders: 0, totalGrossSales: 0, mentorPayout: 0,
+      freaPlatformFee: 0, freeDownloads: 0, feeRatePercent: 5, orders: []
+    };
   }
+}
 
-  const firstDay = new Date(targetYear, targetMonth - 1, 1);
-  const firstWeekdayOffset = (firstDay.getDay() + 6) % 7;
+// ─── Admin ──────────────────────────────────────────────
 
-  return {
-    mentorId: mentor?.id,
-    mentorName: mentor?.name,
-    year: targetYear,
-    month: targetMonth,
-    monthName,
-    daysInMonth,
-    firstWeekdayOffset,
-    days,
-    allOpenSlots,
-    totalOpenSlots: allOpenSlots.length
-  };
+export async function fetchAdminApplications() {
+  const json = await request('/admin/applications');
+  return json.data || [];
+}
+
+export async function fetchAdminSuggestions() {
+  const json = await request('/admin/suggestions');
+  return json.data || [];
+}
+
+// ─── Misc ───────────────────────────────────────────────
+
+export async function fetchStats() {
+  try {
+    const json = await request('/stats');
+    return json.data;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function submitSuggestion(payload) {
+  const json = await request('/suggestions', { method: 'POST', body: payload });
+  return json.data;
+}
+
+// ─── Reports ────────────────────────────────────────────
+
+export async function submitReport({ targetType, targetId, reason, detail }) {
+  const json = await request('/reports', {
+    method: 'POST',
+    body: { targetType, targetId, reason, detail }
+  });
+  return json.data;
+}
+
+export async function fetchAdminReports() {
+  const json = await request('/admin/reports');
+  return json.data || [];
+}
+
+export async function resolveReport(id) {
+  return request(`/admin/reports/${id}/resolve`, { method: 'POST' });
+}
+
+// ─── Connect payouts ────────────────────────────────────
+
+export async function startPayoutOnboarding() {
+  const json = await request('/connect/onboard', { method: 'POST' });
+  return json.data;
+}
+
+export async function fetchPayoutStatus() {
+  try {
+    const json = await request('/connect/status');
+    return json.data;
+  } catch (e) {
+    return { configured: false, started: false, payoutsEnabled: false, currentlyDue: [] };
+  }
 }

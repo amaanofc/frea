@@ -1,101 +1,137 @@
 // ─────────────────────────────────────────────
-// frea — RFC 5545 iCalendar (.ics) Generator
+// frea — RFC 5545 iCalendar (.ics) generator
 // ─────────────────────────────────────────────
+//
+// Works from canonical booking fields (ISO date + 24-hour time), resolves the
+// real UK offset for that date, and emits UTC stamps. The same file is attached
+// to both the student's and the mentor's confirmation email, so a single invite
+// lands in whichever calendar each of them actually uses.
 
-/**
- * Parses user-friendly date string like "Mon 21 Sep" or "2026-09-21" and time like "2:30 PM"
- * and returns UTC ISO formatted start and end strings for calendar events.
- */
-export function formatCalendarDates(dateStr, timeStr) {
-  const currentYear = new Date().getFullYear();
-  let targetDate = new Date();
+import { slotToUtcRange, toLongDisplayDate, toDisplayTime, SESSION_MINUTES } from './time.js';
 
-  // If already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    targetDate = new Date(Date.UTC(y, m - 1, d));
-  } else {
-    // Parse "Mon 21 Sep" or "21 Sep"
-    const match = dateStr.match(/(\d{1,2})\s+([A-Za-z]{3})/);
-    if (match) {
-      const day = parseInt(match[1], 10);
-      const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-      const monthIdx = monthNames.indexOf(match[2].toLowerCase());
-      if (monthIdx !== -1) {
-        targetDate = new Date(Date.UTC(currentYear, monthIdx, day));
-      }
+function stampUtc(date) {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+/** RFC 5545 §3.3.11: escape , ; \ and newlines in TEXT values. */
+function escapeText(value) {
+  return String(value == null ? '' : value)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+/** RFC 5545 §3.1: fold lines at 75 octets. */
+function fold(line) {
+  if (Buffer.byteLength(line, 'utf8') <= 75) return line;
+  const out = [];
+  let current = '';
+  for (const char of line) {
+    const candidate = current + char;
+    const limit = out.length === 0 ? 75 : 74; // continuation lines carry a leading space
+    if (Buffer.byteLength(candidate, 'utf8') > limit) {
+      out.push(current);
+      current = char;
+    } else {
+      current = candidate;
     }
   }
-
-  // Parse time "2:30 PM" or "10:00 AM"
-  let hours = 14;
-  let minutes = 0;
-  const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (timeMatch) {
-    hours = parseInt(timeMatch[1], 10);
-    minutes = parseInt(timeMatch[2], 10);
-    const meridiem = (timeMatch[3] || '').toUpperCase();
-    if (meridiem === 'PM' && hours < 12) hours += 12;
-    if (meridiem === 'AM' && hours === 12) hours = 0;
-  }
-
-  // Set time (treating BST as UTC+1 roughly, or keep UK local time)
-  // For UK summer (BST), UTC is London time minus 1 hour
-  const startYear = targetDate.getUTCFullYear();
-  const startMonth = targetDate.getUTCMonth();
-  const startDay = targetDate.getUTCDate();
-
-  // Create date object
-  const startEvent = new Date(Date.UTC(startYear, startMonth, startDay, hours - 1, minutes)); // Adjusted for BST
-  const endEvent = new Date(startEvent.getTime() + 20 * 60 * 1000); // 20 minutes duration
-
-  const toIcsString = (d) => {
-    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  };
-
-  return {
-    startIcs: toIcsString(startEvent),
-    endIcs: toIcsString(endEvent),
-    startDateObj: startEvent,
-    endDateObj: endEvent
-  };
+  if (current) out.push(current);
+  return out.map((l, i) => (i === 0 ? l : ` ${l}`)).join('\r\n');
 }
 
 /**
- * Generate standard RFC 5545 .ics calendar content
+ * @param {object} booking canonical booking record
+ * @param {object} mentor  mentor record
+ * @param {'REQUEST'|'CANCEL'} method
  */
-export function generateICSContent({ booking, mentor }) {
-  const { startIcs, endIcs } = formatCalendarDates(booking.date, booking.time);
-  const nowIcs = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const uid = booking.id || `frea-${Date.now()}@frea.ac.uk`;
+export function generateICSContent({ booking, mentor, method = 'REQUEST' }) {
+  const { start, end } = slotToUtcRange(booking.date, booking.time, SESSION_MINUTES);
+  const now = new Date();
 
-  const summary = `Peer Mentoring with ${mentor.name} (frea)`;
-  const description = `20-minute 1-on-1 peer mentoring session with ${mentor.name} (${mentor.major}, ${mentor.university}).\\n\\nJoin Google Meet: ${booking.googleMeetUrl}\\n\\nSenior tip from ${mentor.name}: ${mentor.topTip || 'Bring 2-3 specific questions!'}\\n\\nOrganized via frea — 100% free UK student mentoring.`;
-  const location = booking.googleMeetUrl || 'Google Meet';
+  const meetingUrl = booking.meetingUrl || booking.googleMeetUrl || '';
+  const mentorName = mentor?.name || booking.mentorName || 'frea mentor';
+  const mentorEmail = mentor?.email || booking.mentorEmail || '';
 
-  return [
+  const summary = `frea: 20-min mentoring with ${mentorName}`;
+  const description = [
+    `Your 20-minute 1-on-1 peer mentoring session with ${mentorName}`,
+    mentor?.major && mentor?.university ? `${mentor.major} · ${mentor.university}` : '',
+    '',
+    meetingUrl ? `Join the call: ${meetingUrl}` : '',
+    '',
+    mentor?.topTip ? `${mentorName}'s top tip: ${mentor.topTip}` : '',
+    '',
+    `Booking reference: ${booking.id}`,
+    `${toLongDisplayDate(booking.date)} at ${toDisplayTime(booking.time)} (${booking.timezone || 'UK time'})`
+  ].filter(Boolean).join('\n');
+
+  const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//frea//UK Peer Mentoring Platform//EN',
+    'PRODID:-//frea//UK Peer Mentoring//EN',
     'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    `METHOD:${method}`,
     'BEGIN:VEVENT',
-    `UID:${uid}`,
-    `DTSTAMP:${nowIcs}`,
-    `DTSTART:${startIcs}`,
-    `DTEND:${endIcs}`,
-    `SUMMARY:${summary}`,
-    `DESCRIPTION:${description}`,
-    `LOCATION:${location}`,
-    `ORGANIZER;CN="frea UK Mentoring":mailto:sessions@frea.ac.uk`,
-    `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN="${booking.studentEmail}":mailto:${booking.studentEmail}`,
-    'STATUS:CONFIRMED',
+    `UID:${booking.id}@joinfrea.com`,
+    `DTSTAMP:${stampUtc(now)}`,
+    `DTSTART:${stampUtc(start)}`,
+    `DTEND:${stampUtc(end)}`,
+    `SEQUENCE:${method === 'CANCEL' ? 1 : 0}`,
+    `STATUS:${method === 'CANCEL' ? 'CANCELLED' : 'CONFIRMED'}`,
+    `SUMMARY:${escapeText(summary)}`,
+    `DESCRIPTION:${escapeText(description)}`,
+    meetingUrl ? `LOCATION:${escapeText(meetingUrl)}` : 'LOCATION:Online',
+    meetingUrl ? `URL:${escapeText(meetingUrl)}` : '',
+    'ORGANIZER;CN=frea:mailto:sessions@joinfrea.com',
+    `ATTENDEE;CN=${escapeText(booking.studentEmail)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${booking.studentEmail}`,
+    mentorEmail
+      ? `ATTENDEE;CN=${escapeText(mentorName)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${mentorEmail}`
+      : '',
     'BEGIN:VALARM',
     'TRIGGER:-PT15M',
     'ACTION:DISPLAY',
-    'DESCRIPTION:Reminder: frea mentoring session starts in 15 minutes',
+    `DESCRIPTION:${escapeText(`Your frea call with ${mentorName} starts in 15 minutes`)}`,
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR'
-  ].join('\r\n');
+  ].filter(Boolean);
+
+  return lines.map(fold).join('\r\n') + '\r\n';
 }
+
+/**
+ * "Add to calendar" links for people who would rather click than open a file.
+ * Both accept UTC stamps directly.
+ */
+export function calendarLinks({ booking, mentor }) {
+  const { start, end } = slotToUtcRange(booking.date, booking.time, SESSION_MINUTES);
+  const mentorName = mentor?.name || booking.mentorName || 'frea mentor';
+  const meetingUrl = booking.meetingUrl || booking.googleMeetUrl || '';
+
+  const title = `frea: 20-min mentoring with ${mentorName}`;
+  const details = `Join the call: ${meetingUrl}\n\nBooking reference: ${booking.id}`;
+
+  const google = 'https://calendar.google.com/calendar/render?' + new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${stampUtc(start)}/${stampUtc(end)}`,
+    details,
+    location: meetingUrl || 'Online'
+  }).toString();
+
+  const outlook = 'https://outlook.live.com/calendar/0/deeplink/compose?' + new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: title,
+    startdt: start.toISOString(),
+    enddt: end.toISOString(),
+    body: details,
+    location: meetingUrl || 'Online'
+  }).toString();
+
+  return { google, outlook };
+}
+
+export { SESSION_MINUTES };
