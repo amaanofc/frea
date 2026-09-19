@@ -108,21 +108,10 @@ test('landing page renders its hero and mission', async () => {
   assert.match(text, /why we built this/i);
 });
 
-test('landing shows real platform stats from the API', async () => {
-  await goto('#/');
-  await new Promise(r => setTimeout(r, 600));
-  const { document } = dom.window;
-
-  const strip = document.getElementById('landing-stats');
-  assert.ok(strip, 'stats strip should exist');
-  // Hidden until genuine numbers arrive, so a visible strip means real data.
-  assert.notEqual(strip.style.display, 'none', 'stats strip should be revealed');
-
-  const mentors = parseInt(document.getElementById('stat-mentors').textContent, 10);
-  const stats = await (await fetch(`${API}/stats`)).json();
-  assert.equal(mentors, stats.data.verifiedMentors);
-  assert.ok(mentors > 0, 'mentor count should be a real number');
-});
+// The landing stats strip was removed in the UI pass — the page no longer
+// shows mentor/university/resource counts. /api/stats still works and is
+// covered by the smoke suite; there is nothing left on the landing page to
+// assert against. Restore a test here if the numbers ever come back.
 
 test('browse page renders the mentor grid', async () => {
   const text = await goto('#/browse');

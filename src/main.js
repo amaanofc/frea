@@ -323,8 +323,10 @@ function mentorCard(mentor) {
 function handArrow() {
   return `<div class="how-arrow" aria-hidden="true">
     <svg width="76" height="34" viewBox="0 0 76 34" fill="none" class="flow-connector-arrow">
-      <path d="M 6 22 C 24 6, 48 6, 64 16.5" stroke="#171717" stroke-width="2.2" stroke-linecap="round"/>
-      <polygon points="68,18 56,12.5 58.5,17.5 56,23" fill="#171717"/>
+      <path d="M 6 22 C 24 7, 46 7, 61 17.5" stroke="#171717" stroke-width="2.2" stroke-linecap="round"/>
+      <g transform="translate(61, 17.5) rotate(35)">
+        <path d="M 7 0 L -5 -4.5 L -3 0 L -5 4.5 Z" fill="#171717" stroke="#171717" stroke-width="0.5" stroke-linejoin="round"/>
+      </g>
     </svg>
   </div>`;
 }
@@ -378,17 +380,16 @@ function renderLanding() {
           <!-- Hero Visual — Authentic Senior Desk Composition -->
           <div class="hero__visual">
             <div class="hero__visual-desk">
-              <!-- Washi Tape (Cleanly pinned to top-left) -->
-              <div class="washi-tape"></div>
-
               <!-- Decorative Stickers (Safely inside container margins) -->
-              <div class="sticker sticker--1">${stickerDecoration('lightning', 34)}</div>
               <div class="sticker sticker--2">${stickerDecoration('heart', 30)}</div>
               <div class="sticker sticker--3">${stickerDecoration('sparkle', 28)}</div>
               <div class="sticker sticker--4">${stickerDecoration('star', 32)}</div>
 
               <!-- Senior Student ID Badge Card -->
               <div class="hero__senior-pass">
+                <!-- Washi Tape (Cleanly pinned to top-left of the card) -->
+                <div class="washi-tape" style="top: -12px; left: 24%;"></div>
+
                 <div class="hero__pass-header">
                   <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <span class="hero__pass-verified" style="display: inline-flex; align-items: center; gap: 4px;">${ICONS.shieldTick} verified peer mentor</span>
@@ -521,23 +522,6 @@ function renderLanding() {
               <div class="mission-card__icon">${ICONS.shieldTick}</div>
               <h3 class="mission-card__title">verified seniors</h3>
               <p class="mission-card__desc">every mentor confirms a real .ac.uk address before their profile goes live, and links their LinkedIn so you can check who you're talking to.</p>
-            </div>
-          </div>
-
-          <!-- Live platform numbers, pulled from the API. Hidden until they
-               load, so the page never shows a placeholder as if it were real. -->
-          <div id="landing-stats" class="mission-section__grid" style="display: none; margin-top: 20px;">
-            <div class="mission-card" style="text-align: center;">
-              <div id="stat-mentors" class="mission-card__title" style="font-size: 30px; font-family: var(--font-display);">–</div>
-              <p class="mission-card__desc" style="margin: 0;">verified senior mentors</p>
-            </div>
-            <div class="mission-card" style="text-align: center;">
-              <div id="stat-unis" class="mission-card__title" style="font-size: 30px; font-family: var(--font-display);">–</div>
-              <p class="mission-card__desc" style="margin: 0;">UK universities represented</p>
-            </div>
-            <div class="mission-card" style="text-align: center;">
-              <div id="stat-resources" class="mission-card__title" style="font-size: 30px; font-family: var(--font-display);">–</div>
-              <p class="mission-card__desc" style="margin: 0;">freabies &amp; playbooks shared</p>
             </div>
           </div>
         </div>
@@ -6517,7 +6501,6 @@ function renderPage() {
 
   if (path === '/' || path === '') {
     app.innerHTML = renderLanding();
-    hydrateLandingStats();
   } else if (path === '/browse') {
     app.innerHTML = renderBrowse();
   } else if (path === '/resources' || path === '/docs' || path === '/freabies') {
@@ -6552,7 +6535,6 @@ function renderPage() {
     loadMentorCalendar(id, now.getFullYear(), now.getMonth() + 1);
   } else {
     app.innerHTML = renderLanding();
-    hydrateLandingStats();
   }
 
   setupRevealObserver();
@@ -6791,24 +6773,6 @@ function setupCustomCursor() {
 // fixed numbers and an empty resources hub. Each one fails quietly: if the API
 // is unreachable, the bundled content stays on screen.
 
-async function hydrateLandingStats() {
-  const stats = await fetchStats();
-  if (!stats) return;
-
-  const strip = document.getElementById('landing-stats');
-  if (!strip) return;
-
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = String(value);
-  };
-  set('stat-mentors', stats.verifiedMentors);
-  set('stat-unis', stats.universities);
-  set('stat-resources', stats.totalResources);
-
-  // Only reveal once we have genuine numbers to show.
-  strip.style.display = '';
-}
 
 /** Merges server-published resources into the render list. */
 async function hydrateResources() {

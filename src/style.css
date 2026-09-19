@@ -743,7 +743,7 @@ body {
 /* Washi Tape Strip — pinned to top-left of senior card */
 .washi-tape {
   position: absolute;
-  top: 10px;
+  top: -12px;
   left: 20%;
   transform: rotate(-3deg);
   width: 110px;
@@ -754,6 +754,12 @@ body {
   border-right: 2px dashed rgba(23, 23, 23, 0.2);
   z-index: 10;
   pointer-events: none;
+}
+
+.hero__senior-pass .washi-tape {
+  top: -12px;
+  left: 24%;
+  transform: rotate(-2deg);
 }
 
 /* Senior ID Badge Card */
@@ -1333,10 +1339,8 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  height: 68px;
-  min-height: 68px;
-  max-height: 68px;
-  overflow: hidden;
+  min-height: 64px;
+  overflow: visible;
   align-content: flex-start;
   margin-bottom: 12px;
   flex-shrink: 0;
@@ -1345,17 +1349,30 @@ body {
 .achievement-sticker {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: var(--radius-tags);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
+  line-height: 1.25;
   border: 1.5px solid;
   background: var(--color-cream-paper);
   white-space: nowrap;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.achievement-sticker .sticker-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.achievement-sticker .sticker-svg svg {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .achievement-sticker--orange {
@@ -3900,7 +3917,35 @@ body {
 
 .resources-hero {
   text-align: center;
-  padding: 40px 0 24px;
+  padding: 116px 0 28px;
+}
+
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1.5px solid var(--color-charcoal);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 2px 2px 0px var(--color-charcoal);
+}
+
+.hero__badge-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-charcoal);
+  opacity: 0.35;
+  display: inline-block;
+}
+
+@media (max-width: 768px) {
+  .resources-hero {
+    padding-top: 100px;
+  }
 }
 
 .resources-hero__title {
