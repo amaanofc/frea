@@ -721,17 +721,17 @@ export function createMentorApplication(appData) {
 
   if (mentor) {
     // Update existing mentor profile
-    if (appData.name) mentor.name = appData.name;
-    if (appData.university) mentor.university = appData.university;
-    if (appData.major || appData.degree) mentor.major = appData.major || appData.degree;
-    if (appData.year) mentor.year = appData.year;
-    if (appData.topTip) mentor.topTip = appData.topTip;
-    if (appData.topTipColor || appData.postitColor) mentor.topTipColor = appData.topTipColor || appData.postitColor;
+    if (appData.name) mentor.name = cleanText(appData.name, 80);
+    if (appData.university) mentor.university = cleanText(appData.university, 100);
+    if (appData.major || appData.degree) mentor.major = cleanText(appData.major || appData.degree, 80);
+    if (appData.year) mentor.year = cleanText(appData.year, 40);
+    if (appData.topTip) mentor.topTip = cleanText(appData.topTip, 140);
+    if (appData.topTipColor || appData.postitColor) mentor.topTipColor = safePostitColor(appData.topTipColor || appData.postitColor);
     if (appData.achievements) mentor.achievements = appData.achievements;
     if (appData.photoUrl) mentor.photoUrl = appData.photoUrl;
     if (appData.avatarId) mentor.avatarId = appData.avatarId;
-    if (appData.pitchVideoUrl) mentor.pitchVideoUrl = appData.pitchVideoUrl;
-    if (appData.linkedin) mentor.linkedin = appData.linkedin;
+    if (appData.pitchVideoUrl) mentor.pitchVideoUrl = safeVideoUrl(appData.pitchVideoUrl);
+    if (appData.linkedin) mentor.linkedin = sanitiseUrl(appData.linkedin) || '';
     if (appData.links) mentor.links = sanitiseLinks(appData.links);
     if (appData.weeklySchedule) mentor.weeklySchedule = normaliseSchedule(appData.weeklySchedule);
   } else {
@@ -749,18 +749,18 @@ export function createMentorApplication(appData) {
       university: cleanText(appData.university, 100),
       bio: cleanText(appData.bio, 1200) || ('Senior student at ' + cleanText(appData.university, 100) + '. Happy to chat about course survival, applications, and student life.'),
       topTip: cleanText(appData.topTip, 140) || 'Reach out to older students early and test your revision methods!',
-      topTipColor: postitColor,
+      topTipColor: safePostitColor(postitColor),
       achievements: appData.achievements && appData.achievements.length > 0 ? appData.achievements : ['verified-mentor'],
-      helpsWith: [appData.major || appData.degree || 'academics', 'exam tips', 'cv roast', 'applications'],
+      helpsWith: [cleanText(appData.major || appData.degree, 40) || 'academics', 'exam tips', 'cv roast', 'applications'],
       rating: 5.0,
       callsCompleted: 0,
-      linkedin: appData.linkedin || '',
+      linkedin: sanitiseUrl(appData.linkedin) || '',
       links: sanitiseLinks(
         appData.links && appData.links.length
           ? appData.links
           : [appData.linkedin, appData.website].filter(Boolean)
       ),
-      pitchVideoUrl: appData.pitchVideoUrl || '',
+      pitchVideoUrl: safeVideoUrl(appData.pitchVideoUrl),
       photoUrl: appData.photoUrl || '',
       avatarId: appData.avatarId || 1,
       interviewRequired: false,
@@ -1012,7 +1012,7 @@ export function updateMentorProfile(id, updates) {
   if (updates.university) mentor.university = cleanText(updates.university, 100);
   if (updates.bio) mentor.bio = cleanText(updates.bio, 1200);
   if (updates.topTip) mentor.topTip = cleanText(updates.topTip, 140);
-  if (updates.topTipColor) mentor.topTipColor = cleanText(updates.topTipColor, 20);
+  if (updates.topTipColor) mentor.topTipColor = safePostitColor(updates.topTipColor);
   if (updates.achievements && Array.isArray(updates.achievements)) {
     mentor.achievements = updates.achievements
       .map(a => cleanText(a, 75)).filter(Boolean).slice(0, 3);
@@ -1024,7 +1024,7 @@ export function updateMentorProfile(id, updates) {
   if (updates.photoUrl !== undefined) mentor.photoUrl = updates.photoUrl;
   if (updates.avatarId !== undefined) mentor.avatarId = parseInt(updates.avatarId) || 1;
   if (updates.color) mentor.color = updates.color;
-  if (updates.pitchVideoUrl !== undefined) mentor.pitchVideoUrl = String(updates.pitchVideoUrl).trim();
+  if (updates.pitchVideoUrl !== undefined) mentor.pitchVideoUrl = safeVideoUrl(updates.pitchVideoUrl);
 
   // Mentors may attach as many links as they like. Keep LinkedIn as its own
   // first-class field for the verification badge, and mirror it into links.
@@ -1052,6 +1052,37 @@ export function sanitiseLinks(links) {
     .filter(Boolean)
     .filter((l, i, arr) => arr.findIndex(x => x.url === l.url) === i)
     .slice(0, 20);
+}
+
+/**
+ * The post-it colour is interpolated straight into a class attribute on the
+ * mentor card, so it is a CSS-class token, not free text. cleanText only
+ * trimmed it, which left `" onclick=...` inside the 20-character budget.
+ */
+const POSTIT_COLORS = new Set(['yellow', 'mint', 'blush', 'sky']);
+function safePostitColor(value) {
+  const v = (value == null ? '' : String(value)).trim().toLowerCase();
+  return POSTIT_COLORS.has(v) ? v : 'yellow';
+}
+
+/**
+ * A pitch video is either a take uploaded here or a link the mentor pasted
+ * (YouTube and the like), so both shapes stay valid. The point of this is only
+ * that the stored value is a URL and not an attribute-breakout payload — it is
+ * interpolated into href/src on the mentor card.
+ *
+ * It deliberately does NOT decide what may be deleted from disk. That is
+ * ownPitchVideoPath() in server/index.js, which additionally requires the
+ * filename to be one this mentor's own upload minted; an external URL simply
+ * never resolves to a path there.
+ */
+function safeVideoUrl(value) {
+  const raw = (value == null ? '' : String(value)).trim();
+  if (!raw) return '';
+  if (/^\/uploads\/pitch_videos\/pitch-\d+-\d+-[0-9a-f]{8}\.(mp4|webm|mov|m4v)$/i.test(raw)) {
+    return raw;
+  }
+  return sanitiseUrl(raw) || '';
 }
 
 function sanitiseUrl(value) {
@@ -1162,6 +1193,15 @@ export function createResource(resourceData, mentorId) {
   // public URL by design — downloads are streamed through an authorised route.
   if (!resourceData.fileName) {
     throw new Error('Upload a document file before publishing.');
+  }
+
+  // ...but the client sends it back, so it is untrusted. Uploads are named
+  // doc-<mentorId>-..., and a mentor may only publish their own: otherwise
+  // pointing a resource at someone else's upload would read it out through
+  // the owner's own entitlement on the download route.
+  const handle = String(resourceData.fileName);
+  if (handle !== path.basename(handle) || !handle.startsWith(`doc-${mentor.id}-`)) {
+    throw new Error('That file was not uploaded by this account.');
   }
 
   const resource = {

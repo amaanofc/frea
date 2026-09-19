@@ -46,6 +46,11 @@ Copy that `whsec_…` into `.env`:
 STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 ```
 
+`STRIPE_WEBHOOK_SECRET` takes a comma-separated list, so locally you can hold
+the CLI secret alongside the two Dashboard ones and test either path. Keep the
+CLI secret out of production — it is a valid signing key that production should
+not trust.
+
 Leave `stripe:listen` running in its own terminal while you test. Restart the
 API server so it picks up the new value.
 
@@ -54,9 +59,20 @@ API server so it picks up the new value.
 The CLI is for local only. On your server:
 
 1. https://dashboard.stripe.com/webhooks → **Add endpoint**
-2. URL: `https://your-domain.com/api/stripe/webhook`
-3. Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `account.updated`
-4. Copy the **Signing secret** into your production `STRIPE_WEBHOOK_SECRET`
+2. URL: `https://joinfrea.com/api/stripe/webhook` — the host that serves the app
+   directly. Stripe does not follow redirects on delivery.
+3. Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `v2.core.account.updated`
+4. Stripe will split these into **two destinations** — Checkout events use the
+   snapshot payload style, `v2.core.*` events use thin. Each gets its own
+   signing secret.
+5. Put **both** secrets in `STRIPE_WEBHOOK_SECRET`, comma-separated. The handler
+   tries each in turn.
+
+There is no `account.updated` in Accounts v2 — that is the v1 name. The event
+picker also opens on a **Suggested** tab; switch to **All events**.
+
+See `DEPLOY.md` section 5 for the full walkthrough.
 
 ### Proving it works
 

@@ -8,6 +8,21 @@ import { calendarLinks } from './ics.js';
 
 let transporter = null;
 
+/**
+ * Mentor-controlled text reaches these templates verbatim — a name, a top tip,
+ * a playbook title. Unescaped, a mentor can close a tag and inject their own
+ * markup into mail that leaves frea's domain with valid SPF and DKIM, which is
+ * a convincing phishing primitive even though clients strip <script>.
+ *
+ * Subjects are left alone: nodemailer encodes those, and entities would show
+ * up literally in the inbox.
+ */
+function esc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 export function baseUrl() {
   return (process.env.PUBLIC_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
 }
@@ -171,13 +186,13 @@ export async function sendBookingConfirmationEmail({ booking, mentor, icsContent
     html: shell(`
       <h2 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 12px;">You're booked in 🎉</h2>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 18px;">
-        Your 20-minute 1-on-1 with <strong>${mentor.name}</strong> (${mentor.major}, ${mentor.university}) is confirmed.
+        Your 20-minute 1-on-1 with <strong>${esc(mentor.name)}</strong> (${esc(mentor.major)}, ${esc(mentor.university)}) is confirmed.
       </p>
       ${meetingBox(booking, meetingUrl)}
       ${calendarRow(links)}
       ${mentor.topTip ? `
         <div style="font-size: 13.5px; color: #475569; background: #fffbeb; padding: 12px 16px; border-radius: 8px; border-left: 3px solid #ff6f1e; margin-bottom: 20px;">
-          <strong>${mentor.name}'s top tip:</strong> <em>${mentor.topTip}</em>
+          <strong>${esc(mentor.name)}'s top tip:</strong> <em>${esc(mentor.topTip)}</em>
         </div>` : ''}
       <p style="font-size: 13.5px; color: #475569; line-height: 1.6;">
         <strong>Make it count:</strong> bring two or three specific questions. Twenty minutes goes quickly.
@@ -213,7 +228,7 @@ export async function sendMentorBookingNotification({ booking, mentor, icsConten
       <h2 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 12px;">Someone booked you 🎓</h2>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 18px;">
         A student has booked a 20-minute session with you. Their email is
-        <strong>${booking.studentEmail}</strong> — reply directly if you'd like anything from them beforehand.
+        <strong>${esc(booking.studentEmail)}</strong> — reply directly if you'd like anything from them beforehand.
       </p>
       ${meetingBox(booking, meetingUrl)}
       ${calendarRow(links)}
@@ -242,7 +257,7 @@ export async function sendCancellationEmail({ booking, mentor, icsContent, to })
     html: shell(`
       <h2 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 12px;">Session cancelled</h2>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 18px;">
-        The 20-minute session with <strong>${mentor.name}</strong> on
+        The 20-minute session with <strong>${esc(mentor.name)}</strong> on
         <strong>${toLongDisplayDate(booking.date)} at ${toDisplayTime(booking.time)}</strong> has been cancelled.
         The slot is open again for anyone to book.
       </p>
@@ -270,14 +285,14 @@ export async function sendPurchaseReceiptEmail({ order, resource }) {
       <h2 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 12px;">Playbook unlocked ✅</h2>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 18px;">
         Thanks for supporting a fellow student. You now have lifetime access to
-        <strong>${resource.title}</strong> by ${order.mentorName}.
+        <strong>${esc(resource.title)}</strong> by ${esc(order.mentorName)}.
       </p>
       ${button(downloadUrl, 'Download your playbook →')}
       <div style="background: #f8fafc; border-radius: 12px; padding: 16px 18px; font-size: 13.5px; color: #475569;">
         <div style="font-weight: 700; color: #171717; margin-bottom: 8px;">Receipt</div>
         <table style="width: 100%; font-size: 13.5px; border-collapse: collapse;">
-          <tr><td style="padding: 3px 0;">${resource.title}</td><td align="right">£${order.totalAmount.toFixed(2)}</td></tr>
-          <tr><td style="padding: 3px 0; color: #16a34a;">To ${order.mentorName}</td><td align="right" style="color: #16a34a;">£${order.mentorPayout.toFixed(2)}</td></tr>
+          <tr><td style="padding: 3px 0;">${esc(resource.title)}</td><td align="right">£${order.totalAmount.toFixed(2)}</td></tr>
+          <tr><td style="padding: 3px 0; color: #16a34a;">To ${esc(order.mentorName)}</td><td align="right" style="color: #16a34a;">£${order.mentorPayout.toFixed(2)}</td></tr>
           <tr><td style="padding: 3px 0; color: #94a3b8;">frea fee (${Math.round(order.feeRate * 100)}%, paid by the mentor)</td><td align="right" style="color: #94a3b8;">£${order.freaFee.toFixed(2)}</td></tr>
           <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 8px;"></td></tr>
           <tr><td style="font-weight: 700;">Total charged</td><td align="right" style="font-weight: 700;">£${order.totalAmount.toFixed(2)}</td></tr>
@@ -285,7 +300,7 @@ export async function sendPurchaseReceiptEmail({ order, resource }) {
         <div style="font-size: 12px; color: #94a3b8; margin-top: 10px;">Order ${order.id}</div>
       </div>
       <p style="font-size: 13.5px; color: #475569; line-height: 1.6; margin-top: 18px;">
-        Want feedback on your own work? ${order.mentorName.split(' ')[0]} also offers
+        Want feedback on your own work? ${esc(order.mentorName.split(' ')[0])} also offers
         <strong>free 20-minute calls</strong> on frea.
       </p>
     `),
@@ -302,7 +317,7 @@ export async function sendSaleNotificationEmail({ order, mentor }) {
     html: shell(`
       <h2 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 12px;">You made a sale 💸</h2>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 18px;">
-        A student just bought <strong>${order.resourceTitle}</strong>.
+        A student just bought <strong>${esc(order.resourceTitle)}</strong>.
       </p>
       <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 18px;">
         <div style="font-size: 32px; font-weight: 900; color: #16a34a;">£${order.mentorPayout.toFixed(2)}</div>

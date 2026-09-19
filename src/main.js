@@ -99,12 +99,24 @@ function toLongDisplayDate(iso) {
   return `${DAY_NAMES[dt.getUTCDay()]} ${d} ${longMonths[m - 1]} ${y}`;
 }
 
+/**
+ * A value destined for a JS string literal inside an HTML attribute, e.g.
+ * onclick="fn(${jsArg(name)})". Both escapes are required and the order
+ * matters — escapeHtml on its own renders ' as &#39;, which the HTML parser
+ * decodes back to ' before the JS is parsed, reopening the literal.
+ * Returns its own quotes; do not add more.
+ */
+function jsArg(value) {
+  return escapeHtml(JSON.stringify(String(value == null ? '' : value)));
+}
+
 function escapeHtml(value) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 window.escapeHtml = escapeHtml;
+window.jsArg = jsArg;
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -189,7 +201,7 @@ function achievementSticker(key) {
   // Custom user-entered achievement string
   return `<span class="achievement-sticker achievement-sticker--sky">
     <span class="sticker-svg">${STICKER_SVGS.star}</span>
-    ${key}
+    ${escapeHtml(key)}
   </span>`;
 }
 
@@ -267,7 +279,7 @@ function mentorCard(mentor) {
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
             <div class="mentor-card__name"><a href="/mentor/${mentor.id}" class="mentor-card__name-link">${escapeHtml(mentor.name)}</a></div>
             ${mentor.linkedin ? `
-              <a href="${mentor.linkedin}" target="_blank" rel="noopener noreferrer" class="mentor-card__linkedin" onclick="event.stopPropagation()" title="View verified LinkedIn">
+              <a href="${escapeHtml(mentor.linkedin)}" target="_blank" rel="noopener noreferrer" class="mentor-card__linkedin" onclick="event.stopPropagation()" title="View verified LinkedIn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 0 0-1.66 1.64 1.63 1.63 0 0 0 1.66 1.63 1.63 1.63 0 0 0 1.65-1.63A1.64 1.64 0 0 0 7.83 6.2Z"/></svg>
               </a>
             ` : ''}
@@ -282,7 +294,7 @@ function mentorCard(mentor) {
       </div>
 
       <!-- Senior's Top Tip Post-It Sticky Note -->
-      <div class="mentor-card__postit mentor-card__postit--${mentor.topTipColor || 'yellow'}">
+      <div class="mentor-card__postit mentor-card__postit--${escapeHtml(mentor.topTipColor || 'yellow')}">
         <span class="mentor-card__postit-pin"></span>
         <div class="mentor-card__postit-header">
           <span class="mentor-card__postit-label">senior tip</span>
@@ -774,7 +786,7 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
           ${typeBadgeHtml}
           <span class="doc-format-badge">${escapeHtml(doc.format)}</span>
         </div>
-        <span class="doc-category-badge">${doc.category || 'Academic'}</span>
+        <span class="doc-category-badge">${escapeHtml(doc.category || 'Academic')}</span>
       </div>
 
       <div class="doc-card__main">
@@ -782,13 +794,13 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
         <p class="doc-card__subtitle">${escapeHtml(doc.subtitle)}</p>
 
         ${showAuthor ? `
-          <div class="doc-card__author" onclick="window.navigateTo('/mentor/${mentorId}')" title="View ${authorName}'s full profile">
+          <div class="doc-card__author" onclick="window.navigateTo('/mentor/${mentorId}')" title="View ${escapeHtml(authorName)}'s full profile">
             <div class="doc-card__author-avatar">
               ${getMentorAvatar(mentorId, 32)}
             </div>
             <div class="doc-card__author-info">
-              <span class="doc-card__author-name">${authorName}</span>
-              <span class="doc-card__author-uni">${authorUni} · ${authorMajor}</span>
+              <span class="doc-card__author-name">${escapeHtml(authorName)}</span>
+              <span class="doc-card__author-uni">${escapeHtml(authorUni)} · ${escapeHtml(authorMajor)}</span>
             </div>
           </div>
         ` : ''}
@@ -797,7 +809,7 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
           ${(doc.previewBullets || []).slice(0, 2).map(bullet => `
             <div class="doc-card__highlight-item">
               <span class="doc-card__check">${ICONS.tickCircle}</span>
-              <span>${bullet}</span>
+              <span>${escapeHtml(bullet)}</span>
             </div>
           `).join('')}
         </div>
@@ -886,7 +898,7 @@ function renderProfile(mentorId) {
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
                 <span class="hero__pass-verified">${ICONS.shieldTick} verified mentor</span>
                 ${mentor.linkedin ? `
-                  <a href="${mentor.linkedin}" target="_blank" rel="noopener noreferrer" class="profile__linkedin-badge" title="Verified LinkedIn Profile">
+                  <a href="${escapeHtml(mentor.linkedin)}" target="_blank" rel="noopener noreferrer" class="profile__linkedin-badge" title="Verified LinkedIn Profile">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 0 0-1.66 1.64 1.63 1.63 0 0 0 1.66 1.63 1.63 1.63 0 0 0 1.65-1.63A1.64 1.64 0 0 0 7.83 6.2Z"/></svg>
                     <span>LinkedIn verified</span>
                   </a>
@@ -918,7 +930,7 @@ function renderProfile(mentorId) {
 
         <!-- Featured Top Tip Sticky Note -->
         <div style="max-width: 680px; margin-bottom: 40px;">
-          <div class="mentor-card__postit mentor-card__postit--${mentor.topTipColor || 'yellow'}" style="padding: 18px 22px; transform: rotate(-0.8deg); box-shadow: 3px 8px 20px rgba(0,0,0,0.06);">
+          <div class="mentor-card__postit mentor-card__postit--${escapeHtml(mentor.topTipColor || 'yellow')}" style="padding: 18px 22px; transform: rotate(-0.8deg); box-shadow: 3px 8px 20px rgba(0,0,0,0.06);">
             <span class="mentor-card__postit-pin" style="left: 28px; width: 14px; height: 14px;"></span>
             <div class="mentor-card__postit-header" style="margin-bottom: 6px;">
               <span class="mentor-card__postit-label" style="font-size: 15px;">senior tip for freshers</span>
@@ -948,7 +960,7 @@ function renderProfile(mentorId) {
         <div class="profile__section">
           <h3 class="profile__section-title">what you can ask me about</h3>
           <div class="profile__tags">
-            ${mentor.helpsWith.map(t => `<span class="profile__tag">${t}</span>`).join('')}
+            ${mentor.helpsWith.map(t => `<span class="profile__tag">${escapeHtml(t)}</span>`).join('')}
           </div>
         </div>
 
@@ -1612,7 +1624,7 @@ window.handleReportSubmit = handleReportSubmit;
 function reportLink(targetType, targetId, label = '') {
   return `
     <button type="button" class="report-link"
-            onclick="window.openReportModal('${escapeHtml(targetType)}', '${escapeHtml(String(targetId))}', '${escapeHtml(label)}')"
+            onclick="window.openReportModal(${jsArg(targetType)}, ${jsArg(targetId)}, ${jsArg(label)})"
             title="Report this to the frea team">
       report
     </button>
@@ -2324,7 +2336,7 @@ async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
       <div style="margin-top: 10px; padding: 12px 14px; background: var(--color-dew-drop); border: 1.5px solid rgba(23, 23, 23, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-weight: 800; font-size: 11px; padding: 3px 6px; background: var(--color-charcoal); color: #fff; border-radius: 4px; text-transform: uppercase;">${ext.replace('.', '')}</span>
-          <span style="font-size: 13.5px; font-weight: 600;">${file.name}</span>
+          <span style="font-size: 13.5px; font-weight: 600;">${escapeHtml(file.name)}</span>
           <span style="font-size: 12px; opacity: 0.6;">(${(file.size / 1024).toFixed(0)} KB)</span>
         </div>
         <span style="font-size: 12px; color: var(--color-marker-orange); font-weight: 700;">Uploading...</span>
@@ -2519,14 +2531,14 @@ function renderVerificationCodeStep(email, universityName, actionName, previewUr
       </div>` : ''}
 
     <div style="display: flex; flex-direction: column; gap: 10px;">
-      <button type="button" id="verify-otp-btn" class="pill-btn pill-btn--animated" style="width: 100%; padding: 12px;" onclick="window.submitVerificationCode('${escapeHtml(email)}')">
+      <button type="button" id="verify-otp-btn" class="pill-btn pill-btn--animated" style="width: 100%; padding: 12px;" onclick="window.submitVerificationCode(${jsArg(email)})">
         <span class="pill-btn__inner" style="justify-content: center;">
           <span>verify &amp; proceed</span>
           <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
         </span>
       </button>
       <div style="display: flex; justify-content: center; gap: 14px; margin-top: 6px; font-size: 13px;">
-        <button type="button" style="background: none; border: none; color: var(--color-marker-orange); font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="window.resendVerificationCode('${escapeHtml(email)}', '${escapeHtml(universityName || '')}')">Resend code</button>
+        <button type="button" style="background: none; border: none; color: var(--color-marker-orange); font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="window.resendVerificationCode(${jsArg(email)}, ${jsArg(universityName || '')})">Resend code</button>
         <button type="button" style="background: none; border: none; opacity: 0.6; cursor: pointer;" onclick="closeModal()">Cancel</button>
       </div>
     </div>
@@ -3019,7 +3031,7 @@ function renderResourcesHub() {
           <div class="campus-tailored-strip">
             ${prefs && prefs.university && prefs.university !== 'All UK Universities' ? `
               <div class="campus-tailored-pill">
-                <span>📍 Tailored for: <strong>${prefs.university}</strong> ${prefs.subject && prefs.subject !== 'all' ? `· ${prefs.subject}` : ''}</span>
+                <span>📍 Tailored for: <strong>${escapeHtml(prefs.university)}</strong> ${prefs.subject && prefs.subject !== 'all' ? `· ${prefs.subject}` : ''}</span>
                 <button type="button" class="campus-switch-btn" onclick="window.openPreferencesModal(true)">change</button>
               </div>
             ` : `
@@ -3052,7 +3064,7 @@ function renderResourcesHub() {
             <select class="resources-uni-select" id="resources-uni-select" onchange="window.setResourcesUniFilter(this.value)">
               <option value="all" ${activeResourcesUni === 'all' ? 'selected' : ''}>All UK Universities</option>
               ${prefs && prefs.university && prefs.university !== 'All UK Universities' ? `
-                <option value="${prefs.university}" ${activeResourcesUni === prefs.university ? 'selected' : ''}>📍 ${prefs.university} (My Campus)</option>
+                <option value="${escapeHtml(prefs.university)}" ${activeResourcesUni === prefs.university ? 'selected' : ''}>📍 ${prefs.university} (My Campus)</option>
               ` : ''}
               ${UK_UNIVERSITIES.filter(u => u !== 'All UK Universities' && (!prefs || u !== prefs.university)).map(u => `
                 <option value="${u}" ${activeResourcesUni === u ? 'selected' : ''}>${u}</option>
@@ -3394,7 +3406,7 @@ function openSuggestionModal() {
 
         <div class="mentor-form-group" style="margin-bottom: 14px;">
           <label class="mentor-form-label" style="font-size: 13px; font-weight: 700;">Your Course / Degree / Module</label>
-          <input type="text" id="suggestion-course-input" class="mentor-form-input" required placeholder="e.g. BSc Computer Science (COMP26120), LLB Law, Medicine Y2" value="${defaultCourse}" style="padding: 10px 14px; font-size: 13.5px;">
+          <input type="text" id="suggestion-course-input" class="mentor-form-input" required placeholder="e.g. BSc Computer Science (COMP26120), LLB Law, Medicine Y2" value="${escapeHtml(defaultCourse)}" style="padding: 10px 14px; font-size: 13.5px;">
         </div>
 
         <div class="mentor-form-group" style="margin-bottom: 14px;">
@@ -3470,7 +3482,7 @@ function showToast(message) {
   }
   toast.innerHTML = `
     <div class="frea-toast__inner">
-      <span>${message}</span>
+      <span>${escapeHtml(message)}</span>
       <button class="frea-toast__close" onclick="this.closest('.frea-toast').classList.remove('show')">${ICONS.close}</button>
     </div>
   `;
@@ -3503,7 +3515,7 @@ function openDocPreviewModal(docId) {
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
           ${isUnlocked ? `<span class="doc-badge doc-badge--unlocked">${ICONS.tickCircle} unlocked</span>` : (isPaid ? `<span class="doc-badge doc-badge--paid">${ICONS.lock} £${doc.price.toFixed(2)}</span>` : `<span class="doc-badge doc-badge--free">${ICONS.gift} freabie</span>`)}
           <span class="doc-format-badge">${escapeHtml(doc.format)} · ${escapeHtml(doc.pages)}</span>
-          <span class="doc-category-badge">${doc.category || 'Study Resource'}</span>
+          <span class="doc-category-badge">${escapeHtml(doc.category || 'Study Resource')}</span>
           <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; opacity: 0.7; margin-left: auto;">${ICONS.star} ${doc.rating.toFixed(1)} (${doc.downloads} downloads)</span>
         </div>
         <h2 class="doc-modal__title">${escapeHtml(doc.title)}</h2>
@@ -5268,8 +5280,8 @@ function renderMentorDashboard() {
               ${getMentorAvatar(currentMentor.avatarId || currentMentor.id, 42)}
             </div>
             <div style="text-align: left;">
-              <div style="font-size: 14px; font-weight: 800; color: var(--color-charcoal);">${currentMentor.name}</div>
-              <div style="font-size: 11.5px; opacity: 0.65;">${session.email} · ${currentMentor.university}</div>
+              <div style="font-size: 14px; font-weight: 800; color: var(--color-charcoal);">${escapeHtml(currentMentor.name)}</div>
+              <div style="font-size: 11.5px; opacity: 0.65;">${escapeHtml(session.email)} · ${escapeHtml(currentMentor.university)}</div>
             </div>
             <button type="button" class="pill-btn pill-btn--subtle" style="padding: 4px 10px; font-size: 11.5px; margin-left: 6px;" onclick="window.mentorSignOut()" title="Sign out of your mentor portal">
               Sign Out

@@ -82,7 +82,7 @@ MAIL_FROM="frea <hello@joinfrea.com>"
 
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_from_the_dashboard_endpoint
+STRIPE_WEBHOOK_SECRET=whsec_snapshot,whsec_thin
 ```
 
 Notes that bite:
@@ -92,27 +92,76 @@ Notes that bite:
   redirect and sitemap URL derives from it. Get this wrong and verification
   emails point at localhost.
 - **`STRIPE_WEBHOOK_SECRET` is not the one from `stripe listen`.** That secret
-  is local-only. Create a Dashboard endpoint (step 5) and use its signing secret.
+  is local-only — and it is a different shape, so you can tell them apart: the
+  CLI secret is `whsec_` + 64 hex characters, a Dashboard secret is about half
+  that. Create Dashboard destinations (step 5) and use their signing secrets,
+  comma-separated.
+- **`PUBLIC_BASE_URL` should be a literal**, not `https://${{RAILWAY_PUBLIC_DOMAIN}}`.
+  That template resolves to whichever domain Railway feels like, and it feeds
+  every email link and Stripe redirect.
 - **`MAIL_TRANSPORT=auto`**, not `ethereal`. Ethereal is for local testing.
 
 ---
 
 ## 4. Point the domain
 
-**Railway → Settings → Networking → Custom Domain →** `joinfrea.com`
+**Railway → Settings → Networking → Custom Domain**
 
-Railway gives you a CNAME target. At your registrar:
+Add **both** `joinfrea.com` and `www.joinfrea.com` as separate custom domains.
+Railway treats them independently: each gets its own CNAME target and its own
+verification TXT. They are not interchangeable — using one domain's target for
+the other leaves it stuck on "Waiting for DNS update" forever.
+
+For each domain Railway shows two records under **Show DNS records**:
 
 | Type | Name | Value |
 |---|---|---|
-| CNAME | `www` | `your-app.up.railway.app` |
-| ALIAS / ANAME / CNAME flattening | `@` | `your-app.up.railway.app` |
+| CNAME | `@` (apex) or `www` | `<per-domain>.up.railway.app` |
+| TXT | `_railway-verify` or `_railway-verify.www` | `railway-verify=<per-domain hash>` |
 
-Root domains can't take a plain CNAME under DNS rules. Most registrars offer
-ALIAS, ANAME or CNAME flattening — Cloudflare, Namecheap and Porkbun all do. If
-yours doesn't, put the site on `www.joinfrea.com` and redirect the root.
+**Read the TXT Name column literally.** It is `_railway-verify`, *not* `@`.
+Putting the apex verification on `@` looks plausible, resolves fine, and never
+verifies — that mistake cost an afternoon.
 
-TLS is issued automatically once DNS resolves. Usually minutes.
+### DNS must be on Cloudflare, not Namecheap
+
+Railway wants a **CNAME** on the apex. DNS forbids a plain CNAME on a root
+domain, so the registrar has to fake it. Namecheap's ALIAS record flattens to
+an A record, which browsers accept but Railway's verifier may not. Cloudflare's
+CNAME flattening is the one that works, and it is free.
+
+1. Cloudflare → **Add a site** → `joinfrea.com` → Free plan.
+2. Recreate the records below. Cloudflare's import scan **misses subdomain TXT
+   records** like `_railway-verify.www`, so check for it by hand.
+3. Namecheap → **Nameservers → Custom DNS** → Cloudflare's two.
+
+Target zone:
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| CNAME | `@` | apex target from Railway | **DNS only** |
+| CNAME | `www` | www target from Railway | **DNS only** |
+| TXT | `_railway-verify` | apex verify string | — |
+| TXT | `_railway-verify.www` | www verify string | — |
+| TXT | `@` | `v=spf1 include:spf.efwd.registrar-servers.com ~all` | — |
+| MX ×5 | `@` | `eforward1-5.registrar-servers.com` (10,10,10,15,20) | — |
+
+**Keep the proxy off (grey cloud).** Proxied means Cloudflare terminates TLS
+itself, and Railway can then no longer renew its certificate. That failure is
+invisible for 90 days and then takes the site down. A new Cloudflare zone also
+often defaults to SSL mode *Flexible*, which talks to the origin over plain
+HTTP and produces an infinite redirect loop. If you ever do want the proxy,
+set SSL to **Full** first and verify renewal actually works.
+
+Railway may offer to write these records into Cloudflare for you. Read that
+screen carefully — it sets **Proxied**, which is the one thing you don't want.
+
+TLS is issued a few minutes after DNS resolves. Both hostnames end up with
+their own Let's Encrypt certificate, and both redirect HTTP to HTTPS.
+
+Don't delete the generated `*.up.railway.app` domain. It costs nothing and is
+how you tell "the app is broken" from "DNS is broken" — it was the only way to
+confirm the webhook secrets were right while the custom domain was still dark.
 
 ---
 
@@ -121,7 +170,11 @@ TLS is issued automatically once DNS resolves. Usually minutes.
 **https://dashboard.stripe.com/webhooks → Add endpoint**
 
 - URL: `https://joinfrea.com/api/stripe/webhook`
-- Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `account.updated`
+- Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+  `v2.core.account.updated`
+
+Stripe does **not** follow redirects on webhook delivery. The URL has to be the
+hostname that serves the app directly, not one that redirects to it.
 
 ### You need TWO destinations
 
@@ -151,6 +204,19 @@ STRIPE_WEBHOOK_SECRET=whsec_from_snapshot,whsec_from_thin
 Each is tried in turn. Without the thin one, a mentor finishes payout
 onboarding and stays blocked from pricing until something else refreshes their
 status.
+
+Do **not** put the `stripe listen` secret in the production variable. It is a
+valid signing key, and production has no business trusting it. Locally it is
+fine to list all three — the handler tries each in turn.
+
+### Verifying it without waiting for a real event
+
+The handler ignores event types it doesn't recognise, so a correctly signed
+`ping` is inert: it proves a secret is loaded without touching any data.
+
+```
+node test/webhooks.e2e.mjs          # both payload styles, all secrets, forgeries
+```
 
 ---
 
@@ -208,6 +274,61 @@ railway run npm run reset:launch
 ```
 
 Clears the demo mentors and resources. It asks first and writes a backup.
+
+### Going live on Stripe
+
+Switching from test to live is not a key swap — four things move together:
+
+1. `STRIPE_SECRET_KEY` and `STRIPE_PUBLISHABLE_KEY` → `sk_live_` / `pk_live_`.
+2. **Both webhook destinations recreated in live mode.** Live and test are
+   separate, with separate signing secrets, so `STRIPE_WEBHOOK_SECRET` gets two
+   new values.
+3. **Mentors re-onboard.** Test-mode connected accounts do not exist in live
+   mode, so every mentor redoes payout onboarding with real details.
+4. **`reset:launch`.** Orders and bookings reference test-mode Stripe objects
+   that mean nothing in live mode.
+
+Stripe account activation (business details, bank account, identity) has a
+review period. Start it well before you need it.
+
+---
+
+## Security headers
+
+`server/index.js` sets HSTS, `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, `Permissions-Policy` and a CSP. Hand-rolled rather than
+helmet — the set is small and every value was chosen deliberately.
+
+HSTS is only sent when `req.secure`, so local http development is unaffected
+and no one pins `localhost` to https for a year.
+
+**Two known weaknesses, both structural, both still open:**
+
+1. `script-src` carries `'unsafe-inline'`. The front end builds markup as HTML
+   strings and wires behaviour with `onclick=` attributes — 177 of them in
+   `src/main.js` — so removing it blanks the app. That costs most of CSP's XSS
+   protection. Moving those to `addEventListener` and tightening `script-src`
+   to `'self'` is the highest-value change left; the rest of the policy does
+   not depend on it. Best done alongside a front-end rework rather than before.
+2. The session bearer token lives in `localStorage` (`src/api.js`), so any
+   successful XSS is account takeover rather than a defacement. An httpOnly
+   cookie would blunt that, but cookies are sent automatically, so it means
+   adding CSRF protection at the same time — the current header-based scheme is
+   immune to CSRF by construction. Do it as one deliberate change, not a swap.
+
+### Rules that are easy to break by accident
+
+- **User text is escaped at the sink, not at the source.** `escapeHtml` for
+  element content and quoted attributes; `jsArg` when the value lands inside a
+  JS string in an attribute (`onclick="fn(${jsArg(x)})"`). `escapeHtml` alone
+  is wrong there — it renders `'` as `&#39;`, the HTML parser turns that back
+  into `'` before the JS is parsed, and the literal reopens.
+- **Uploads are named after their owner** — `doc-<mentorId>-…`,
+  `pitch-<mentorId>-…` — and the server checks that prefix before publishing a
+  resource or deleting a file. The stored `fileName`/`pitchVideoUrl` come back
+  from the client, so they are untrusted even though they live in our record.
+- **Emails escape with `esc()` in `server/email.js`.** Mail leaves frea's
+  domain with valid SPF and DKIM; injected markup there is a phishing tool.
 
 ---
 

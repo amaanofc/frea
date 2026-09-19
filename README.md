@@ -56,7 +56,7 @@ downloads are authenticated, so they must share the API's origin.
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` | Real mail. Omit for the dev test inbox |
 | `MAIL_FROM` | From header, e.g. `"frea <hello@joinfrea.com>"` |
 | `STRIPE_SECRET_KEY` | Enables playbook checkout. Without it, paid checkout is refused cleanly |
-| `STRIPE_WEBHOOK_SECRET` | Required to accept webhooks — unsigned webhooks are rejected |
+| `STRIPE_WEBHOOK_SECRET` | Required to accept webhooks — unsigned webhooks are rejected. Comma-separated list; Stripe needs one destination per payload style |
 | `FREA_FEE_RATE` | frea's cut, deducted from the mentor's payout. `0.05` = 5% |
 
 ### Stripe in development
@@ -67,6 +67,10 @@ stripe listen --forward-to localhost:3001/api/stripe/webhook
 
 Copy the printed `whsec_…` into `STRIPE_WEBHOOK_SECRET`. Test card `4242 4242
 4242 4242`, any future expiry and CVC.
+
+In production that variable holds **two** secrets, comma-separated — Stripe
+requires a separate destination for snapshot (Checkout) and thin (Accounts v2)
+payloads. See `DEPLOY.md` section 5.
 
 ---
 

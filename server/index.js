@@ -102,6 +102,55 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', 1);
 app.use(cors());
 
+// ─── Security headers ───────────────────────────────────
+//
+// Hand-rolled rather than pulled from helmet: the set is small, every value
+// here is one we actually reasoned about, and a dependency that rewrites
+// headers is worth avoiding on a server that also serves the SPA.
+//
+// The CSP is deliberately strict. The front end loads nothing from a CDN —
+// Google Fonts is the only third party, and Checkout is a server-side redirect
+// rather than an embedded Stripe.js, so no script origin needs allowing.
+app.use((req, res, next) => {
+  // HSTS only once we are actually on TLS. Sending it over plain http is
+  // meaningless, and in local dev it would pin localhost to https for months.
+  if (req.secure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    // 'unsafe-inline' is load-bearing, not laziness: the front end renders its
+    // markup as HTML strings and wires behaviour with onclick= attributes —
+    // 177 of them across src/main.js. Dropping it blanks the whole app. It
+    // costs most of CSP's XSS protection, so moving those to addEventListener
+    // and tightening this to 'self' is worth doing. Everything else here is
+    // already at full strength and does not depend on that work.
+    "script-src 'self' 'unsafe-inline'",
+    // React sets style attributes, and the Google Fonts stylesheet is remote.
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    // Mentor avatars and og images are local; data: covers inline SVG icons.
+    "img-src 'self' data: blob:",
+    // Pitch videos are served from our own /uploads/pitch_videos.
+    "media-src 'self'",
+    "connect-src 'self'",
+    // Checkout is reached by navigation, so Stripe needs no frame or form entry.
+    "frame-ancestors 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
+
+  next();
+});
+
 // Stripe needs the raw body to verify its signature, so this route is mounted
 // with a raw parser *before* express.json() claims everything.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
@@ -154,7 +203,10 @@ const storage = multer.diskStorage({
       .replace(/[^a-zA-Z0-9_-]/g, '_')
       .substring(0, 40);
     const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    cb(null, `${baseName}-${uniqueSuffix}${ext}`);
+    // The owner is part of the name so the server can later tell whose file
+    // this is. Without it, a mentor could publish a resource pointing at
+    // someone else's upload and download it through their own entitlement.
+    cb(null, `doc-${req.session?.mentorId || 'x'}-${baseName}-${uniqueSuffix}${ext}`);
   }
 });
 
@@ -316,7 +368,13 @@ app.get('/api/health', (req, res) => {
 // ─── Email verification & sessions ──────────────────────
 
 /** Issues a one-time code. The code is emailed; it is never returned here. */
-app.post('/api/auth/send-verification', rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+// Two limits, because they stop different things. By email: a single address
+// cannot be mail-bombed. By IP: one caller cannot walk a list of addresses,
+// which the per-email limit does nothing about and which costs real money at
+// the mail provider.
+app.post('/api/auth/send-verification',
+  rateLimit({ max: 20, windowMs: 60 * 60_000, key: req => `ip:${req.ip}` }),
+  rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
   const { email, universityName } = req.body;
   const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -716,7 +774,34 @@ app.get('/api/admin/suggestions', requireAdmin, (req, res) => {
  * Pitch video upload. Accepts an in-browser recording or a chosen file, and
  * returns a public URL — these play on profiles for every visitor.
  */
-app.post('/api/upload/pitch-video', requireMentor, (req, res) => {
+/**
+ * Resolves a mentor's stored pitchVideoUrl to a file we are allowed to delete.
+ *
+ * The field is writable by the mentor through PUT /api/mentors/:id, so it is
+ * untrusted input even though it lives in our own record. basename() keeps the
+ * path inside VIDEO_DIR, but VIDEO_DIR holds every mentor's video and the
+ * filenames are public — so confinement alone would let one mentor delete
+ * another's take. The filename must also be one THIS mentor's upload produced.
+ */
+function ownPitchVideoPath(mentorId, url) {
+  const name = path.basename(String(url || ''));
+  const ext = path.extname(name).toLowerCase();
+  if (!VIDEO_EXTENSIONS.has(ext)) return null;
+
+  // Filenames are minted as pitch-<mentorId>-<timestamp>-<8 hex><ext>.
+  const parts = name.slice(0, -ext.length).split('-');
+  if (parts.length !== 4) return null;
+  if (parts[0] !== 'pitch') return null;
+  if (parts[1] !== String(Number(mentorId))) return null;
+  if (!/^[0-9]+$/.test(parts[2])) return null;
+  if (!/^[0-9a-f]{8}$/.test(parts[3])) return null;
+
+  const full = path.join(VIDEO_DIR, name);
+  return full.startsWith(VIDEO_DIR) ? full : null;
+}
+
+app.post('/api/upload/pitch-video', requireMentor,
+  rateLimit({ max: 6, windowMs: 60_000, key: byEmail }), (req, res) => {
   uploadVideo.single('video')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -742,6 +827,17 @@ app.post('/api/upload/pitch-video', requireMentor, (req, res) => {
 
     const videoUrl = `/uploads/pitch_videos/${req.file.filename}`;
 
+    // Reclaim the take this one replaces. Without it every re-record left a
+    // file behind, and the volume this fills is the same one data.json is
+    // written to — so it ends as an outage, not just wasted disk.
+    const previous = getMentorById(req.session.mentorId)?.pitchVideoUrl;
+    if (previous && previous !== videoUrl) {
+      const stale = ownPitchVideoPath(req.session.mentorId, previous);
+      if (stale && fs.existsSync(stale)) {
+        try { fs.unlinkSync(stale); } catch (e) { /* best effort */ }
+      }
+    }
+
     // Attach it to the mentor straight away: a video that uploaded but was
     // never saved to the profile is the most annoying way to lose a take.
     let mentor = null;
@@ -762,14 +858,15 @@ app.post('/api/upload/pitch-video', requireMentor, (req, res) => {
 });
 
 /** Removes a mentor's pitch video, file and all. */
-app.delete('/api/upload/pitch-video', requireMentor, (req, res) => {
+app.delete('/api/upload/pitch-video', requireMentor,
+  rateLimit({ max: 12, windowMs: 60_000, key: byEmail }), (req, res) => {
   const mentor = getMentorById(req.session.mentorId);
   const current = mentor?.pitchVideoUrl || '';
 
-  if (current.startsWith('/uploads/pitch_videos/')) {
-    const filePath = path.join(VIDEO_DIR, path.basename(current));
+  const filePath = ownPitchVideoPath(req.session.mentorId, current);
+  if (filePath) {
     try {
-      if (filePath.startsWith(VIDEO_DIR) && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch (e) {
       console.warn('[upload] could not delete pitch video file:', e.message);
     }
@@ -779,7 +876,8 @@ app.delete('/api/upload/pitch-video', requireMentor, (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/upload/document', requireMentor, (req, res, next) => {
+app.post('/api/upload/document', requireMentor,
+  rateLimit({ max: 12, windowMs: 60_000, key: byEmail }), (req, res, next) => {
   upload.single('document')(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -860,7 +958,23 @@ app.delete('/api/resources/:id', requireMentor, (req, res) => {
   if (resource.mentorId !== req.session.mentorId && !req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'You can only delete your own resources.' });
   }
-  res.json({ success: true, data: deleteResource(req.params.id) });
+
+  // Drop the record first, then the bytes: if the unlink fails the resource is
+  // still gone, and the sweep below reclaims the file later.
+  const result = deleteResource(req.params.id);
+
+  if (resource.fileName) {
+    const filePath = path.join(UPLOADS_DIR, path.basename(resource.fileName));
+    if (filePath.startsWith(UPLOADS_DIR)) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (e) {
+        console.warn('[resources] could not delete file:', e.message);
+      }
+    }
+  }
+
+  res.json({ success: true, data: result });
 });
 
 /** Claim a freabie. Verified students only, so downloads stay attributable. */
@@ -1322,6 +1436,45 @@ async function seedDemoContentOnFirstBoot(freshDatabase) {
     console.warn('[frea] Could not generate demo resources:', err.message);
   }
 }
+
+// ─── Reclaiming abandoned uploads ───────────────────────
+//
+// A mentor can upload a document and never publish it — the file lands on the
+// volume with nothing referencing it and nothing to remove it. The same volume
+// holds data.json, so left alone this ends as a failed write, not just wasted
+// disk. Anything unreferenced and older than the grace period goes.
+//
+// The grace period matters: a file uploaded seconds ago is mid-publish and has
+// no resource pointing at it yet.
+const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000;
+
+function sweepOrphanedUploads() {
+  try {
+    const referenced = new Set(
+      getAllResources().map(r => r.fileName).filter(Boolean).map(f => path.basename(f))
+    );
+    const now = Date.now();
+    let removed = 0;
+
+    for (const name of fs.readdirSync(UPLOADS_DIR)) {
+      if (name.startsWith('.') || referenced.has(name)) continue;
+      const full = path.join(UPLOADS_DIR, name);
+      if (!full.startsWith(UPLOADS_DIR)) continue;
+      try {
+        const stat = fs.statSync(full);
+        if (!stat.isFile() || now - stat.mtimeMs < UPLOAD_GRACE_MS) continue;
+        fs.unlinkSync(full);
+        removed += 1;
+      } catch (_) { /* a file that vanished under us is already handled */ }
+    }
+
+    if (removed) console.log(`[uploads] reclaimed ${removed} unreferenced file(s)`);
+  } catch (err) {
+    console.warn('[uploads] sweep failed:', err.message);
+  }
+}
+
+setInterval(sweepOrphanedUploads, 6 * 60 * 60 * 1000).unref();
 
 const databaseExistedAtBoot = fs.existsSync(path.join(DATA_DIR, 'data.json'));
 
