@@ -87,6 +87,7 @@ import {
   createCheckoutSession,
   constructWebhookEvent,
   isSessionPaid,
+  accountIdFromEvent,
   createConnectAccount,
   createAccountLink,
   getAccountStatus
@@ -1108,9 +1109,18 @@ async function handleStripeWebhook(req, res) {
     // Payout readiness changes on Stripe's schedule, not ours — a mentor can
     // be verified (or restricted) hours after they finish onboarding. Without
     // this, they would stay blocked from pricing until they happened to reload.
-    if (event.type === 'account.updated' || event.type === 'v2.core.account.updated') {
-      const account = event.data.object;
-      const accountId = account.id;
+    // Accounts v2 emits several event names as an account progresses through
+    // verification (and Stripe adds more over time). Rather than enumerate
+    // them, react to anything account-shaped and re-fetch the real status —
+    // the status call is the source of truth, the event is only a nudge.
+    const isAccountEvent = event.type === 'account.updated'
+      || event.type.startsWith('v2.core.account');
+
+    if (isAccountEvent) {
+      // Works for both payload styles: Accounts v2 sends thin events that carry
+      // only a reference, so the full object is fetched from the status call
+      // below rather than read off the event.
+      const accountId = accountIdFromEvent(event);
       const mentor = accountId ? findMentorByStripeAccount(accountId) : null;
 
       if (mentor) {

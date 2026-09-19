@@ -90,14 +90,71 @@ export async function createCheckoutSession({ order, resource, baseUrl, client, 
   return { id: session.id, url: session.url };
 }
 
-/** Verifies the webhook signature and returns the parsed event. */
+/**
+ * Verifies the webhook signature and returns the parsed event.
+ *
+ * STRIPE_WEBHOOK_SECRET may hold several comma-separated secrets. Stripe
+ * requires a separate destination — and therefore a separate signing secret —
+ * for each payload style, and frea subscribes to both: snapshot events for
+ * Checkout, thin events for Accounts v2. Each secret is tried in turn.
+ */
 export function constructWebhookEvent(rawBody, signature) {
   const stripe = getStripe();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
+  const secrets = (process.env.STRIPE_WEBHOOK_SECRET || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!secrets.length) {
     throw new Error('STRIPE_WEBHOOK_SECRET is not set — refusing to trust this webhook.');
   }
-  return stripe.webhooks.constructEvent(rawBody, signature, secret);
+
+  // The two payload styles need different parsers, and the SDK refuses to
+  // parse one as the other. Decide from the body: thin events declare
+  // "object": "v2.core.event".
+  let isThin = false;
+  try {
+    const peek = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody));
+    isThin = peek?.object === 'v2.core.event' || String(peek?.type || '').startsWith('v2.');
+  } catch (_) {
+    // Unparseable bodies fall through to the verifier, which rejects them.
+  }
+
+  let lastError = null;
+  for (const secret of secrets) {
+    try {
+      return isThin
+        ? stripe.parseEventNotification(rawBody, signature, secret)
+        : stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * The account id an event refers to, from either payload style.
+ *
+ * Snapshot events carry the whole object at data.object. Thin events (all of
+ * Accounts v2) carry only a reference at related_object — reading data.object
+ * on one of those throws, which Stripe then retries indefinitely.
+ */
+export function accountIdFromEvent(event) {
+  if (!event) return null;
+
+  if (event.related_object && typeof event.related_object.id === 'string') {
+    return event.related_object.id;
+  }
+
+  const obj = event.data?.object;
+  if (!obj) return null;
+
+  if (typeof obj.id === 'string' && obj.id.startsWith('acct_')) return obj.id;
+  if (typeof obj.account === 'string') return obj.account;
+  if (typeof obj.related_object?.id === 'string') return obj.related_object.id;
+
+  return null;
 }
 
 /**

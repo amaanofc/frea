@@ -123,10 +123,34 @@ TLS is issued automatically once DNS resolves. Usually minutes.
 - URL: `https://joinfrea.com/api/stripe/webhook`
 - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `account.updated`
 
-Copy the **signing secret** into `STRIPE_WEBHOOK_SECRET` and redeploy.
+### You need TWO destinations
 
-Without `account.updated` a mentor finishes payout onboarding and stays blocked
-from pricing until something else refreshes their status.
+Stripe splits events into two payload styles and requires a separate
+destination — and separate signing secret — for each. frea subscribes to both.
+
+| Destination | Scope | Events |
+|---|---|---|
+| **Snapshot** | Your account | `checkout.session.completed`, `checkout.session.async_payment_succeeded` |
+| **Thin** | Your account | `v2.core.account.updated` (take the other `v2.core.account.*` too) |
+
+Scope is **Your account**, not Connected accounts: with Accounts v2, mentor
+accounts belong directly to your platform, so their events route there.
+
+There is no `account.updated` in v2 — that is the v1 name, which is why it does
+not appear in the picker. Note the event list defaults to a **Suggested** tab;
+switch to **All events** or the Checkout events will not appear either.
+
+### Both secrets go in one variable
+
+`STRIPE_WEBHOOK_SECRET` accepts a comma-separated list:
+
+```
+STRIPE_WEBHOOK_SECRET=whsec_from_snapshot,whsec_from_thin
+```
+
+Each is tried in turn. Without the thin one, a mentor finishes payout
+onboarding and stays blocked from pricing until something else refreshes their
+status.
 
 ---
 
