@@ -49,6 +49,29 @@ function transportMode() {
   return ['auto', 'ethereal', 'smtp'].includes(mode) ? mode : 'auto';
 }
 
+/**
+ * What mail will actually do, without building a transporter or touching the
+ * network. Exposed on /api/health because the failure this catches is silent:
+ * with MAIL_TRANSPORT=auto and SMTP_* incomplete, sends go to a throwaway
+ * Ethereal inbox, the API reports success, and nothing is ever delivered.
+ */
+export function mailStatus() {
+  const mode = transportMode();
+  const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  if (mode === 'ethereal') return { transport: 'test-inbox', delivers: false, reason: 'MAIL_TRANSPORT=ethereal' };
+  if (mode === 'smtp' && !smtpConfigured) return { transport: 'misconfigured', delivers: false, reason: 'MAIL_TRANSPORT=smtp but SMTP_HOST/USER/PASS incomplete' };
+  if (smtpConfigured) {
+    return {
+      transport: 'smtp',
+      delivers: true,
+      host: process.env.SMTP_HOST,
+      from: (mailFrom().match(/@([^>\s]+)/) || [])[1] || null
+    };
+  }
+  return { transport: 'test-inbox', delivers: false, reason: 'SMTP_HOST/USER/PASS not all set — falling back to Ethereal' };
+}
+
 export async function getEmailTransporter() {
   if (transporter) return transporter;
 

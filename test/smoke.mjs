@@ -66,6 +66,18 @@ group('CONFIGURATION');
     caution('not HTTPS — expected for local, never acceptable in production');
   }
 
+  // The failure this catches is silent: with SMTP_* incomplete the server
+  // falls back to a throwaway Ethereal inbox, every send reports success, and
+  // no verification code ever reaches a student.
+  const mail = health.mail || {};
+  if (isProd) {
+    ok('mail actually delivers', mail.delivers === true,
+      `transport=${mail.transport}${mail.reason ? ' — ' + mail.reason : ''}`);
+    if (mail.delivers) ok('mail sends from the real domain', Boolean(mail.from), String(mail.from));
+  } else if (!mail.delivers) {
+    caution(`mail goes to a test inbox (${mail.reason || mail.transport}) — expected locally`);
+  }
+
   // A sitemap URL on the wrong host means PUBLIC_BASE_URL is wrong, which also
   // means every emailed link is wrong.
   const sm = await get('/sitemap.xml');

@@ -78,6 +78,7 @@ import {
   sendCancellationEmail,
   sendPurchaseReceiptEmail,
   sendSaleNotificationEmail,
+  mailStatus,
   baseUrl
 } from './email.js';
 
@@ -361,6 +362,9 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     service: 'frea-api',
     payments: stripeConfigured() ? 'stripe' : 'not-configured',
+    // Mail fails silently by design in dev — surface it so a deploy that is
+    // quietly posting into a throwaway inbox is visible without reading logs.
+    mail: mailStatus(),
     time: new Date().toISOString()
   });
 });
