@@ -1,4 +1,38 @@
-# Logs
+# ─── Dependencies & build output ───
+node_modules
+dist
+dist-ssr
+*.local
+
+# ─── Secrets ───
+# .env holds live Stripe and Resend keys. It has never been committed; keep it
+# that way. Railway and any other host supply these as platform variables.
+.env
+.env.*
+!.env.example
+
+# ─── Runtime data ───
+# The platform's entire state. In production this lives on a mounted volume
+# (DATA_DIR), never in the repo. data.seed.json IS committed — it is the demo
+# catalogue a fresh deploy starts from.
+server/data.json
+server/data.json.*
+server/uploads/
+
+# ─── Local tooling ───
+# Stripe CLI binary: Windows-only, 32MB, useless in a Linux container.
+tools/
+# Agent skills installed locally.
+.agents/
+# PATH backup written during setup.
+.path-backup.txt
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+
+# ─── Logs ───
 logs
 *.log
 npm-debug.log*
@@ -7,38 +41,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# ─── Editors & OS ───
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-# Environment
-
-# Runtime data & uploads
-server/data.json
-server/uploads/
-
-# Agent tooling installed locally
-.agents/
-
-# Local dev tooling (Stripe CLI binary)
-tools/
-
-.projects/cache
-.projects/vault
-.projects/state.test.json
-.projects/state.local.test.json
-.env
-.env.*
-!.env.example

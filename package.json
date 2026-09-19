@@ -26,22 +26,25 @@
     "reset:dev": "node scripts/reset-dev.mjs",
     "assets": "node scripts/generate-brand-assets.mjs",
     "start:local": "npm run build && node server/index.js",
-    "test:smoke": "node test/smoke.mjs"
+    "test:smoke": "node test/smoke.mjs",
+    "railway": "npx --yes @railway/cli",
+    "deploy": "npx --yes @railway/cli up",
+    "logs": "npx --yes @railway/cli logs"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
-    "jsdom": "^29.1.1",
-    "jszip": "^3.10.2",
-    "sharp": "^0.35.4",
-    "vite": "^8.3.0"
+    "jsdom": "^29.1.1"
   },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^18.0.0",
     "express": "^5.2.1",
+    "jszip": "^3.10.2",
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
-    "stripe": "^22.6.2"
+    "sharp": "^0.35.4",
+    "stripe": "^22.6.2",
+    "vite": "^8.3.0"
   },
   "engines": {
     "node": ">=20"

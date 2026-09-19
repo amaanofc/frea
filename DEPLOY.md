@@ -7,6 +7,27 @@ first.
 
 ---
 
+## If the build fails
+
+Two failures are worth recognising on sight.
+
+**`EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'`**
+
+The build command ran `npm ci` a second time. Nixpacks already installs
+dependencies before your build command runs, and Railway mounts a cache volume
+inside `node_modules` — `npm ci` wipes `node_modules` first, and cannot remove a
+live mount. `buildCommand` must be **`npm run build`** alone. Already fixed in
+`railway.json`; don't add `npm ci` back.
+
+**`vite: not found` or `Cannot find module 'sharp'`**
+
+`NODE_ENV=production` makes npm skip devDependencies, and the build needs vite,
+sharp and jszip. They're listed under `dependencies` for exactly this reason —
+Railway keeps `node_modules` from the install step in the final image, so it
+costs nothing. Leave them there.
+
+---
+
 ## 1. Create the project
 
 ```bash

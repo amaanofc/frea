@@ -1,0 +1,36 @@
+# Keeps the build context small and stops local state reaching the deployed
+# image. Railway uploads this directory on every deploy, so anything listed
+# here is bytes you do not send and files that cannot overwrite the volume.
+
+node_modules
+dist
+
+# 32MB Windows Stripe CLI binary — useless on a Linux container.
+tools
+
+# Secrets live in Railway's own variables, never in the image.
+.env
+.env.local
+.env.*.local
+
+# Local runtime state. Production data lives on the mounted volume at DATA_DIR;
+# shipping a local copy would be confusing at best.
+server/data.json
+server/data.json.*
+server/uploads
+
+# Local tooling and scratch
+.git
+.agents
+.claude
+.projects
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# Docs and tests are not needed to run the server. The seed catalogue
+# (server/data.seed.json) IS needed and is deliberately not excluded.
+test
+*.md
+!README.md
