@@ -62,12 +62,24 @@ export function mailStatus() {
   if (mode === 'ethereal') return { transport: 'test-inbox', delivers: false, reason: 'MAIL_TRANSPORT=ethereal' };
   if (mode === 'smtp' && !smtpConfigured) return { transport: 'misconfigured', delivers: false, reason: 'MAIL_TRANSPORT=smtp but SMTP_HOST/USER/PASS incomplete' };
   if (smtpConfigured) {
-    return {
-      transport: 'smtp',
-      delivers: true,
-      host: process.env.SMTP_HOST,
-      from: (mailFrom().match(/@([^>\s]+)/) || [])[1] || null
-    };
+    const host = process.env.SMTP_HOST;
+    const from = (mailFrom().match(/@([^>\s]+)/) || [])[1] || null;
+
+    // resend.dev is Resend's shared sandbox sender. It accepts everything and
+    // delivers only to the account owner's own address, so a student never
+    // receives their code and nothing anywhere reports an error. Sending as
+    // your own domain requires verifying it at resend.com/domains first.
+    if (from && /resend\.dev$/i.test(from)) {
+      return {
+        transport: 'smtp',
+        delivers: false,
+        host,
+        from,
+        reason: 'MAIL_FROM uses resend.dev, the Resend sandbox sender, which only reaches the account owner. Verify your domain and send as it.'
+      };
+    }
+
+    return { transport: 'smtp', delivers: true, host, from };
   }
   return { transport: 'test-inbox', delivers: false, reason: 'SMTP_HOST/USER/PASS not all set — falling back to Ethereal' };
 }
