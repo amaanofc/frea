@@ -15,15 +15,12 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
+import { DB_FILE, SEED_FILE, UPLOADS_DIR, VIDEO_DIR } from '../server/paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const DB_FILE = path.join(ROOT, 'server', 'data.json');
-const SEED_FILE = path.join(ROOT, 'server', 'data.seed.json');
-const UPLOAD_DIRS = [
-  path.join(ROOT, 'server', 'uploads', 'digital_products'),
-  path.join(ROOT, 'server', 'uploads', 'pitch_videos')
-];
+
+const UPLOAD_DIRS = [UPLOADS_DIR, VIDEO_DIR];
 
 if (!fs.existsSync(SEED_FILE)) {
   console.error('server/data.seed.json is missing — cannot restore the demo state.');

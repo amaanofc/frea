@@ -1289,7 +1289,33 @@ process.on('unhandledRejection', (reason) => {
   console.error('[frea] Unhandled promise rejection:', reason);
 });
 
-app.listen(PORT, () => {
+/**
+ * Generates the demo documents on a genuinely first boot.
+ *
+ * The seed catalogue deliberately ships with no resources: a resource is only
+ * useful if its file exists, and uploads live on the volume rather than in the
+ * repo. So the files are produced here instead.
+ *
+ * Gated on the database not having existed before, not on the catalogue being
+ * empty — otherwise `reset:launch` would be undone by the next restart.
+ */
+async function seedDemoContentOnFirstBoot(freshDatabase) {
+  if (!freshDatabase) return;
+  if (process.env.SEED_DEMO_CONTENT === 'false') return;
+
+  try {
+    const { seedDemoResources } = await import('../scripts/seed-resources.mjs');
+    await seedDemoResources({ quiet: true });
+    console.log('[frea] First boot — generated demo resources on the volume.');
+    console.log('       Run `npm run reset:launch` to clear them before real users.');
+  } catch (err) {
+    console.warn('[frea] Could not generate demo resources:', err.message);
+  }
+}
+
+const databaseExistedAtBoot = fs.existsSync(path.join(DATA_DIR, 'data.json'));
+
+app.listen(PORT, async () => {
   console.log(`[frea backend] http://localhost:${PORT}`);
   console.log(`[frea backend] public base URL: ${baseUrl()}`);
   console.log(`[frea backend] data directory: ${DATA_DIR}`);
@@ -1304,6 +1330,11 @@ app.listen(PORT, () => {
   if (!process.env.ADMIN_EMAILS) {
     console.log('[frea backend] ADMIN_EMAILS not set — the admin dashboard is closed to everyone.');
   }
+
+  // Touch the database so it exists, then fill in demo content if this is the
+  // very first boot on a fresh volume.
+  loadDb();
+  await seedDemoContentOnFirstBoot(!databaseExistedAtBoot);
 });
 
 export default app;

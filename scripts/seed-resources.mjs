@@ -19,8 +19,13 @@ import { makeMarkdown, makeLatex, makePdf, makePptx } from './lib/make-files.mjs
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const DB_FILE = path.join(ROOT, 'server', 'data.json');
-const UPLOADS = path.join(ROOT, 'server', 'uploads', 'digital_products');
+
+// Same resolution as the server: a mounted volume in production, server/ locally.
+const DATA_ROOT = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(ROOT, 'server');
+const DB_FILE = path.join(DATA_ROOT, 'data.json');
+const UPLOADS = path.join(DATA_ROOT, 'uploads', 'digital_products');
 
 const SEEDS = [
   {
@@ -93,7 +98,8 @@ const SEEDS = [
   }
 ];
 
-async function main() {
+export async function seedDemoResources({ quiet = false } = {}) {
+  const log = quiet ? () => {} : console.log;
   if (!fs.existsSync(DB_FILE)) {
     console.error('No server/data.json — start the server once to create it.');
     process.exit(1);
@@ -109,7 +115,7 @@ async function main() {
   db.mentors.forEach(m => { m.docs = []; });
   db.entitlements = [];
 
-  console.log(`Cleared ${removed} catalogue entries (none had files attached).\n`);
+  log(`Cleared ${removed} catalogue entries (none had files attached).\n`);
 
   for (const seed of SEEDS) {
     const mentor = db.mentors.find(m => m.id === seed.mentorId);
@@ -161,16 +167,22 @@ async function main() {
     db.resources.unshift(resource);
     mentor.docs.unshift(resource);
 
-    console.log(`  ✓ ${seed.format.padEnd(11)} ${fileName}  (${(bytes / 1024).toFixed(1)} KB)  —  ${mentor.name}`);
+    log(`  ✓ ${seed.format.padEnd(11)} ${fileName}  (${(bytes / 1024).toFixed(1)} KB)  —  ${mentor.name}`);
   }
 
   db.stats = db.stats || {};
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
 
-  console.log(`\nSeeded ${db.resources.length} real resources, every one downloadable.`);
+  log(`\nSeeded ${db.resources.length} real resources, every one downloadable.`);
 }
 
-main().catch(err => {
-  console.error('Seeding failed:', err);
-  process.exit(1);
-});
+// Run directly: node scripts/seed-resources.mjs
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (invokedDirectly) {
+  seedDemoResources().catch(err => {
+    console.error('Seeding failed:', err);
+    process.exit(1);
+  });
+}

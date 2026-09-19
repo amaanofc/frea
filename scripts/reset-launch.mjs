@@ -15,14 +15,15 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import { DB_FILE, UPLOADS_DIR, VIDEO_DIR, DATA_DIR } from '../server/paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const DB_FILE = path.join(ROOT, 'server', 'data.json');
-const UPLOAD_DIRS = [
-  path.join(ROOT, 'server', 'uploads', 'digital_products'),
-  path.join(ROOT, 'server', 'uploads', 'pitch_videos')
-];
+// Imported so this resets the SAME location the server writes to. Hardcoding
+// server/ meant `railway run npm run reset:launch` cleared a local file and
+// left production data untouched, while reporting success.
+
+const UPLOAD_DIRS = [UPLOADS_DIR, VIDEO_DIR];
 
 const FORCE = process.argv.includes('--force') || process.argv.includes('-y');
 
@@ -34,6 +35,9 @@ function countFiles(dir) {
 async function confirm(summary) {
   if (FORCE) return true;
 
+  // Name the target explicitly. This script once cleared a local file while
+  // reporting success, leaving production data untouched.
+  console.log(`\nTarget: ${DATA_DIR}`);
   console.log('\nThis will permanently delete:\n');
   for (const [label, n] of summary) {
     console.log(`   ${String(n).padStart(5)}  ${label}`);
