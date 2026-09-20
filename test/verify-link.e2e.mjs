@@ -40,6 +40,18 @@ async function issueToken(email) {
   return rec;
 }
 
+// The token is read straight out of the database, so this only runs against a
+// local server. Against production the volume lives on the host and tokens are
+// not reachable from here — clicking a real link is the test there.
+if (!/localhost|127\.0\.0\.1/.test(API)) {
+  console.log('');
+  console.log('This suite reads tokens from the local database, so it only runs locally.');
+  console.log(`Asked for: ${API}`);
+  console.log('To check production, click a real verification link from an Outlook inbox.');
+  console.log('');
+  process.exit(0);
+}
+
 console.log(`\nfrea verification links → ${API}`);
 
 group('A SCANNER FETCHING THE LINK FIRST');
