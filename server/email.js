@@ -55,6 +55,35 @@ function transportMode() {
  * with MAIL_TRANSPORT=auto and SMTP_* incomplete, sends go to a throwaway
  * Ethereal inbox, the API reports success, and nothing is ever delivered.
  */
+let smtpProbe = { checked: false };
+
+/**
+ * Opens one connection at boot and remembers the outcome.
+ *
+ * Whether the host can reach the mail server is otherwise invisible until a
+ * student tries to sign up, and the symptom then is a hang rather than an
+ * error. Ports are the usual culprit: some platforms block outbound 465, in
+ * which case 587 with SMTP_SECURE=false works instead.
+ */
+export async function probeSmtp() {
+  const status = mailStatus();
+  if (status.transport !== 'smtp') {
+    smtpProbe = { checked: true, ok: null, reason: 'not using SMTP' };
+    return smtpProbe;
+  }
+  try {
+    const t = await getEmailTransporter();
+    await t.verify();
+    smtpProbe = { checked: true, ok: true };
+    console.log(`[frea email] SMTP reachable: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 587}`);
+  } catch (err) {
+    smtpProbe = { checked: true, ok: false, error: err.message };
+    console.error(`[frea email] SMTP UNREACHABLE: ${err.message}`);
+    console.error('             Outbound SMTP may be blocked. Try SMTP_PORT=587 with SMTP_SECURE=false.');
+  }
+  return smtpProbe;
+}
+
 export function mailStatus() {
   const mode = transportMode();
   const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
@@ -79,7 +108,12 @@ export function mailStatus() {
       };
     }
 
-    return { transport: 'smtp', delivers: true, host, from };
+    const base = { transport: 'smtp', delivers: true, host, from };
+    if (smtpProbe.checked && smtpProbe.ok === false) {
+      return { ...base, delivers: false, reachable: false, reason: `SMTP unreachable: ${smtpProbe.error}` };
+    }
+    if (smtpProbe.checked && smtpProbe.ok) base.reachable = true;
+    return base;
   }
   return { transport: 'test-inbox', delivers: false, reason: 'SMTP_HOST/USER/PASS not all set — falling back to Ethereal' };
 }
@@ -100,6 +134,13 @@ export async function getEmailTransporter() {
       port: parseInt(process.env.SMTP_PORT || '587', 10),
       secure: process.env.SMTP_SECURE === 'true',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      // Without these, nodemailer waits minutes on an unreachable host: the
+      // HTTP request never returns and the sign-up screen sits on "sending
+      // your code" forever. Failing in seconds turns a hang into an error the
+      // student can act on.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
     console.log(`[frea email] Using configured SMTP server: ${process.env.SMTP_HOST}`);
 

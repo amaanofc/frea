@@ -79,6 +79,7 @@ import {
   sendPurchaseReceiptEmail,
   sendSaleNotificationEmail,
   mailStatus,
+  probeSmtp,
   baseUrl
 } from './email.js';
 
@@ -1542,6 +1543,10 @@ app.listen(PORT, async () => {
 
   // After seeding, so the first snapshot is of a database worth restoring.
   startBackupSchedule();
+
+  // One connection, so an unreachable mail server shows up in the logs and on
+  // /api/health at boot rather than as a hung sign-up.
+  probeSmtp();
 });
 
 export default app;
