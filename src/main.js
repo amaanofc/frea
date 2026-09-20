@@ -2552,6 +2552,29 @@ function renderVerificationCodeStep(email, universityName, actionName, previewUr
         <button type="button" style="background: none; border: none; color: var(--color-marker-orange); font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="window.resendVerificationCode(${jsArg(email)}, ${jsArg(universityName || '')})">Resend code</button>
         <button type="button" style="background: none; border: none; opacity: 0.6; cursor: pointer;" onclick="closeModal()">Cancel</button>
       </div>
+
+      <!-- Some universities hold mail from young domains in a quarantine the
+           student cannot see, so "resend" achieves nothing and they are stuck
+           with no way forward. This is the way forward: replying from the
+           address itself proves control of it just as well as a code does. -->
+      <details style="margin-top: 14px; text-align: left; font-size: 12.5px; line-height: 1.55;">
+        <summary style="cursor: pointer; color: var(--color-marker-orange); font-weight: 700; text-align: center; list-style: none;">Didn't get the code?</summary>
+        <div style="margin-top: 10px; padding: 12px 14px; background: #f8fafc; border: 1.5px solid rgba(23,23,23,0.12); border-radius: 10px; opacity: 0.85;">
+          <p style="margin: 0 0 8px;">Try these first:</p>
+          <ul style="margin: 0 0 10px; padding-left: 18px;">
+            <li>Check your junk or spam folder.</li>
+            <li>Give it two or three minutes — some universities hold new senders briefly.</li>
+            <li>Make sure the address is right, then press <strong>Resend code</strong>.</li>
+          </ul>
+          <p style="margin: 0;">
+            Still nothing? A few universities filter mail from new domains before it
+            ever reaches you. Email
+            <a href="mailto:hello@joinfrea.com?subject=Verify%20my%20student%20email" style="color: var(--color-marker-orange); font-weight: 700;">hello@joinfrea.com</a>
+            <strong>from your university address</strong> and we'll verify you by hand —
+            sending from it proves it's yours just as well as a code does.
+          </p>
+        </div>
+      </details>
     </div>
   `);
 
