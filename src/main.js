@@ -1290,9 +1290,9 @@ function renderBecomeMentor() {
           </div>
         </form>
       </div>
-
-      ${renderFooter()}
     </div>
+
+    ${renderFooter()}
   `;
 }
 
@@ -4976,9 +4976,9 @@ function renderAdminDashboard() {
           <div style="text-align: center; padding: 20px; opacity: 0.6;">Loading…</div>
         </div>
       </div>
-
-      ${renderFooter()}
     </div>
+
+    ${renderFooter()}
   `;
 }
 window.initAdminDashboard = initAdminDashboard;

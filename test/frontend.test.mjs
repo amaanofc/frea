@@ -174,6 +174,29 @@ test('the mentor form submits once its visible fields are filled', async () => {
   price.value = '4.99'; assert.ok(price.checkValidity(), '2dp prices must be allowed');
 });
 
+test('the footer is never nested inside a narrow content column', async () => {
+  // The footer is full-bleed orange. Rendered inside a wrapper with a
+  // max-width — become-a-mentor is 860px, admin 1100px — it stops short of
+  // both edges and reads as a floating panel rather than the page footer.
+  // jsdom has no layout, so this checks the structure that causes it.
+  const routes = ['/', '/browse', '/resources', '/become-a-mentor', '/mentor/1',
+    '/my-sessions', '/mentor-dashboard', '/admin', '/faq'];
+
+  for (const route of routes) {
+    await goto(`#${route}`);
+    const { document } = dom.window;
+    const footer = document.querySelector('footer.footer');
+    assert.ok(footer, `${route} should render a footer`);
+
+    const parent = footer.parentElement;
+    const parentClasses = (parent.className || '').toString();
+    assert.ok(
+      parent.id === 'app' || !/page-container|become-mentor|admin-dashboard-page|mentor-portal/.test(parentClasses),
+      `${route}: footer is inside "${parentClasses || parent.id}", which constrains its width — move it outside that wrapper`
+    );
+  }
+});
+
 test('browse page renders the mentor grid', async () => {
   const text = await goto('#/browse');
   assert.match(text, /find your senior mentor/i);
