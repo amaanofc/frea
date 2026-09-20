@@ -866,7 +866,12 @@ export function getStats() {
 export function saveVerificationToken({ email, token, code, expiresAt }) {
   const db = loadDb();
   const cleanEmail = (email || '').trim().toLowerCase();
-  db.verificationTokens = db.verificationTokens.filter(t => t.email !== cleanEmail);
+  // Tokens are no longer deleted the moment they are used, so expired ones are
+  // swept here rather than accumulating for the life of the platform.
+  const now = Date.now();
+  db.verificationTokens = db.verificationTokens
+    .filter(t => t.email !== cleanEmail)
+    .filter(t => (t.expiresAt || 0) > now);
   db.verificationTokens.push({
     email: cleanEmail,
     token,
@@ -932,6 +937,14 @@ export function verifyEmailCode(email, code) {
   return { success: true, email: cleanEmail };
 }
 
+/**
+ * How long a verification link keeps working after its first use.
+ *
+ * Long enough to cover a mail scanner fetching it seconds before the student
+ * clicks; short enough that the link is not a reusable credential.
+ */
+const TOKEN_REUSE_GRACE_MS = 15 * 60 * 1000;
+
 export function verifyEmailToken(token) {
   const db = loadDb();
   const record = db.verificationTokens.find(t => t.token === token);
@@ -944,8 +957,33 @@ export function verifyEmailToken(token) {
   }
 
   const cleanEmail = record.email;
-  // Single-use, same as the six-digit code.
-  db.verificationTokens = db.verificationTokens.filter(t => t.token !== token);
+
+  // Not strictly single-use, for a short grace period after the first hit.
+  //
+  // Mail providers fetch the links inside a message before the recipient ever
+  // sees it — Microsoft Defender Safe Links does exactly this, and Outlook is
+  // where most .ac.uk addresses live. That scan consumed the token, and the
+  // student's own click then failed with "invalid or expired" on a link they
+  // had never used. It is the most confusing failure the product can produce:
+  // the email arrived, the link was real, and it still did not work.
+  //
+  // A grace window rather than unlimited reuse. Anyone holding the link can
+  // already sign in once, so accepting it again for a few minutes changes
+  // little; leaving it live for its full 24 hours would turn a forwarded email
+  // into a standing key.
+  const now = Date.now();
+  if (record.usedAt && now - record.usedAt > TOKEN_REUSE_GRACE_MS) {
+    throw new Error('That verification link has already been used. Please request a new one.');
+  }
+
+  if (record.usedAt) {
+    // A repeat inside the window: hand back a session without re-consuming.
+    record.usedCount = (record.usedCount || 1) + 1;
+  } else {
+    record.usedAt = now;
+    record.usedCount = 1;
+  }
+
   if (!db.verifiedEmails.includes(cleanEmail)) {
     db.verifiedEmails.push(cleanEmail);
   }
