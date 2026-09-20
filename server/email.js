@@ -58,6 +58,11 @@ function transportMode() {
 let smtpProbe = { checked: false };
 let apiProbe = { checked: false };
 
+// The last send failure, so a rejected message is diagnosable from
+// /api/health rather than by reading platform logs. Provider messages, no
+// addresses and no credentials.
+let lastSendError = null;
+
 /**
  * Opens one connection at boot and remembers the outcome.
  *
@@ -136,6 +141,7 @@ export function mailStatus() {
       base.reachable = true;
       if (apiProbe.unverified) base.note = apiProbe.unverified;
     }
+    if (lastSendError) base.lastSendError = lastSendError;
     return base;
   }
 
@@ -281,7 +287,16 @@ async function sendViaResendApi(mailOptions) {
 }
 
 async function send(mailOptions) {
-  if (usingResendApi()) return sendViaResendApi(mailOptions);
+  if (usingResendApi()) {
+    try {
+      const result = await sendViaResendApi(mailOptions);
+      lastSendError = null;
+      return result;
+    } catch (err) {
+      lastSendError = { at: new Date().toISOString(), error: err.message };
+      throw err;
+    }
+  }
 
   const mailer = await getEmailTransporter();
   const info = await mailer.sendMail({ from: mailFrom(), ...mailOptions });
