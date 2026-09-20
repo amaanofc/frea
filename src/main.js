@@ -1270,6 +1270,8 @@ function renderBecomeMentor() {
             </div>
           </div>
 
+          <div id="bm-form-error" role="alert" style="display: none; margin-top: 24px; padding: 12px 16px; border-radius: 10px; background: #fef2f2; border: 1.5px solid #fecaca; color: #b91c1c; font-size: 14px; font-weight: 600; text-align: center;"></div>
+
           <div style="margin-top: 36px; text-align: center;">
             <button type="submit" class="pill-btn pill-btn--animated" style="padding: 14px 44px; font-size: 17px;">
               <span class="pill-btn__inner">
@@ -2180,7 +2182,7 @@ function handleMentorPhotoUpload(e) {
   if (!file) return;
 
   if (file.size > 5 * 1024 * 1024) {
-    alert('Please select an image smaller than 5MB.');
+    showToast('That image is over 5MB. Please choose a smaller one.');
     return;
   }
 
@@ -2308,14 +2310,14 @@ async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
   const allowedExts = ['.pdf', '.md', '.tex', '.pptx'];
   const ext = '.' + file.name.split('.').pop().toLowerCase();
   if (!allowedExts.includes(ext)) {
-    alert(`File format rejected (${ext}). frea strictly accepts original student study documents in .pdf, .md (Markdown), .tex (LaTeX), or .pptx format.\n\nExecutable binaries, scripts, or archives (.exe, .py, .zip) are prohibited.`);
+    showToast(`We cannot accept ${ext} files — please upload a .pdf, .md, .tex or .pptx.`);
     event.target.value = '';
     return;
   }
 
   // 10MB file limit
   if (file.size > 10 * 1024 * 1024) {
-    alert('File size exceeds the 10MB limit. Please upload a smaller document.');
+    showToast('That file is over the 10MB limit. Please upload a smaller document.');
     event.target.value = '';
     return;
   }
@@ -2387,10 +2389,19 @@ window.isVerified = isVerified;
  * runs `onVerified`. Every gated action funnels through here.
  */
 async function requireVerifiedSession({ email, universityName, actionName, onVerified }) {
-  if (isVerified()) {
+  const wanted = (email || '').trim().toLowerCase();
+  const current = (verifiedEmail() || '').trim().toLowerCase();
+
+  // An existing session is only good enough if it belongs to the address this
+  // action is for. The server binds a mentor profile to the session email, so
+  // someone signed in as one address and filling the form with another would
+  // have had the profile created against the wrong one — or, for an admin on a
+  // non-.ac.uk address, rejected with an error naming a rule they had followed.
+  if (isVerified() && (!wanted || wanted === current)) {
     if (typeof onVerified === 'function') onVerified();
     return;
   }
+
   return openVerificationModal({ email, universityName, actionName, onVerified });
 }
 window.requireVerifiedSession = requireVerifiedSession;
@@ -2675,10 +2686,11 @@ async function handleBecomeMentorSubmit(e) {
   const avatarId = parseInt(document.getElementById('bm-selected-avatar-id')?.value) || 1;
   const topTip = document.getElementById('bm-toptip')?.value.trim();
   const submitBtn = e.target.querySelector('button[type="submit"]');
+  clearFormError('bm-form-error');
 
   // Strict .ac.uk validation
   if (!email || !email.endsWith('.ac.uk')) {
-    alert('frea requires a verified UK student email ending in ".ac.uk" (e.g. yourname@imperial.ac.uk, s123456@ed.ac.uk) to verify your student status.');
+    showFormError('bm-form-error', 'Please use your university email, ending in .ac.uk — for example s123456@ed.ac.uk.', 'bm-email');
     document.getElementById('bm-email')?.focus();
     return;
   }
@@ -2690,7 +2702,7 @@ async function handleBecomeMentorSubmit(e) {
   const achievements = [a1, a2, a3].filter(Boolean);
 
   if (achievements.length === 0) {
-    alert('Please enter at least 1 achievement (e.g. offers, internships, awards or first-class rank).');
+    showFormError('bm-form-error', 'Add at least one achievement — an offer, internship, award or your degree classification.', 'bm-achieve-1');
     document.getElementById('bm-achieve-1')?.focus();
     return;
   }
@@ -2834,7 +2846,7 @@ async function handleBecomeMentorSubmit(e) {
       overlay.classList.add('open');
       document.body.style.overflow = 'hidden';
     } catch (err) {
-      alert(`Could not submit application: ${err.message || 'Please check your connection.'}`);
+      showFormError('bm-form-error', err.message || 'Could not submit your application. Please check your connection and try again.');
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -2842,6 +2854,11 @@ async function handleBecomeMentorSubmit(e) {
       }
     }
   };
+
+  // Verification can interrupt this flow, so clear any error from a previous
+  // attempt before it proceeds — otherwise it stays on screen behind the
+  // success state.
+  clearFormError('bm-form-error');
 
   // The mentor profile is created against the verified session email, so
   // verification has to happen first.
@@ -3464,6 +3481,33 @@ async function handleSuggestionSubmit(e) {
 window.handleSuggestionSubmit = handleSuggestionSubmit;
 
 // ─── Toast Notification (Peak-End Rule & Doherty Feedback) ─────
+
+/**
+ * An inline, non-blocking form error.
+ *
+ * These were alert() calls, which halt the renderer until dismissed, look
+ * nothing like the rest of the product, and say nothing about which field is
+ * at fault. The message lands next to the submit button and the offending
+ * input takes focus.
+ */
+function showFormError(containerId, message, focusId) {
+  const el = document.getElementById(containerId);
+  if (el) {
+    el.textContent = message;
+    el.style.display = 'block';
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  } else {
+    showToast(message);   // no slot on this form; better than swallowing it
+  }
+  if (focusId) document.getElementById(focusId)?.focus();
+}
+window.showFormError = showFormError;
+
+function clearFormError(containerId) {
+  const el = document.getElementById(containerId);
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
+}
+window.clearFormError = clearFormError;
 
 function showToast(message) {
   let toast = document.getElementById('frea-toast');
@@ -4215,7 +4259,7 @@ function openBookingModal(mentorId) {
       window.__selectedDay = first.displayDate;
       window.__selectedSlot = first.time;
     } else {
-      alert('Please click on an available date and time slot before confirming your booking!');
+      showToast('Pick a date and time slot first.');
       return;
     }
   }
