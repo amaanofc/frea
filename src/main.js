@@ -2460,10 +2460,13 @@ async function submitVerificationEmail() {
   const btn = document.getElementById('verify-email-btn');
   const email = input ? input.value.trim().toLowerCase() : '';
 
-  if (!email || !email.endsWith('.ac.uk')) {
+  // Shape only. Students need .ac.uk, administrators do not, and the server
+  // holds that rule (ADMIN_EMAILS). Enforcing it here as well meant an admin
+  // address was rejected in the browser and the request was never sent.
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     if (errorEl) {
       errorEl.style.display = 'block';
-      errorEl.innerText = 'Please enter a valid UK university email ending in .ac.uk';
+      errorEl.innerText = 'Please enter a valid email address.';
     }
     return;
   }
@@ -4593,6 +4596,16 @@ async function initAdminDashboard() {
          <span class="pill-btn__inner"><span>sign in</span><span class="pill-btn__arrow">→</span></span>
        </button>`
     );
+
+    // The loaders below never run on this path, so their markup would sit on
+    // "Loading…" for as long as the page is open — which reads as a broken
+    // page rather than a locked one.
+    for (const id of ['admin-reports-list', 'admin-suggestions-list']) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.innerHTML = '<div style="padding: 20px; text-align: center; opacity: 0.6; font-size: 13.5px;">Sign in as an administrator to view this.</div>';
+      }
+    }
     return;
   }
 
@@ -4827,16 +4840,12 @@ function renderAdminDashboard() {
   return `
     <div class="admin-dashboard-page">
       <div class="admin-dashboard-header">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-          <span class="doc-badge doc-badge--free">${ICONS.shieldTick} Quality Assurance & Governance</span>
-          <span class="hero__badge">frea Committee Admin</span>
-        </div>
         <h1 style="font-size: 32px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">
-          Mentor Application Review
+          Admin
         </h1>
         <p style="font-size: 15px; opacity: 0.75; max-width: 680px; margin-bottom: 24px; line-height: 1.5;">
-          Mentors activate instantly on sign-up — no interview. This is the audit trail: every senior
-          who has joined, plus the resource requests students have sent in.
+          Mentors activate instantly on sign-up, so nothing here is a queue to approve. This is the
+          record of who has joined, what students have reported, and what they have asked for.
         </p>
 
         <!-- Admin Stats Bar -->
@@ -4903,22 +4912,30 @@ window.renderAdminDashboard = renderAdminDashboard;
 async function syncLiveMentors() {
   try {
     const backendMentors = await fetchMentors();
-    if (backendMentors && Array.isArray(backendMentors) && backendMentors.length > 0) {
-      backendMentors.forEach(bm => {
-        const idx = MENTORS.findIndex(m => m.id === bm.id);
-        if (idx >= 0) {
-          MENTORS[idx] = { ...MENTORS[idx], ...bm };
-        } else {
-          MENTORS.unshift(bm);
-        }
-      });
-      const path = window.location.hash.replace(/^#/, '') || '/';
-      if (path === '/' || path === '/browse') {
-        renderPage();
-      }
+    if (!Array.isArray(backendMentors)) return;
+
+    // The server is the roster, not an addition to it.
+    //
+    // This used to merge server mentors into the bundled demo list and never
+    // remove anything, and it skipped entirely when the server returned an
+    // empty array. After reset:launch that left every fabricated mentor on
+    // screen — names, ratings, LinkedIn links and all — with Book buttons
+    // pointing at people who do not exist. Replacing the array means an empty
+    // server means an empty site, which is the honest answer.
+    //
+    // Replaced in place because MENTORS is a const binding shared by every
+    // render path.
+    MENTORS.length = 0;
+    MENTORS.push(...backendMentors);
+
+    const path = window.location.hash.replace(/^#/, '') || '/';
+    if (path === '/' || path === '/browse') {
+      renderPage();
     }
   } catch (e) {
-    console.warn('[main] live mentors sync fallback to local list', e);
+    // Only a failed request keeps the bundled list, so the page still has
+    // something to show when the API is unreachable.
+    console.warn('[main] live mentors sync failed; keeping bundled list', e);
   }
 }
 window.syncLiveMentors = syncLiveMentors;
@@ -6380,7 +6397,12 @@ function renderMySessions() {
       <div id="my-sessions-list">
         ${isVerified()
       ? '<div style="opacity: 0.6; padding: 30px 0;">loading your sessions…</div>'
-      : '<div style="opacity: 0.6; padding: 30px 0;">verify your student email to see your sessions.</div>'}
+      : `<div style="padding: 30px 0;">
+           <p style="opacity: 0.7; margin-bottom: 16px;">Verify your student email to see your sessions.</p>
+           <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'see your sessions' })">
+             <span class="pill-btn__inner"><span>verify my email</span><span class="pill-btn__arrow">&rarr;</span></span>
+           </button>
+         </div>`}
       </div>
     </div>
     ${renderFooter()}

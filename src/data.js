@@ -17,12 +17,12 @@ export const MENTORS = [
     helpsWith: ["tech interviews", "spring weeks", "side projects", "leetcoding"],
     rating: 4.9,
     callsCompleted: 47,
-    linkedin: "https://www.linkedin.com/in/aanya-sharma",
+    linkedin: "",
     websites: [
       { label: "GitHub", url: "https://github.com/aanyasharma" },
       { label: "Portfolio", url: "https://aanya.dev" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["10:00 AM", "2:30 PM", "4:30 PM"] },
       { day: "Wed 23 Sep", slots: ["11:00 AM", "3:00 PM"] },
@@ -80,11 +80,11 @@ export const MENTORS = [
     helpsWith: ["spring weeks", "investment banking", "cv roast", "assessment centres"],
     rating: 4.8,
     callsCompleted: 62,
-    linkedin: "https://www.linkedin.com/in/callum-davies-lse",
+    linkedin: "",
     websites: [
       { label: "Substack", url: "https://callumd.substack.com" }
     ],
-    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["10:30 AM", "12:00 PM"] },
       { day: "Thu 24 Sep", slots: ["2:00 PM", "4:30 PM", "6:00 PM"] },
@@ -142,12 +142,12 @@ export const MENTORS = [
     helpsWith: ["ux research", "career switching", "portfolio review", "tech transition"],
     rating: 5.0,
     callsCompleted: 31,
-    linkedin: "https://www.linkedin.com/in/priya-nair-ux",
+    linkedin: "",
     websites: [
       { label: "Portfolio", url: "https://priyanair.design" },
       { label: "Medium", url: "https://medium.com/@priyanair" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["5:30 PM", "6:30 PM"] },
       { day: "Wed 23 Sep", slots: ["6:00 PM", "7:00 PM"] },
@@ -205,11 +205,11 @@ export const MENTORS = [
     helpsWith: ["gpa comeback", "revision systems", "engineering careers", "exam technique"],
     rating: 4.9,
     callsCompleted: 55,
-    linkedin: "https://www.linkedin.com/in/noah-adebayo-bristol",
+    linkedin: "",
     websites: [
       { label: "CAD Portfolio", url: "https://grabcad.com/noah.adebayo" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["9:30 AM", "11:00 AM"] },
       { day: "Thu 24 Sep", slots: ["3:00 PM", "5:00 PM"] },
@@ -267,11 +267,11 @@ export const MENTORS = [
     helpsWith: ["vacation schemes", "commercial law", "watson glaser", "essay technique"],
     rating: 4.8,
     callsCompleted: 38,
-    linkedin: "https://www.linkedin.com/in/oliver-zhang-oxford",
+    linkedin: "",
     websites: [
       { label: "Law Review", url: "https://oxfordlawreview.org" }
     ],
-    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["4:00 PM", "5:30 PM"] },
       { day: "Wed 23 Sep", slots: ["10:00 AM", "2:00 PM"] },
@@ -329,12 +329,12 @@ export const MENTORS = [
     helpsWith: ["placement years", "cad & prototyping", "engineering portfolios", "automotive"],
     rating: 4.9,
     callsCompleted: 44,
-    linkedin: "https://www.linkedin.com/in/emily-watson-bath",
+    linkedin: "",
     websites: [
       { label: "Design Portfolio", url: "https://emilywatson.design" },
       { label: "Behance", url: "https://behance.net/emilywatson" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["6:30 PM", "7:30 PM"] },
       { day: "Sat 26 Sep", slots: ["11:00 AM", "12:30 PM", "2:00 PM"] }
@@ -390,11 +390,11 @@ export const MENTORS = [
     helpsWith: ["med school survival", "anki workflows", "clinical osces", "audit projects"],
     rating: 5.0,
     callsCompleted: 29,
-    linkedin: "https://www.linkedin.com/in/tariq-al-mansoor",
+    linkedin: "",
     websites: [
       { label: "ResearchGate", url: "https://researchgate.net/profile/Tariq-Al-Mansoor" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["11:00 AM", "1:30 PM"] },
       { day: "Thu 24 Sep", slots: ["10:00 AM", "4:00 PM"] },
@@ -452,12 +452,12 @@ export const MENTORS = [
     helpsWith: ["quant trading", "mental maths", "probability puzzles", "maths modules"],
     rating: 4.9,
     callsCompleted: 51,
-    linkedin: "https://www.linkedin.com/in/maya-tremblay-warwick",
+    linkedin: "",
     websites: [
       { label: "GitHub", url: "https://github.com/mayatremblay" },
       { label: "Blog", url: "https://mayatremblay.io" }
     ],
-    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
+    pitchVideoUrl: "",
     availability: [
       { day: "Wed 23 Sep", slots: ["9:00 AM", "11:30 AM", "5:00 PM"] },
       { day: "Fri 25 Sep", slots: ["2:00 PM", "4:00 PM"] }
@@ -514,11 +514,11 @@ export const MENTORS = [
     helpsWith: ["civil service", "essay writing", "reading lists", "supervision prep"],
     rating: 4.9,
     callsCompleted: 22,
-    linkedin: "https://www.linkedin.com/in/lucas-wright-cambridge",
+    linkedin: "",
     websites: [
       { label: "Policy Blog", url: "https://lucaswright.co.uk" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["5:30 PM", "6:30 PM"] },
       { day: "Thu 24 Sep", slots: ["6:00 PM", "7:00 PM"] },
@@ -575,12 +575,12 @@ export const MENTORS = [
     helpsWith: ["machine learning", "research abroad", "kaggle competitions", "python & pytorch"],
     rating: 4.9,
     callsCompleted: 73,
-    linkedin: "https://www.linkedin.com/in/sophia-taylor-ai",
+    linkedin: "",
     websites: [
       { label: "GitHub", url: "https://github.com/sophiataylor" },
       { label: "HuggingFace", url: "https://huggingface.co/sophiataylor" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["7:00 PM", "8:30 PM"] },
       { day: "Wed 23 Sep", slots: ["8:00 PM"] },
@@ -636,12 +636,12 @@ export const MENTORS = [
     helpsWith: ["hardware projects", "hackathons", "funding grants", "engineering projects"],
     rating: 4.8,
     callsCompleted: 34,
-    linkedin: "https://www.linkedin.com/in/liam-fletcher-durham",
+    linkedin: "",
     websites: [
       { label: "GitHub", url: "https://github.com/liamfletcher" },
       { label: "Hardware Lab", url: "https://liamfletcher.dev" }
     ],
-    pitchVideoUrl: "https://www.loom.com/share/63346d0a7fbe4f6990fa1db4e25a297e",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["4:00 PM", "5:30 PM"] },
       { day: "Fri 25 Sep", slots: ["10:00 AM", "11:30 AM"] },
@@ -681,12 +681,12 @@ export const MENTORS = [
     helpsWith: ["phd applications", "cold emailing labs", "biochemistry revision", "personal statements"],
     rating: 5.0,
     callsCompleted: 31,
-    linkedin: "https://www.linkedin.com/in/chloe-jenkins-st-andrews",
+    linkedin: "",
     websites: [
       { label: "ORCID", url: "https://orcid.org/0000-0002-1825-0097" },
       { label: "Research Lab", url: "https://chloejenkins.bio" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Mon 21 Sep", slots: ["2:00 PM", "3:30 PM"] },
       { day: "Thu 24 Sep", slots: ["11:00 AM", "1:30 PM"] },
@@ -743,11 +743,11 @@ export const MENTORS = [
     helpsWith: ["tech interviews", "algorithms & ds", "cv roast", "uom survival"],
     rating: 5.0,
     callsCompleted: 38,
-    linkedin: "https://www.linkedin.com/in/kiran-patel-uom",
+    linkedin: "",
     websites: [
       { label: "GitHub", url: "https://github.com/kiranpatel-uom" }
     ],
-    pitchVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    pitchVideoUrl: "",
     availability: [
       { day: "Tue 22 Sep", slots: ["11:00 AM", "2:00 PM", "4:30 PM"] },
       { day: "Thu 24 Sep", slots: ["1:00 PM", "3:30 PM"] },
