@@ -26,7 +26,8 @@ yours. No real email needed until you're testing production.
 
 - [ ] Landing page loads with no console errors
 - [ ] Hero, how-it-works, mission and FAQ all render
-- [ ] The stats strip shows **real numbers** (13 mentors, 12 universities), not dashes
+- [ ] **No fabricated numbers anywhere** — no stats strip, no ratings out of five.
+      Counts on the page must come from real data or not appear at all.
 - [ ] FAQ items expand and collapse
 - [ ] Custom cursor follows the mouse and reacts on buttons *(desktop only)*
 
@@ -35,6 +36,31 @@ yours. No real email needed until you're testing production.
 - [ ] **The "find a senior mentor" button is visible and tappable.** It used to be clipped off-screen entirely
 - [ ] Nothing scrolls sideways
 - [ ] Nav wraps to two rows rather than overflowing
+
+---
+
+## A2 · Stars, and things that were broken before
+
+These are recent fixes. They are cheap to check and expensive to get wrong.
+
+- [ ] A mentor profile shows a **star count**, not a rating out of five
+- [ ] A brand-new mentor shows **0 stars**, not 5
+- [ ] Signed out, pressing the star asks you to verify first
+- [ ] Signed in, pressing it increments the count and fills the button
+- [ ] Pressing again removes it — the count goes back down, not up
+- [ ] Open the same profile in another browser: the count is there, the fill is not
+- [ ] A mentor cannot star their own profile
+
+- [ ] A mentor with **no pitch video** shows no video section at all
+      (not a grey box with a broken-image icon)
+- [ ] No mentor links to a YouTube or Loom URL nobody uploaded
+- [ ] `/my-sessions` signed out offers a **verify my email** button, not a dead end
+- [ ] Every validation failure appears **inline or as a toast** — a native browser
+      alert box is a failure, wherever it appears
+- [ ] `/admin` signed out shows a sign-in prompt, and Reports and Student Requests
+      say so too rather than sitting on "Loading…" forever
+- [ ] Signing in at `/admin` with the address in `ADMIN_EMAILS` works **even though
+      it is not a .ac.uk address**
 
 ---
 
@@ -194,6 +220,12 @@ In a **second browser**, with a different `.ac.uk` address:
 - [ ] Price a playbook at £10
 - [ ] As a student in another browser, click buy
 - [ ] The breakdown says **you pay £10.00**, mentor gets £9.50, frea 50p
+
+> **Note:** that split is 5% of the **gross**, and frea pays Stripe's fee out of
+> its own cut — so frea nets about 23p on a £10 sale and *loses* money below
+> about £5.71. The agreed model is to take the cut **after** Stripe's fee. Until
+> that is built, treat the numbers above as what the code does, not what it
+> should do.
 - [ ] Checkout opens on Stripe
 - [ ] Pay with **4242 4242 4242 4242**, any future expiry, any CVC
 - [ ] Returns to frea and confirms
