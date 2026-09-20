@@ -4852,8 +4852,8 @@ async function renderAdminApplicationsList() {
         <div style="width: 56px; height: 56px; border-radius: 50%; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
           ${ICONS.tickCircle}
         </div>
-        <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">All Caught Up!</h3>
-        <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto;">No pending mentor applications awaiting review. Any new applications submitted with verified .ac.uk emails will appear here.</p>
+        <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">Nobody has joined yet</h3>
+        <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto;">Mentors go live the moment they verify their university email — there is nothing to approve. Everyone who signs up is listed here, newest first.</p>
       </div>
     `;
     return;
@@ -4954,7 +4954,7 @@ function renderAdminDashboard() {
         <div class="admin-stats-grid">
           <div class="admin-stat-card">
             <div class="admin-stat-num" id="admin-pending-count">–</div>
-            <div class="admin-stat-label">Mentor Sign-ups</div>
+            <div class="admin-stat-label">Joined via sign-up</div>
           </div>
           <div class="admin-stat-card">
             <div class="admin-stat-num" id="admin-mentor-count">–</div>
@@ -4970,7 +4970,7 @@ function renderAdminDashboard() {
       <div style="margin-top: 32px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <h2 style="font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0;">
-            Mentor Sign-ups
+            Who has joined
           </h2>
           <button type="button" class="pill-btn pill-btn--subtle" onclick="window.initAdminDashboard()">
             ↻ Refresh
