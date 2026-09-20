@@ -1240,7 +1240,7 @@ function renderBecomeMentor() {
                   <label class="mentor-form-label" style="font-size: 12.5px;">Price (£ GBP)</label>
                   <div style="position: relative; display: flex; align-items: center;">
                     <span style="position: absolute; left: 12px; font-weight: 800; color: var(--color-charcoal);">£</span>
-                    <input type="number" class="mentor-form-input" id="bm-doc-price" min="1" max="100" step="0.50" value="4.99" style="padding-left: 26px;" oninput="window.updatePayoutPreview('bm-doc-price', 'bm-doc-payout')">
+                    <input type="number" class="mentor-form-input" id="bm-doc-price" min="1" max="100" step="0.01" value="4.99" disabled style="padding-left: 26px;" oninput="window.updatePayoutPreview('bm-doc-price', 'bm-doc-payout')">
                   </div>
                   <div id="bm-doc-payout" style="font-size: 12.5px; margin-top: 6px; line-height: 1.5;"></div>
                 </div>
@@ -2281,12 +2281,18 @@ window.updatePayoutPreview = updatePayoutPreview;
 function toggleDocPriceField(type, elId) {
   const el = document.getElementById(elId);
   if (!el) return;
-  el.style.display = type === 'paid' ? 'block' : 'none';
 
-  // Show the split straight away rather than waiting for a keystroke.
-  if (type === 'paid') {
-    const input = el.querySelector('input[type="number"]');
-    if (input) updatePayoutPreview(input.id, input.id.replace('-price', '-payout'));
+  const paid = type === 'paid';
+  el.style.display = paid ? 'block' : 'none';
+
+  // Disable while hidden. A hidden control that fails constraint validation
+  // blocks form submission, and the browser cannot focus it to explain why —
+  // "An invalid form control with name='' is not focusable" — so the submit
+  // button simply does nothing. Disabled controls are skipped by validation.
+  const input = el.querySelector('input[type="number"]');
+  if (input) {
+    input.disabled = !paid;
+    if (paid) updatePayoutPreview(input.id, input.id.replace('-price', '-payout'));
   }
 }
 window.toggleDocPriceField = toggleDocPriceField;
@@ -5530,7 +5536,7 @@ function renderMentorDashboard() {
                 <label class="mentor-form-label" style="font-size: 12.5px;">Price (£ GBP)</label>
                 <div style="position: relative; display: flex; align-items: center;">
                   <span style="position: absolute; left: 12px; font-weight: 800; color: var(--color-charcoal);">£</span>
-                  <input type="number" class="mentor-form-input" id="pr-price" min="1" max="100" step="0.50" value="4.99" style="padding-left: 26px;" oninput="window.updatePayoutPreview('pr-price', 'pr-payout')">
+                  <input type="number" class="mentor-form-input" id="pr-price" min="1" max="100" step="0.01" value="4.99" disabled style="padding-left: 26px;" oninput="window.updatePayoutPreview('pr-price', 'pr-payout')">
                 </div>
                 <div id="pr-payout" style="font-size: 12.5px; margin-top: 6px; line-height: 1.5;"></div>
                 </div>

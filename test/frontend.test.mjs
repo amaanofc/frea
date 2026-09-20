@@ -113,6 +113,67 @@ test('landing page renders its hero and mission', async () => {
 // covered by the smoke suite; there is nothing left on the landing page to
 // assert against. Restore a test here if the numbers ever come back.
 
+test('no hidden control can block a form from submitting', async () => {
+  await goto('#/become-a-mentor');
+  const { document } = dom.window;
+
+  // A control that fails constraint validation while hidden cannot be focused
+  // to report why, so the browser aborts submit and says nothing: the button
+  // looks dead. The price field did exactly this — step="0.50" made its own
+  // default of 4.99 a stepMismatch, inside a wrapper hidden until "paid".
+  const hiddenBy = (el) => {
+    let n = el;
+    while (n && n !== document.body) {
+      if (/display:\s*none/i.test(n.getAttribute?.('style') || '')) return n.id || n.tagName;
+      n = n.parentElement;
+    }
+    return null;
+  };
+
+  for (const form of document.querySelectorAll('form')) {
+    for (const el of form.querySelectorAll('input, select, textarea')) {
+      if (!el.willValidate) continue;   // disabled controls are skipped, which is the fix
+      const hidden = hiddenBy(el);
+      if (!hidden) continue;
+      assert.ok(el.checkValidity(),
+        `#${el.id || el.name} is hidden by #${hidden} and invalid — it will block submit with no visible error`);
+    }
+  }
+});
+
+test('the mentor form submits once its visible fields are filled', async () => {
+  await goto('#/become-a-mentor');
+  const { document } = dom.window;
+  const form = document.getElementById('become-mentor-form');
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('bm-name', 'Test Mentor');
+  set('bm-major', 'Computer Science');
+  set('bm-email', 'test@ed.ac.uk');
+  set('bm-achieve-1', 'first-class-honours');
+  set('bm-toptip', 'Start applications in September.');
+  for (const id of ['bm-uni', 'bm-year']) {
+    const sel = document.getElementById(id);
+    if (sel && sel.options.length > 1) sel.selectedIndex = 1;
+  }
+
+  const invalid = [...form.querySelectorAll('input, select, textarea')]
+    .filter(el => el.willValidate && !el.checkValidity())
+    .map(el => el.id || el.tagName);
+  assert.deepEqual(invalid, [], 'a filled form should be submittable');
+
+  // And the paid path, where the price field becomes live.
+  dom.window.toggleDocPriceField('paid', 'bm-doc-price-wrap');
+  const price = document.getElementById('bm-doc-price');
+  assert.equal(price.disabled, false, 'price should be enabled when paid is chosen');
+  assert.ok(price.checkValidity(), `default price ${price.value} should be valid`);
+
+  // Bounds match the server, which accepts £1.00 to £100.00 at 2dp.
+  price.value = '0.50'; assert.ok(!price.checkValidity(), 'below £1 should be rejected');
+  price.value = '101';  assert.ok(!price.checkValidity(), 'above £100 should be rejected');
+  price.value = '4.99'; assert.ok(price.checkValidity(), '2dp prices must be allowed');
+});
+
 test('browse page renders the mentor grid', async () => {
   const text = await goto('#/browse');
   assert.match(text, /find your senior mentor/i);
