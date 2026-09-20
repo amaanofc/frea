@@ -18,6 +18,8 @@ dist-ssr
 server/data.json
 server/data.json.*
 server/uploads/
+# Database snapshots. Local ones are noise; production ones live on the volume.
+server/backups/
 
 # ─── Local tooling ───
 # Stripe CLI binary: Windows-only, 32MB, useless in a Linux container.

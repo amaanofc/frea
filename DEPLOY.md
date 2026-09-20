@@ -334,15 +334,57 @@ and no one pins `localhost` to https for a year.
 
 ## Keeping data safe
 
-`/data/data.json` is the entire platform. Railway volumes are not backed up
-automatically.
+`/data/data.json` is the entire platform — every mentor, student, booking,
+order and entitlement. Railway volumes are not snapshotted, so the copy on the
+volume is the only copy unless you make another.
+
+Writes are already atomic: `saveDb` writes a temp file and renames over the
+target, so an interrupted write cannot leave a half-written database. That is
+not the risk. The risks are a **logical** mistake — `reset:launch` against the
+wrong target, a bug deleting records — where the file is perfectly valid and
+the contents are wrong, and **losing the volume**.
+
+### Rotation on the volume
+
+The server snapshots to `/data/backups/` at boot and every few hours after.
+Identical databases are not re-snapshotted, so a quiet week cannot rotate every
+useful restore point out of the window.
+
+| Variable | Default | |
+|---|---|---|
+| `BACKUP_INTERVAL_HOURS` | `6` | how often to snapshot |
+| `BACKUP_KEEP` | `20` | snapshots retained before the oldest is pruned |
+
+At the defaults that is five days of history.
+
+### Getting a copy off the box
+
+Rotation does not survive losing the volume. For that the copy has to leave,
+and the download route is the way:
 
 ```bash
-railway run cat /data/data.json > backup-$(date +%F).json
+curl -fsS -H "Authorization: Bearer $TOKEN"      https://joinfrea.com/api/admin/backup -o frea-$(date +%F).json
 ```
 
-Run it on a schedule. At this size the whole database is a few hundred
-kilobytes, so there's no excuse for not having yesterday's copy.
+`$TOKEN` is an admin session token — sign in with an address in `ADMIN_EMAILS`.
+Run it from anywhere that runs on a schedule: your machine, a GitHub Action, a
+cron box. **The file contains live session tokens. Treat it as a credential.**
+
+Two more admin routes: `GET /api/admin/backups` lists what is on the volume,
+`POST /api/admin/backups` takes one immediately — worth doing by hand before
+anything irreversible, a schema change or a `reset:launch`.
+
+### Restoring
+
+A snapshot is the database, unmodified. There is no format to decode:
+
+```bash
+railway run cp /data/backups/data-<stamp>.json /data/data.json
+```
+
+Then restart. Everyone is signed out — sessions live in that file, and a
+restored one predates their current tokens — but nothing else is lost.
+`npm run test:backup` covers this path, restore included.
 
 ---
 

@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 
-import { UPLOADS_DIR, VIDEO_DIR, DIST_DIR, DATA_DIR, ensureDataDirs } from './paths.js';
+import { UPLOADS_DIR, VIDEO_DIR, DIST_DIR, DATA_DIR, DB_FILE, ensureDataDirs } from './paths.js';
 
 import {
   loadDb,
@@ -83,6 +83,7 @@ import {
 } from './email.js';
 
 import { generateICSContent, calendarLinks } from './ics.js';
+import { startBackupSchedule, listBackups, takeBackup, BACKUP_DIR } from './backup.js';
 import {
   stripeConfigured,
   createCheckoutSession,
@@ -1293,6 +1294,42 @@ app.post('/api/reports', requireVerified, rateLimit({ max: 10, windowMs: 60_000,
   });
 });
 
+// ─── Backups ────────────────────────────────────────────
+//
+// Rotation on the volume covers a bad logical write. It does not cover losing
+// the volume, and nothing on the box can — that needs a copy pulled off it,
+// which is what the download route is for. Point a scheduled job at it:
+//
+//   curl -fsS -H "Authorization: Bearer $FREA_ADMIN_TOKEN" //        https://joinfrea.com/api/admin/backup -o frea-$(date +%F).json
+
+app.get('/api/admin/backups', requireAdmin, (req, res) => {
+  res.json({ success: true, data: { directory: BACKUP_DIR, snapshots: listBackups() } });
+});
+
+app.post('/api/admin/backups', requireAdmin, (req, res) => {
+  try {
+    res.json({ success: true, data: takeBackup({ force: true }) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * The live database, as a file.
+ *
+ * It contains everything, session tokens included, so it is admin-only and
+ * must be treated as a credential once downloaded.
+ */
+app.get('/api/admin/backup', requireAdmin, (req, res) => {
+  if (!fs.existsSync(DB_FILE)) {
+    return res.status(404).json({ success: false, error: 'No database file yet.' });
+  }
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="frea-backup-${stamp}.json"`);
+  fs.createReadStream(DB_FILE).pipe(res);
+});
+
 app.get('/api/admin/reports', requireAdmin, (req, res) => {
   res.json({ success: true, data: getReports() });
 });
@@ -1480,7 +1517,7 @@ function sweepOrphanedUploads() {
 
 setInterval(sweepOrphanedUploads, 6 * 60 * 60 * 1000).unref();
 
-const databaseExistedAtBoot = fs.existsSync(path.join(DATA_DIR, 'data.json'));
+const databaseExistedAtBoot = fs.existsSync(DB_FILE);
 
 app.listen(PORT, async () => {
   console.log(`[frea backend] http://localhost:${PORT}`);
@@ -1502,6 +1539,9 @@ app.listen(PORT, async () => {
   // very first boot on a fresh volume.
   loadDb();
   await seedDemoContentOnFirstBoot(!databaseExistedAtBoot);
+
+  // After seeding, so the first snapshot is of a database worth restoring.
+  startBackupSchedule();
 });
 
 export default app;
