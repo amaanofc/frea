@@ -381,8 +381,16 @@ app.get('/api/health', (req, res) => {
 // cannot be mail-bombed. By IP: one caller cannot walk a list of addresses,
 // which the per-email limit does nothing about and which costs real money at
 // the mail provider.
+//
+// The IP window is deliberately generous. Every user of this platform is at a
+// university, and universities put thousands of students behind a handful of
+// NAT addresses — during freshers week a single campus egress IP could
+// legitimately send hundreds of codes an hour. A tight cap here does not stop
+// an attacker, who can rotate addresses; it locks out a whole institution.
+// This is sized to stop a scripted walk through an address list while leaving
+// real campus traffic alone, and the per-email limit does the precise work.
 app.post('/api/auth/send-verification',
-  rateLimit({ max: 20, windowMs: 60 * 60_000, key: req => `ip:${req.ip}` }),
+  rateLimit({ max: 100, windowMs: 10 * 60_000, key: req => `ip:${req.ip}` }),
   rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
   const { email, universityName } = req.body;
   const cleanEmail = (email || '').trim().toLowerCase();
