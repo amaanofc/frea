@@ -286,7 +286,46 @@ async function sendViaResendApi(mailOptions) {
   return { messageId: body.id || null, previewUrl: null };
 }
 
+/**
+ * A plain-text alternative, derived from the HTML when none is given.
+ *
+ * Every message here was HTML-only. Filters treat that as a spam signal —
+ * SpamAssassin scores MIME_HTML_ONLY, and Microsoft tenants, which is what
+ * most .ac.uk addresses run on, weigh it more heavily still. On a domain with
+ * no sending history that alone can be enough to land a message in a
+ * quarantine the student never sees.
+ *
+ * It is also just correct: a multipart message should carry a readable text
+ * part for clients that will not render HTML.
+ */
+export function htmlToText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    // Keep where a link goes, not just its label.
+    .replace(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
+      const label_ = label.replace(/<[^>]+>/g, '').trim();
+      return label_ && !href.startsWith('mailto:') ? label_ + ': ' + href : (label_ || href);
+    })
+    .replace(/<\/(p|div|h[1-6]|tr|li)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&rsquo;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n').map(line => line.trim()).join('\n')
+    .trim();
+}
+
 async function send(mailOptions) {
+  // Never send HTML on its own.
+  if (!mailOptions.text) mailOptions = { ...mailOptions, text: htmlToText(mailOptions.html) };
   if (usingResendApi()) {
     try {
       const result = await sendViaResendApi(mailOptions);
@@ -335,6 +374,20 @@ export async function sendVerificationEmail({ email, code, token, universityName
   return send({
     to: email,
     subject: `Your frea verification code: ${code}`,
+    // Written out rather than derived: the code is the payload, and it should
+    // not depend on how a tag-stripper happens to lay the page out.
+    text: [
+      'Verify your UK student email',
+      '',
+      `Your frea verification code is: ${code}`,
+      '',
+      'Enter it on the site, or open this link:',
+      verifyUrl,
+      '',
+      'The code is valid for 24 hours and can be used once.',
+      '',
+      "If you didn't request this, you can ignore this email — nothing happens.",
+    ].join('\n'),
     html: shell(`
       <h1 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 10px;">Verify your UK student email</h1>
       <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 20px;">

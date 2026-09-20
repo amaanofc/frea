@@ -1690,6 +1690,32 @@ body {
    Footer
    ───────────────────────────────────────────── */
 
+/* ─── Keeping the footer at the bottom ───
+   On a page whose content is shorter than the window — checkout-complete,
+   verify, an empty my-sessions — the footer used to stop wherever the content
+   did, leaving a band of white beneath it. The taller the screen the worse it
+   looked: about 140px on a 900px window, over 200px on a 1080p one.
+
+   Growing the content rather than pushing the footer with `margin-top: auto`
+   is deliberate: auto would win over the footer's own 80px top margin and
+   quietly close that gap on every long page too. */
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app > *:not(.footer),
+.page-view > *:not(.footer) {
+  flex: 1 0 auto;
+}
+
+.page-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
 .footer {
   background-color: var(--color-marker-orange);
   border-radius: var(--radius-footer) var(--radius-footer) 0 0;
