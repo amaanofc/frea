@@ -75,9 +75,23 @@ export async function probeSmtp() {
         headers: { 'Authorization': `Bearer ${resendApiKey()}` },
         signal: AbortSignal.timeout(10_000)
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      apiProbe = { checked: true, ok: true };
-      console.log('[frea email] Resend API reachable over HTTPS');
+
+      // Any HTTP response proves 443 is open and the host resolves, which is
+      // the failure this probe exists to catch.
+      if (res.ok) {
+        apiProbe = { checked: true, ok: true };
+        console.log('[frea email] Resend API reachable, key verified');
+      } else if (res.status === 401 || res.status === 403) {
+        // Listing domains needs a full-access key. A sending-only key sends
+        // mail fine and is refused here, so this cannot be treated as broken
+        // — only as unverified. A real send is the only way to settle it.
+        apiProbe = { checked: true, ok: true, unverified: `key cannot list domains (HTTP ${res.status}) — fine for a sending-only key, but an invalid key looks identical here` };
+        console.warn(`[frea email] Resend API reachable; key could not list domains (HTTP ${res.status}).`);
+        console.warn('             Expected for a sending-only key. If sends fail with 401, the key is wrong.');
+      } else {
+        apiProbe = { checked: true, ok: false, error: `HTTP ${res.status}` };
+        console.error(`[frea email] Resend API error: HTTP ${res.status}`);
+      }
     } catch (err) {
       apiProbe = { checked: true, ok: false, error: err.message };
       console.error(`[frea email] Resend API UNREACHABLE: ${err.message}`);
@@ -118,7 +132,10 @@ export function mailStatus() {
     if (apiProbe.checked && apiProbe.ok === false) {
       return { ...base, delivers: false, reachable: false, reason: `Resend API unreachable: ${apiProbe.error}` };
     }
-    if (apiProbe.checked && apiProbe.ok) base.reachable = true;
+    if (apiProbe.checked && apiProbe.ok) {
+      base.reachable = true;
+      if (apiProbe.unverified) base.note = apiProbe.unverified;
+    }
     return base;
   }
 
