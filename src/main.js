@@ -47,7 +47,8 @@ import {
   setSession,
   clearSession,
   fetchMe,
-  signOut
+  signOut,
+  starMentor
 } from './api.js';
 import { ICONS } from './icons.js';
 import { applyRouteMeta } from './seo.js';
@@ -308,7 +309,7 @@ function mentorCard(mentor) {
       <div class="mentor-card__bio">“${escapeHtml(mentor.bio)}”</div>
       <div class="mentor-card__footer">
         <div class="mentor-card__stats">
-          <span style="display: inline-flex; align-items: center; gap: 3px; color: #f59e0b; font-weight: 700;">${ICONS.star} ${mentor.rating.toFixed(1)}</span>
+          <span style="display: inline-flex; align-items: center; gap: 3px; color: #f59e0b; font-weight: 700;" title="Students who starred this mentor">${ICONS.star} ${mentor.stars || 0}</span>
           <span style="opacity: 0.65; margin: 0 2px;">·</span>
           <span>${mentor.callsCompleted} chats</span>
         </div>
@@ -905,8 +906,14 @@ function renderProfile(mentorId) {
               ${mentor.achievements.map(a => achievementSticker(a)).join('')}
             </div>
             <div class="profile__rating">
-              <span class="profile__rating-stars">${starRating(mentor.rating)}</span>
-              <span>${mentor.rating} rating · ${mentor.callsCompleted} chats completed</span>
+              <button type="button" id="mentor-star-btn"
+                      class="mentor-star-btn${mentor.youStarred ? ' mentor-star-btn--on' : ''}"
+                      onclick="window.toggleMentorStar(${Number(mentor.id)})"
+                      title="${mentor.youStarred ? 'Remove your star' : 'Star this mentor'}">
+                ${ICONS.star}
+                <span id="mentor-star-count">${mentor.stars || 0}</span>
+              </button>
+              <span>${mentor.callsCompleted} chats completed</span>
               ${reportLink('mentor', mentor.id, mentor.name)}
             </div>
           </div>
@@ -3508,6 +3515,34 @@ function clearFormError(containerId) {
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 window.clearFormError = clearFormError;
+
+/**
+ * Star a mentor, or take the star back.
+ *
+ * A count of students who vouched for someone, not a score out of anything.
+ * Verification is required so one person cannot inflate it, and the count is
+ * re-read from the response rather than incremented locally.
+ */
+async function toggleMentorStar(mentorId) {
+  const act = async () => {
+    try {
+      const res = await starMentor(mentorId);
+      const countEl = document.getElementById('mentor-star-count');
+      const btn = document.getElementById('mentor-star-btn');
+      if (countEl) countEl.textContent = String(res.stars);
+      if (btn) {
+        btn.classList.toggle('mentor-star-btn--on', res.starred);
+        btn.title = res.starred ? 'Remove your star' : 'Star this mentor';
+      }
+      showToast(res.starred ? 'Starred — thanks for vouching for them.' : 'Star removed.');
+    } catch (err) {
+      showToast(err.message || 'Could not star this mentor just now.');
+    }
+  };
+
+  requireVerifiedSession({ email: null, actionName: 'star a mentor', onVerified: act });
+}
+window.toggleMentorStar = toggleMentorStar;
 
 function showToast(message) {
   let toast = document.getElementById('frea-toast');

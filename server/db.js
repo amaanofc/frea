@@ -1278,6 +1278,70 @@ export function deleteResource(id) {
   return { success: true, id };
 }
 
+// ─── Stars: a count of students who vouched for a mentor ───
+//
+// Not a rating. There is no score, no average and no denominator — just how
+// many verified students pressed the button. Everyone starts at zero and it
+// only goes up as real people arrive, so a new mentor looks new rather than
+// looking like a five-star one.
+//
+// Keyed by verified email so it is one per student per mentor, and pressing
+// again takes it back.
+
+export function toggleStar({ mentorId, email }) {
+  const id = parseInt(mentorId, 10);
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) throw new Error('Verify your student email before starring a mentor.');
+
+  const db = loadDb();
+  const mentor = db.mentors.find(m => m.id === id);
+  if (!mentor) throw new Error('Mentor not found.');
+
+  // Starring yourself would make the count meaningless.
+  if ((mentor.email || '').toLowerCase() === clean) {
+    throw new Error('You cannot star your own profile.');
+  }
+
+  db.stars = db.stars || [];
+  const idx = db.stars.findIndex(s => s.mentorId === id && s.email === clean);
+
+  let starred;
+  if (idx >= 0) {
+    db.stars.splice(idx, 1);
+    starred = false;
+  } else {
+    db.stars.push({ mentorId: id, email: clean, at: new Date().toISOString() });
+    starred = true;
+  }
+
+  saveDb(db);
+  return { mentorId: id, stars: db.stars.filter(s => s.mentorId === id).length, starred };
+}
+
+/** How many students starred this mentor. */
+export function getStarCount(mentorId) {
+  const id = parseInt(mentorId, 10);
+  const db = loadDb();
+  return (db.stars || []).filter(s => s.mentorId === id).length;
+}
+
+/** Counts for every mentor at once, so a listing is one pass not N. */
+export function getStarCounts() {
+  const db = loadDb();
+  const counts = {};
+  for (const s of (db.stars || [])) counts[s.mentorId] = (counts[s.mentorId] || 0) + 1;
+  return counts;
+}
+
+/** Whether this student has already starred this mentor. */
+export function hasStarred(mentorId, email) {
+  const id = parseInt(mentorId, 10);
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return false;
+  const db = loadDb();
+  return (db.stars || []).some(s => s.mentorId === id && s.email === clean);
+}
+
 // ─── Entitlements: who may download what ───────────────
 //
 // Access lives on the server, keyed to a verified email. Clearing browser

@@ -439,3 +439,9 @@ export async function fetchPayoutStatus() {
     return { configured: false, started: false, payoutsEnabled: false, currentlyDue: [] };
   }
 }
+
+/** Star a mentor, or take the star back. Verified students only. */
+export async function starMentor(mentorId) {
+  const json = await request(`/mentors/${mentorId}/star`, { method: 'POST' });
+  return json.data;
+}

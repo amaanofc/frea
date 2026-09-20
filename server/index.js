@@ -57,7 +57,10 @@ import {
   getReports,
   resolveReport,
   splitPrice,
-  feeRate
+  feeRate,
+  toggleStar,
+  getStarCounts,
+  hasStarred
 } from './db.js';
 
 import {
@@ -571,14 +574,30 @@ app.post('/api/auth/mentor-verify', rateLimit({ max: 10, windowMs: 60_000, key: 
 // ─── Mentors ────────────────────────────────────────────
 
 /** Strips fields that should never reach other people's browsers. */
-function publicMentor(mentor) {
-  const { email, ...rest } = mentor;
+/**
+ * `rating` is a seeded constant that nothing ever writes to, so it is not sent
+ * to the client any more — a mentor with no sessions was being shown as 5.0.
+ * `stars` replaces it: a real count of verified students who vouched for them,
+ * starting at zero for everyone.
+ */
+function withStars(mentor, counts, viewerEmail) {
+  const { rating, ...rest } = mentor;
+  return {
+    ...rest,
+    stars: counts[mentor.id] || 0,
+    youStarred: viewerEmail ? hasStarred(mentor.id, viewerEmail) : false
+  };
+}
+
+function publicMentor(mentor, viewerEmail) {
+  const counts = getStarCounts();
+  const { email, ...rest } = withStars(mentor, counts, viewerEmail);
   return { ...rest, email, hasEmail: Boolean(email) };
 }
 
-function listedMentor(mentor) {
+function listedMentor(mentor, counts, viewerEmail) {
   // Public listings omit the mentor's email address entirely.
-  const { email, ...rest } = mentor;
+  const { email, ...rest } = withStars(mentor, counts || getStarCounts(), viewerEmail);
   return rest;
 }
 
@@ -588,13 +607,20 @@ app.get('/api/mentors', (req, res) => {
     university: req.query.university,
     subject: req.query.subject
   });
-  res.json({ success: true, count: mentors.length, data: mentors.map(listedMentor) });
+  // Counts are read once for the whole listing rather than per mentor.
+  const counts = getStarCounts();
+  const viewer = req.session?.email || null;
+  res.json({
+    success: true,
+    count: mentors.length,
+    data: mentors.map(m => listedMentor(m, counts, viewer))
+  });
 });
 
 app.get('/api/mentors/:id', (req, res) => {
   const mentor = getMentorById(req.params.id);
   if (!mentor) return res.status(404).json({ success: false, error: 'Mentor not found' });
-  res.json({ success: true, data: listedMentor(mentor) });
+  res.json({ success: true, data: listedMentor(mentor, null, req.session?.email || null) });
 });
 
 app.put('/api/mentors/:id', requireSelfOrAdmin, (req, res) => {
@@ -641,6 +667,18 @@ app.get('/api/mentors/:id/orders', requireSelfOrAdmin, (req, res) => {
 });
 
 // ─── Bookings ───────────────────────────────────────────
+
+/**
+ * Star a mentor, or take it back. One per verified student per mentor.
+ */
+app.post('/api/mentors/:id/star', requireVerified, (req, res) => {
+  try {
+    const result = toggleStar({ mentorId: req.params.id, email: req.session.email });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
 
 app.post('/api/bookings', requireVerified, rateLimit({ max: 10, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
   const { mentorId, date, time } = req.body;
