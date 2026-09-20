@@ -46,7 +46,7 @@ function mailFrom() {
  */
 function transportMode() {
   const mode = (process.env.MAIL_TRANSPORT || 'auto').trim().toLowerCase();
-  return ['auto', 'ethereal', 'smtp'].includes(mode) ? mode : 'auto';
+  return ['auto', 'ethereal', 'smtp', 'resend'].includes(mode) ? mode : 'auto';
 }
 
 /**
@@ -56,6 +56,7 @@ function transportMode() {
  * Ethereal inbox, the API reports success, and nothing is ever delivered.
  */
 let smtpProbe = { checked: false };
+let apiProbe = { checked: false };
 
 /**
  * Opens one connection at boot and remembers the outcome.
@@ -66,6 +67,24 @@ let smtpProbe = { checked: false };
  * which case 587 with SMTP_SECURE=false works instead.
  */
 export async function probeSmtp() {
+  // The API path has its own check: list domains, which proves both that the
+  // key is valid and that 443 is open, without sending anything.
+  if (usingResendApi()) {
+    try {
+      const res = await fetch('https://api.resend.com/domains', {
+        headers: { 'Authorization': `Bearer ${resendApiKey()}` },
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      apiProbe = { checked: true, ok: true };
+      console.log('[frea email] Resend API reachable over HTTPS');
+    } catch (err) {
+      apiProbe = { checked: true, ok: false, error: err.message };
+      console.error(`[frea email] Resend API UNREACHABLE: ${err.message}`);
+    }
+    return apiProbe;
+  }
+
   const status = mailStatus();
   if (status.transport !== 'smtp') {
     smtpProbe = { checked: true, ok: null, reason: 'not using SMTP' };
@@ -87,6 +106,21 @@ export async function probeSmtp() {
 export function mailStatus() {
   const mode = transportMode();
   const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  // Checked before SMTP: when a Resend key is present this is the path taken,
+  // over 443, and the SMTP settings are no longer consulted at all.
+  if (usingResendApi()) {
+    const from = (mailFrom().match(/@([^>\s]+)/) || [])[1] || null;
+    const base = { transport: 'resend-api', delivers: true, from };
+    if (from && /resend\.dev$/i.test(from)) {
+      return { ...base, delivers: false, reason: 'MAIL_FROM uses resend.dev, the Resend sandbox sender, which only reaches the account owner. Verify your domain and send as it.' };
+    }
+    if (apiProbe.checked && apiProbe.ok === false) {
+      return { ...base, delivers: false, reachable: false, reason: `Resend API unreachable: ${apiProbe.error}` };
+    }
+    if (apiProbe.checked && apiProbe.ok) base.reachable = true;
+    return base;
+  }
 
   if (mode === 'ethereal') return { transport: 'test-inbox', delivers: false, reason: 'MAIL_TRANSPORT=ethereal' };
   if (mode === 'smtp' && !smtpConfigured) return { transport: 'misconfigured', delivers: false, reason: 'MAIL_TRANSPORT=smtp but SMTP_HOST/USER/PASS incomplete' };
@@ -170,7 +204,68 @@ export async function getEmailTransporter() {
   }
 }
 
+/**
+ * Resend over HTTPS instead of SMTP.
+ *
+ * Railway blocks outbound SMTP — 465 and 587 both time out on connect — which
+ * is common on container platforms and not something the app can configure its
+ * way around. The HTTP API is port 443, so it is never caught by that, and it
+ * is the path Resend themselves recommend.
+ *
+ * The key is the same value SMTP_PASS already holds, so nothing new has to be
+ * set for this to work; RESEND_API_KEY is accepted too for clarity.
+ */
+function resendApiKey() {
+  const explicit = (process.env.RESEND_API_KEY || '').trim();
+  if (explicit) return explicit;
+  const pass = (process.env.SMTP_PASS || '').trim();
+  return pass.startsWith('re_') ? pass : '';
+}
+
+/** True when we should prefer the API over SMTP. */
+function usingResendApi() {
+  const mode = transportMode();
+  if (mode === 'ethereal') return false;
+  if (mode === 'resend') return Boolean(resendApiKey());
+  // auto: a Resend key means the API is available and strictly more reliable.
+  return mode === 'auto' && Boolean(resendApiKey());
+}
+
+async function sendViaResendApi(mailOptions) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: mailFrom(),
+      to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+      subject: mailOptions.subject,
+      html: mailOptions.html,
+      ...(mailOptions.text ? { text: mailOptions.text } : {}),
+      ...(mailOptions.attachments ? {
+        attachments: mailOptions.attachments.map(a => ({
+          filename: a.filename,
+          content: Buffer.isBuffer(a.content)
+            ? a.content.toString('base64')
+            : Buffer.from(String(a.content)).toString('base64')
+        }))
+      } : {})
+    }),
+    signal: AbortSignal.timeout(15_000)
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Resend API ${res.status}: ${body.message || body.name || 'send failed'}`);
+  }
+  return { messageId: body.id || null, previewUrl: null };
+}
+
 async function send(mailOptions) {
+  if (usingResendApi()) return sendViaResendApi(mailOptions);
+
   const mailer = await getEmailTransporter();
   const info = await mailer.sendMail({ from: mailFrom(), ...mailOptions });
   let previewUrl = null;
