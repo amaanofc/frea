@@ -5,6 +5,9 @@
 import fs from 'fs';
 
 const API = 'http://localhost:3001/api';
+
+import { localOnly } from './_local-only.mjs';
+localOnly(API, { suite: 'api.e2e.mjs' });
 const DB = new URL('../server/data.json', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 let pass = 0, fail = 0;

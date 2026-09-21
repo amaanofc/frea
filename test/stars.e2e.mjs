@@ -9,6 +9,9 @@
 
 const API = (process.argv[2] || 'http://localhost:3001') + '/api';
 
+import { localOnly } from './_local-only.mjs';
+localOnly(API, { suite: 'stars.e2e.mjs' });
+
 let pass = 0, fail = 0;
 const ok = (label, cond, detail = '') => {
   if (cond) { pass++; console.log(`   ✓ ${label}`); }

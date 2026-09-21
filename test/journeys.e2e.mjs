@@ -17,6 +17,9 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = 'http://localhost:3001/api';
+
+import { localOnly } from './_local-only.mjs';
+localOnly(API, { suite: 'journeys.e2e.mjs' });
 const DB = path.join(__dirname, '..', 'server', 'data.json');
 
 let pass = 0, fail = 0;

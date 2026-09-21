@@ -10,6 +10,9 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = 'http://localhost:3001/api';
+
+import { localOnly } from './_local-only.mjs';
+localOnly(API, { suite: 'pitch-video.e2e.mjs' });
 const ORIGIN = 'http://localhost:3001';
 const DB = path.join(__dirname, '..', 'server', 'data.json');
 
