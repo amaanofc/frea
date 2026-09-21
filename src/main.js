@@ -5053,6 +5053,9 @@ function updateNavbarMentorStatus() {
   updateNavbarSessionLink();
 
   const session = getMentorSession();
+  // The mentor session is null for a student, but they still have a verified
+  // one and still need a way out of it.
+  const verified = getSession();
   const toggleBtn = document.getElementById('nav-mentors-btn');
   const menu = document.getElementById('nav-mentors-menu');
   if (!toggleBtn || !menu) return;
@@ -5110,9 +5113,39 @@ function updateNavbarMentorStatus() {
           <div class="dropdown-item-desc">access your availability & earnings</div>
         </div>
       </a>
+      ${verified && verified.email ? `
+        <a href="#" class="navbar__dropdown-item" onclick="event.preventDefault(); window.closeMentorsDropdown(); window.studentSignOut()">
+          <span class="dropdown-item-icon">🚪</span>
+          <div>
+            <div class="dropdown-item-title">sign out</div>
+            <div class="dropdown-item-desc">${escapeHtml(verified.email)}</div>
+          </div>
+        </a>` : ''}
     `;
   }
 }
+
+/**
+ * Ends a verified session that does not own a mentor profile.
+ *
+ * Sign-out used to live only inside the mentor branch of this menu, so a
+ * student had no way to end their session at all. Sessions last thirty days
+ * and sit in localStorage, which on a shared university machine means the
+ * next person to sit down can book calls and download paid resources as them.
+ */
+async function studentSignOut() {
+  try {
+    await signOut();
+  } catch (_) {
+    // The session is going regardless — a failed call to the server should
+    // not strand someone signed in on a machine they are trying to leave.
+  }
+  setSession(null);
+  updateNavbarMentorStatus();
+  showToast('Signed out.');
+  navigateTo('/');
+}
+window.studentSignOut = studentSignOut;
 window.updateNavbarMentorStatus = updateNavbarMentorStatus;
 
 /**
