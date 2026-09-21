@@ -63,6 +63,14 @@ let apiProbe = { checked: false };
 // addresses and no credentials.
 let lastSendError = null;
 
+// How long our own hand-off took, so "the email was slow" can be answered with
+// a number instead of a guess. This measures us talking to Resend and nothing
+// further: once they have accepted it, delivery time belongs to the receiving
+// university, and the commonest cause of a multi-minute delay there is
+// greylisting — a deliberate temporary rejection of the first attempt from an
+// unfamiliar sender, retried automatically a few minutes later.
+let lastSend = null;
+
 /**
  * Opens one connection at boot and remembers the outcome.
  *
@@ -142,6 +150,7 @@ export function mailStatus() {
       if (apiProbe.unverified) base.note = apiProbe.unverified;
     }
     if (lastSendError) base.lastSendError = lastSendError;
+    if (lastSend) base.lastSend = lastSend;
     return base;
   }
 
@@ -327,11 +336,16 @@ async function send(mailOptions) {
   // Never send HTML on its own.
   if (!mailOptions.text) mailOptions = { ...mailOptions, text: htmlToText(mailOptions.html) };
   if (usingResendApi()) {
+    const startedAt = Date.now();
     try {
       const result = await sendViaResendApi(mailOptions);
+      const ms = Date.now() - startedAt;
+      lastSend = { at: new Date().toISOString(), ms };
       lastSendError = null;
+      if (ms > 3000) console.warn(`[frea email] handoff to Resend took ${ms}ms`);
       return result;
     } catch (err) {
+      lastSend = { at: new Date().toISOString(), ms: Date.now() - startedAt, failed: true };
       lastSendError = { at: new Date().toISOString(), error: err.message };
       throw err;
     }

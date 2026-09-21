@@ -4351,9 +4351,16 @@ function openBookingModal(mentorId) {
     <div style="margin-top: 20px;">
       ${alreadyVerified ? `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;">
-          <div style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #15803d;">
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #15803d; flex-wrap: wrap;">
             <span>${ICONS.shieldTick}</span>
             <span>Booking as <strong>${escapeHtml(sessionEmail)}</strong></span>
+            <!-- Sessions last thirty days, so the signed-in address is often
+                 not the one the person in front of the screen expects —
+                 someone else's on a shared machine, or an old account of
+                 their own. Say whose it is, and offer a way out of it. -->
+            <button type="button"
+                    style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;"
+                    onclick="window.studentSignOut()">not you?</button>
           </div>
           <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
         </div>
