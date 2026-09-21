@@ -48,7 +48,9 @@ import {
   clearSession,
   fetchMe,
   signOut,
-  starMentor
+  starMentor,
+  signInWithMicrosoft,
+  microsoftAuthAvailable
 } from './api.js';
 import { ICONS } from './icons.js';
 import { applyRouteMeta } from './seo.js';
@@ -2372,6 +2374,96 @@ async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
 }
 window.handleDocumentFileSelect = handleDocumentFileSelect;
 
+
+// ─── Sign in with Microsoft ─────────────────────────────
+//
+// Roughly four in five .ac.uk addresses are filtered by Microsoft or a gateway
+// in front of it, which is where multi-minute verification codes come from.
+// Signing in through the university's own tenant skips the inbox entirely, so
+// this is offered first and the emailed code becomes the fallback — not the
+// other way round.
+
+let MS_AUTH_AVAILABLE = false;
+
+/** Asked once at boot so every later render can decide synchronously. */
+async function detectMicrosoftAuth() {
+  try {
+    MS_AUTH_AVAILABLE = await microsoftAuthAvailable();
+  } catch (_) {
+    MS_AUTH_AVAILABLE = false;
+  }
+}
+
+function microsoftAuthReady() {
+  return MS_AUTH_AVAILABLE;
+}
+
+/**
+ * The button plus the "or" divider, or nothing at all when Entra is not
+ * configured — so a deploy without the credentials looks exactly as it did.
+ */
+function microsoftSignInHtml({ id = 'ms-signin-btn', note = '' } = {}) {
+  if (!MS_AUTH_AVAILABLE) return '';
+  return `
+    <button type="button" id="${escapeHtml(id)}" class="ms-signin-btn">
+      <svg width="17" height="17" viewBox="0 0 23 23" aria-hidden="true">
+        <rect x="1" y="1" width="10" height="10" fill="#f25022"/>
+        <rect x="12" y="1" width="10" height="10" fill="#7fba00"/>
+        <rect x="1" y="12" width="10" height="10" fill="#00a4ef"/>
+        <rect x="12" y="12" width="10" height="10" fill="#ffb900"/>
+      </svg>
+      <span>sign in with your university account</span>
+    </button>
+    ${note ? `<div class="ms-signin-note">${escapeHtml(note)}</div>` : ''}
+    <div class="ms-signin-divider"><span>or verify by email</span></div>
+  `;
+}
+
+/**
+ * Wires the button rendered above.
+ *
+ * `onSuccess` runs once the session exists. Errors are shown in place rather
+ * than thrown: the email form is still sitting right below, and a student
+ * whose tenant blocks third-party apps needs to be pointed at it, not left
+ * with a dead button.
+ */
+function wireMicrosoftSignIn({ id = 'ms-signin-btn', errorElId = null, onSuccess } = {}) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+
+  const original = btn.innerHTML;
+  btn.addEventListener('click', async () => {
+    const errorEl = errorElId ? document.getElementById(errorElId) : null;
+    if (errorEl) errorEl.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<span>opening sign-in…</span>';
+
+    try {
+      // Called synchronously inside the handler: the popup only opens while
+      // the click is still being handled.
+      const result = await signInWithMicrosoft();
+      trackEvent('microsoft_signin_success', { domain: String(result.email || '').split('@').pop() });
+      await refreshEntitlements();
+      updateNavbarMentorStatus();
+      showToast('Verified with your university account.');
+      if (typeof onSuccess === 'function') onSuccess(result);
+    } catch (err) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+      // Closing the window is an ordinary cancel, not a failure worth shouting
+      // about.
+      if (/closed before it finished/i.test(err.message)) return;
+      trackEvent('microsoft_signin_failed', { reason: err.message });
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = err.message;
+      } else {
+        showToast(err.message);
+      }
+    }
+  });
+}
+
 // ─── Email verification & session ─────
 //
 // Verifying an .ac.uk address opens a server session. That session is what
@@ -2452,6 +2544,7 @@ function renderVerificationEmailStep(actionName) {
       frea is free for verified UK students. Enter your university email ending in
       <strong>.ac.uk</strong> to ${escapeHtml(actionName || 'continue')}.
     </p>
+    ${microsoftSignInHtml({ id: 'ms-signin-verify' })}
     <div style="margin-bottom: 16px;">
       <input type="email" id="verify-email-input" class="mentor-form-input" placeholder="e.g. s123456@ed.ac.uk" style="text-align: center;" autocomplete="email">
       <div id="verify-email-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 8px; display: none;"></div>
@@ -2465,6 +2558,21 @@ function renderVerificationEmailStep(actionName) {
   `);
 
   openOverlay();
+
+  // Signing in through the tenant satisfies whatever this modal was opened
+  // to gate, so run that intent straight away rather than asking for a code
+  // the student no longer needs.
+  wireMicrosoftSignIn({
+    id: 'ms-signin-verify',
+    errorElId: 'verify-email-error',
+    onSuccess: () => {
+      const fn = window.__currentOnVerified;
+      window.__currentOnVerified = null;
+      if (typeof fn === 'function') fn();
+      else { closeModal(); renderPage(); }
+    }
+  });
+
   const input = document.getElementById('verify-email-input');
   if (input) {
     input.focus();
@@ -4324,6 +4432,23 @@ function openBookingModal(mentorId) {
 
   trackEvent('booking_modal_opened', { mentorId: mentor.id, mentorName: mentor.name, day: selectedDay, slot: selectedSlot });
 
+  renderBookingModal({ mentor, selectedDay, selectedSlot });
+
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+/**
+ * Paints the gate for the slot already chosen.
+ *
+ * Split out from `openBookingModal` so "not you?" can repaint it after ending
+ * the session without re-running slot selection or counting a second
+ * `booking_modal_opened`. The verified/unverified branch is decided here, on
+ * every paint, from the live session — which is what makes the repaint enough
+ * to move the student from "booking as ..." back to an empty email field.
+ */
+function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = false }) {
   // A student who has already verified skips straight to confirming.
   const alreadyVerified = isVerified();
   const sessionEmail = verifiedEmail() || '';
@@ -4355,17 +4480,17 @@ function openBookingModal(mentorId) {
             <span>${ICONS.shieldTick}</span>
             <span>Booking as <strong>${escapeHtml(sessionEmail)}</strong></span>
             <!-- Sessions last thirty days, so the signed-in address is often
-                 not the one the person in front of the screen expects —
+                 not the one the person in front of the screen expects --
                  someone else's on a shared machine, or an old account of
                  their own. Say whose it is, and offer a way out of it. -->
-            <button type="button"
-                    style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;"
-                    onclick="window.studentSignOut()">not you?</button>
+            <button type="button" id="booking-not-you"
+                    style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;">not you?</button>
           </div>
           <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
         </div>
         <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
       ` : `
+        ${microsoftSignInHtml({ id: 'ms-signin-booking' })}
         <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Your UK University Student Email:</label>
         <div class="modal__input-row">
           <input type="email" class="modal__input" id="booking-email" placeholder="e.g. s123456@ed.ac.uk or name@imperial.ac.uk">
@@ -4380,9 +4505,64 @@ function openBookingModal(mentorId) {
     </div>
   `;
 
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  // Wired here rather than inline: every new on*= handler is another reason
+  // the CSP still carries script-src 'unsafe-inline'.
+  const notYouBtn = document.getElementById('booking-not-you');
+  if (notYouBtn) {
+    notYouBtn.addEventListener('click', () => {
+      forgetBookingAccount({ mentor, selectedDay, selectedSlot, trigger: notYouBtn });
+    });
+  }
+
+  // Verified through the university tenant: the gate is satisfied, so repaint
+  // it in its confirmed state rather than sending them back to the email form.
+  wireMicrosoftSignIn({
+    id: 'ms-signin-booking',
+    errorElId: 'booking-error-msg',
+    onSuccess: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
+  });
+
+  // Only after "not you?". An unprompted focus on first open would pop the
+  // keyboard over the slot summary on a phone before it has been read.
+  if (focusEmail) {
+    const input = document.getElementById('booking-email');
+    if (input) input.focus();
+  }
+}
+
+/**
+ * "not you?" -- ends the session and hands the gate back empty.
+ *
+ * It has to do all three, because a student clicking this is telling us the
+ * address on screen is the wrong one: end the session on the server (the token
+ * is what authorises booking, so leaving it alive leaves the wrong person able
+ * to book), drop it locally, and repaint the gate so the field is empty and
+ * theirs to fill. It used to call studentSignOut, which navigates to the home
+ * page -- the address did go away, but so did the modal and the slot they had
+ * picked, which is not what the link offers.
+ *
+ * The chosen slot survives: they are changing who is booking, not what.
+ */
+async function forgetBookingAccount({ mentor, selectedDay, selectedSlot, trigger }) {
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.textContent = 'signing out...';
+  }
+
+  try {
+    await signOut();
+  } catch (_) {
+    // The session is going regardless -- a failed call to the server should
+    // not strand someone signed in on a machine they are trying to leave.
+  }
+  // signOut clears it too, but only on the path where its request resolved.
+  setSession(null);
+
+  trackEvent('booking_account_switched', { mentorId: mentor.id, day: selectedDay, slot: selectedSlot });
+
+  updateNavbarMentorStatus();
+  renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail: true });
+  showToast('Signed out. Enter your university email to carry on.');
 }
 
 async function confirmBooking(mentorId) {
@@ -7036,6 +7216,7 @@ async function init() {
   // Then reconcile with the server, in a fixed order. Mentors and the session
   // must land before resources, or a resource whose mentor has not arrived yet
   // is attributed to a synthesised stub and the portal can misattribute.
+  detectMicrosoftAuth();
   hydratePaymentConfig();
   await syncLiveMentors();
   await restoreSession();

@@ -244,6 +244,115 @@ spam. A verification code in spam is the same as no code.
 are more likely to be filtered. Send yourself a few, mark them *not spam*, and
 ramp gradually rather than emailing a thousand students on day one.
 
+### DMARC reporting — do not leave this off
+
+The record Resend generates is `v=DMARC1; p=none;` and nothing else. That
+publishes a policy and asks for **no reports**, so the only feed of what
+receivers actually do with our mail is switched off. Add `rua`:
+
+```
+v=DMARC1; p=none; rua=mailto:dmarc@joinfrea.com; fo=1; adkim=r; aspf=r
+```
+
+Microsoft and Google both send daily aggregate XML to that address, per
+receiving domain — which is the only free, per-university view of whether mail
+is passing authentication and being accepted. It is the data you want *before*
+anyone asks why a code was slow, because it cannot be backfilled.
+
+`fo=1` asks for a failure report when either SPF or DKIM fails, rather than
+only when both do. `adkim=r` / `aspf=r` are the defaults spelled out: relaxed
+alignment, which is what makes `send.joinfrea.com` (Resend's envelope domain)
+align with `joinfrea.com` in the From header.
+
+Leave `p=none` for now. Moving to `p=quarantine` measurably helps reputation
+with Microsoft and Google, but only do it once a few weeks of `rua` reports
+show nothing legitimate is failing — an enforced policy on a misconfiguration
+you cannot yet see means silently losing mail you currently deliver.
+
+**Deliverability to `.ac.uk` is dominated by one receiver.** Of 24 UK
+universities surveyed, 15 point MX straight at Microsoft (`mail.protection.
+outlook.com`), 4 sit behind a commercial filtering gateway (Proofpoint,
+Trend Micro) that itself usually fronts Microsoft 365, 3 self-host, and 2 use
+Google. So roughly four in five student addresses are filtered by Microsoft or
+a security gateway, both of which defer unfamiliar low-volume senders and
+detonate links before release. That is the cause of multi-minute verification
+codes, and it is downstream of us — see `/api/admin/mail-log` for our own
+hand-off times, which should stay well under a second.
+
+---
+
+## 6b. Sign in with Microsoft (Entra ID)
+
+Optional, and the single biggest lever on verification speed. Of 24 UK
+universities surveyed, 15 point MX straight at Microsoft and 4 more sit behind
+a filtering gateway that fronts Microsoft 365 — so for about four in five
+students, the verification email is judged by Exchange Online. It defers
+unfamiliar low-volume senders and detonates links before releasing them, which
+is where multi-minute codes come from. Signing in through the student's own
+tenant never touches an inbox.
+
+It is also a **stronger** proof than the emailed code. Entra will not let a
+tenant issue user principal names on a domain it has not verified ownership of,
+so a UPN ending in `.ac.uk` is Microsoft asserting that the university controls
+that domain and that this user is theirs. The emailed code only ever proved
+that somebody could read one inbox.
+
+Email codes stay as the fallback and must not be removed: three of the 24
+self-host their mail (Edinburgh, Glasgow, St Andrews), and some tenants refuse
+third-party apps without an admin's consent.
+
+### Registering the app
+
+**portal.azure.com → Microsoft Entra ID → App registrations → New registration**
+
+| Field | Value |
+|---|---|
+| Name | `frea` |
+| Supported account types | **Accounts in any organizational directory (Any Microsoft Entra ID tenant — Multitenant)** |
+| Redirect URI | **Web** → `https://joinfrea.com/api/auth/microsoft/callback` |
+
+Multitenant is the whole point — single-tenant would only admit your own
+directory. Do **not** pick the option that also includes personal Microsoft
+accounts: the code requests the `organizations` authority precisely to keep
+outlook.com logins out, and mismatched settings fail confusingly.
+
+Then **Certificates & secrets → New client secret**. Copy the *Value*, not the
+Secret ID — the value is shown once and is unrecoverable afterwards. Note the
+expiry; Entra caps secrets at 24 months and a lapsed one fails every sign-in at
+once. Set a calendar reminder.
+
+From **Overview**, copy the *Application (client) ID*.
+
+### Railway variables
+
+```
+MS_CLIENT_ID=<Application (client) ID>
+MS_CLIENT_SECRET=<the secret Value>
+```
+
+`MS_REDIRECT_URI` is only needed when the callback is not
+`<PUBLIC_BASE_URL>/api/auth/microsoft/callback`. Whatever it resolves to must
+match a registered redirect URI **character for character** — Entra compares it
+as a string, and a trailing slash alone fails with `AADSTS50011`.
+
+For local work, register a second redirect URI of
+`http://localhost:5173/api/auth/microsoft/callback` on the same app.
+
+### Checking it
+
+`GET /api/auth/microsoft/status` reports `{ available: true }` once both
+variables are set, and the front end only draws the button when it does — so an
+unconfigured deploy looks exactly as it did before.
+
+### Admin consent
+
+Some university tenants block third-party apps until an administrator approves
+them. The student sees "needs admin approval" and the email fallback carries
+them. Completing **Microsoft Publisher Verification** (a verified MPN account,
+then Branding & properties → Publisher domain) makes that prompt far less
+likely and is worth doing before any campus push.
+
+
 ---
 
 ## 7. First deploy

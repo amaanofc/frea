@@ -60,8 +60,17 @@ import {
   feeRate,
   toggleStar,
   getStarCounts,
-  hasStarred
+  hasStarred,
+  markEmailVerified,
+  mailHandoffStats,
+  recentMailHandoffs
 } from './db.js';
+
+import {
+  microsoftConfigured,
+  buildAuthorizeUrl,
+  completeMicrosoftLogin
+} from './oauth.js';
 
 import {
   attachSession,
@@ -429,6 +438,100 @@ app.post('/api/auth/send-verification',
     email: cleanEmail,
     // Ethereal preview link in dev only — never the code itself.
     previewUrl: emailResult?.previewUrl || null
+  });
+}));
+
+// ─── Sign in with Microsoft ─────────────────────────────
+
+/**
+ * Whether to offer the button at all. The front end asks before drawing it, so
+ * an unconfigured deploy simply shows the email form as it always did.
+ */
+app.get('/api/auth/microsoft/status', (req, res) => {
+  res.json({ success: true, data: { available: microsoftConfigured() } });
+});
+
+/** Step one: hand the browser to Microsoft. */
+app.get('/api/auth/microsoft/start', (req, res) => {
+  if (!microsoftConfigured()) {
+    return res.status(503).json({ success: false, error: 'Microsoft sign-in is not configured.' });
+  }
+  const { url } = buildAuthorizeUrl({ returnTo: null });
+  res.redirect(url);
+});
+
+/**
+ * Step two: Microsoft sends the student back here.
+ *
+ * This runs in a popup the front end opened, so it answers with a small page
+ * that posts the result to the opener and closes itself. The alternative — a
+ * full-page redirect — would take the booking modal and the slot the student
+ * had chosen down with it, which is the same failure "not you?" used to have.
+ *
+ * Errors render here rather than throwing: a popup that dies on a stack trace
+ * leaves the opener waiting forever with no way to know why.
+ */
+app.get('/api/auth/microsoft/callback', wrap(async (req, res) => {
+  const { code, state, error: oauthError, error_description: oauthDesc } = req.query;
+
+  const reply = (payload) => {
+    // The origin is ours and fixed. postMessage to '*' would broadcast a live
+    // session token to whatever else happens to be listening.
+    const origin = (process.env.PUBLIC_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    res.type('html').send(`<!doctype html>
+<meta charset="utf-8">
+<title>Signing you in…</title>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; text-align: center; color: #334155;">
+<p>${payload.ok ? 'Signed in — you can close this window.' : 'Sign-in failed. You can close this window and try your email instead.'}</p>
+<script>
+  // JSON.stringify of a server-built object, into a script context: the token
+  // is hex and the message is ours, but this is still the one place where a
+  // stray quote would end the script early.
+  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  try { if (window.opener) window.opener.postMessage({ source: 'frea-microsoft-auth', ...payload }, ${JSON.stringify(origin)}); } catch (e) {}
+  window.close();
+</script>
+</body>`);
+  };
+
+  // The student pressed cancel, or the tenant refused the app.
+  if (oauthError) {
+    console.warn('[oauth] returned error:', oauthError, oauthDesc);
+    return reply({ ok: false, error: 'Sign-in was cancelled or refused by your university.' });
+  }
+
+  if (!code || !state) {
+    return reply({ ok: false, error: 'Microsoft did not return a usable sign-in.' });
+  }
+
+  let result;
+  try {
+    result = await completeMicrosoftLogin({ code, state });
+  } catch (err) {
+    return reply({ ok: false, error: err.message });
+  }
+
+  // Same rule as the emailed code: this platform is for UK students, and an
+  // Entra login from a non-.ac.uk tenant is still not one.
+  if (!result.email.endsWith('.ac.uk') && !isAdminEmail(result.email)) {
+    return reply({
+      ok: false,
+      error: `Signed in as ${result.email}, which is not a UK university (.ac.uk) address.`
+    });
+  }
+
+  markEmailVerified(result.email);
+  const mentor = findMentorByEmail(result.email);
+  const session = createSession({ email: result.email, mentorId: mentor?.id || null });
+
+  console.log(`[oauth] Microsoft sign-in: ${result.email.split('@').pop()} tenant ${result.tenantId}`);
+
+  reply({
+    ok: true,
+    email: result.email,
+    sessionToken: session.token,
+    isMentor: Boolean(mentor),
+    isAdmin: session.isAdmin
   });
 }));
 
@@ -1348,6 +1451,29 @@ app.post('/api/reports', requireVerified, rateLimit({ max: 10, windowMs: 60_000,
 // which is what the download route is for. Point a scheduled job at it:
 //
 //   curl -fsS -H "Authorization: Bearer $FREA_ADMIN_TOKEN" //        https://joinfrea.com/api/admin/backup -o frea-$(date +%F).json
+
+/**
+ * Mail hand-off diagnostics.
+ *
+ * Admin-only because it lists recipient domains and provider message ids.
+ * Neither identifies a student on its own, but together they map who has been
+ * signing up from where, which is not something to serve anonymously.
+ *
+ * This survives deploys, unlike the in-memory `lastSend` on /api/health, so a
+ * report of slow mail can be checked after the fact rather than only while the
+ * sending process is still alive.
+ */
+app.get('/api/admin/mail-log', requireAdmin, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '50', 10) || 50, 500);
+  res.json({
+    success: true,
+    data: {
+      status: mailStatus(),
+      handoff: mailHandoffStats(),
+      recent: recentMailHandoffs(limit)
+    }
+  });
+});
 
 app.get('/api/admin/backups', requireAdmin, (req, res) => {
   res.json({ success: true, data: { directory: BACKUP_DIR, snapshots: listBackups() } });

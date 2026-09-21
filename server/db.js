@@ -287,6 +287,8 @@ function migrate(db) {
   db.sessions = db.sessions || [];
   db.suggestions = db.suggestions || [];
   db.reports = db.reports || [];
+  db.mailLog = Array.isArray(db.mailLog) ? db.mailLog : [];
+  db.oauthStates = Array.isArray(db.oauthStates) ? db.oauthStates : [];
   db.stats = db.stats || {};
   if (typeof db.stats.totalBookings !== 'number') db.stats.totalBookings = 0;
   if (typeof db.stats.averageRating !== 'number') db.stats.averageRating = 4.9;
@@ -998,6 +1000,25 @@ export function verifyEmailToken(token) {
   });
 
   saveDb(db);
+  return { success: true, email: cleanEmail };
+}
+
+/**
+ * Records an address as verified without an emailed code.
+ *
+ * The code path reaches the same list via verifyEmailCode / verifyEmailToken.
+ * Microsoft sign-in proves the address a different way — the tenant owns the
+ * domain and vouches for the user — so it lands here instead, and everything
+ * downstream that asks "is this address verified" keeps working unchanged.
+ */
+export function markEmailVerified(email) {
+  const db = loadDb();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return { success: false };
+  if (!db.verifiedEmails.includes(cleanEmail)) {
+    db.verifiedEmails.push(cleanEmail);
+    saveDb(db);
+  }
   return { success: true, email: cleanEmail };
 }
 
@@ -1714,4 +1735,153 @@ export function canMentorSell(mentorId) {
   const db = loadDb();
   const mentor = db.mentors.find(m => m.id === parseInt(mentorId));
   return Boolean(mentor && mentor.stripeAccountId && mentor.payoutsEnabled);
+}
+
+// ─── Mail hand-off log ──────────────────────────────────
+
+/**
+ * How many sends to keep. Each entry is a few dozen bytes and the whole
+ * document is rewritten on every save, so this is a cap on write cost as much
+ * as on disk.
+ */
+const MAIL_LOG_MAX = 500;
+
+/**
+ * Records one hand-off to the mail provider.
+ *
+ * This existed only in memory, which meant it was wiped by every deploy — and
+ * a deploy is exactly what tends to follow someone reporting that mail was
+ * slow. By the time anyone looked, the number was gone. Persisting it is what
+ * makes "was it us?" answerable after the fact instead of only while the
+ * process that sent it is still running.
+ *
+ * Recipient DOMAIN only, never the address. The question this answers is
+ * whether a given university is slower than the rest, and the local part
+ * cannot help with that while being the part that identifies a student.
+ *
+ * `messageId` is the provider's handle for the message. It was being thrown
+ * away, which left "I never got my code" with nothing to look up.
+ */
+export function recordMailHandoff({ to, kind, ms, ok, messageId = null, error = null }) {
+  try {
+    const domain = String(to || '').split('@').pop().trim().toLowerCase() || 'unknown';
+    const db = loadDb();
+    db.mailLog = Array.isArray(db.mailLog) ? db.mailLog : [];
+    db.mailLog.push({
+      at: new Date().toISOString(),
+      domain,
+      kind: kind || 'unknown',
+      ms,
+      ok: Boolean(ok),
+      messageId,
+      // Provider text only: it names the rejection, not the recipient.
+      ...(error ? { error: String(error).slice(0, 200) } : {})
+    });
+    if (db.mailLog.length > MAIL_LOG_MAX) {
+      db.mailLog = db.mailLog.slice(-MAIL_LOG_MAX);
+    }
+    saveDb(db);
+  } catch (err) {
+    // Never let bookkeeping fail a send that already succeeded.
+    console.warn('[db] could not record mail hand-off:', err.message);
+  }
+}
+
+/**
+ * Hand-off timings grouped by recipient domain, worst median first.
+ *
+ * Our hand-off is to the provider, not to the university, so an even spread
+ * here is the expected result and is itself the finding: it places the delay
+ * downstream of us. A single domain standing out means the provider is
+ * rejecting or stalling on that domain specifically, which is the one part of
+ * this we can act on directly.
+ */
+export function mailHandoffStats() {
+  const db = loadDb();
+  const log = Array.isArray(db.mailLog) ? db.mailLog : [];
+  if (!log.length) return { sends: 0, domains: [] };
+
+  const byDomain = new Map();
+  for (const entry of log) {
+    if (!byDomain.has(entry.domain)) byDomain.set(entry.domain, []);
+    byDomain.get(entry.domain).push(entry);
+  }
+
+  const median = (nums) => {
+    const sorted = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  };
+
+  const domains = [...byDomain.entries()].map(([domain, entries]) => {
+    const times = entries.map(e => e.ms).filter(n => typeof n === 'number');
+    return {
+      domain,
+      sends: entries.length,
+      failed: entries.filter(e => !e.ok).length,
+      medianMs: times.length ? median(times) : null,
+      maxMs: times.length ? Math.max(...times) : null,
+      lastAt: entries[entries.length - 1].at
+    };
+  }).sort((a, b) => (b.medianMs || 0) - (a.medianMs || 0));
+
+  const allTimes = log.map(e => e.ms).filter(n => typeof n === 'number');
+  return {
+    sends: log.length,
+    failed: log.filter(e => !e.ok).length,
+    medianMs: allTimes.length ? median(allTimes) : null,
+    since: log[0].at,
+    domains
+  };
+}
+
+/** Recent hand-offs, newest first — for tracing one report of a missing code. */
+export function recentMailHandoffs(limit = 50) {
+  const db = loadDb();
+  const log = Array.isArray(db.mailLog) ? db.mailLog : [];
+  return log.slice(-limit).reverse();
+}
+
+// ─── Microsoft sign-in, in-flight state ─────────────────
+
+/**
+ * One row per sign-in attempt, held between the redirect out to Microsoft and
+ * the callback coming back.
+ *
+ * Persisted rather than kept in memory because a Railway restart mid-flow
+ * would otherwise reject a perfectly good callback with "state not
+ * recognised", which reads to the student as the login being broken. Rows are
+ * single-use and short-lived, so the table stays tiny.
+ */
+export function saveOAuthState({ state, nonce, codeVerifier, returnTo = null, expiresAt }) {
+  const db = loadDb();
+  const now = Date.now();
+  db.oauthStates = (Array.isArray(db.oauthStates) ? db.oauthStates : [])
+    .filter(s => (s.expiresAt || 0) > now);
+  db.oauthStates.push({
+    state, nonce, codeVerifier, returnTo,
+    expiresAt: expiresAt || (now + 10 * 60 * 1000),
+    createdAt: new Date().toISOString()
+  });
+  saveDb(db);
+}
+
+/**
+ * Reads a state row and deletes it in the same step.
+ *
+ * Single use is the point: a replayed callback is how an intercepted code gets
+ * turned into a second session, so the row has to be gone before the code is
+ * exchanged, not after.
+ */
+export function consumeOAuthState(state) {
+  if (!state) return null;
+  const db = loadDb();
+  const now = Date.now();
+  const all = Array.isArray(db.oauthStates) ? db.oauthStates : [];
+  const row = all.find(s => s.state === state);
+  db.oauthStates = all.filter(s => s.state !== state && (s.expiresAt || 0) > now);
+  saveDb(db);
+  if (!row) return null;
+  if ((row.expiresAt || 0) <= now) return null;
+  return row;
 }

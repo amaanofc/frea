@@ -5,6 +5,7 @@
 import nodemailer from 'nodemailer';
 import { toLongDisplayDate, toDisplayTime } from './time.js';
 import { calendarLinks } from './ics.js';
+import { recordMailHandoff } from './db.js';
 
 let transporter = null;
 
@@ -84,8 +85,9 @@ export async function probeSmtp() {
   // key is valid and that 443 is open, without sending anything.
   if (usingResendApi()) {
     try {
+      const probeKey = resendReadKey() || resendApiKey();
       const res = await fetch('https://api.resend.com/domains', {
-        headers: { 'Authorization': `Bearer ${resendApiKey()}` },
+        headers: { 'Authorization': `Bearer ${probeKey}` },
         signal: AbortSignal.timeout(10_000)
       });
 
@@ -95,12 +97,20 @@ export async function probeSmtp() {
         apiProbe = { checked: true, ok: true };
         console.log('[frea email] Resend API reachable, key verified');
       } else if (res.status === 401 || res.status === 403) {
-        // Listing domains needs a full-access key. A sending-only key sends
-        // mail fine and is refused here, so this cannot be treated as broken
-        // — only as unverified. A real send is the only way to settle it.
-        apiProbe = { checked: true, ok: true, unverified: `key cannot list domains (HTTP ${res.status}) — fine for a sending-only key, but an invalid key looks identical here` };
-        console.warn(`[frea email] Resend API reachable; key could not list domains (HTTP ${res.status}).`);
-        console.warn('             Expected for a sending-only key. If sends fail with 401, the key is wrong.');
+        // Listing domains needs a key with read access. A sending-only key
+        // sends mail fine and is refused here, so on its own this cannot be
+        // treated as broken — only as unverified.
+        //
+        // With RESEND_READ_API_KEY set, that excuse is gone: the read key is
+        // the one being offered, and a 401 means it is genuinely wrong.
+        if (resendReadKey()) {
+          apiProbe = { checked: true, ok: false, error: `read key rejected (HTTP ${res.status})` };
+          console.error(`[frea email] RESEND_READ_API_KEY rejected (HTTP ${res.status}) — check the key.`);
+        } else {
+          apiProbe = { checked: true, ok: true, unverified: `key cannot list domains (HTTP ${res.status}) — expected for a sending-only key. Set RESEND_READ_API_KEY to remove this ambiguity.` };
+          console.warn(`[frea email] Resend API reachable; key could not list domains (HTTP ${res.status}).`);
+          console.warn('             Expected for a sending-only key. Set RESEND_READ_API_KEY to verify properly.');
+        }
       } else {
         apiProbe = { checked: true, ok: false, error: `HTTP ${res.status}` };
         console.error(`[frea email] Resend API error: HTTP ${res.status}`);
@@ -254,6 +264,20 @@ function resendApiKey() {
   return pass.startsWith('re_') ? pass : '';
 }
 
+/**
+ * A read-scoped key, if one is configured.
+ *
+ * The sending key is deliberately restricted — it answers 401
+ * "restricted_api_key" to every GET, including the domain check the boot
+ * probe makes, which is why that probe cannot tell a sending-only key from an
+ * invalid one. A separate read key resolves that ambiguity and is the only way
+ * to query delivery events, which is where the answer to "did it actually
+ * arrive" lives. Optional: without it everything works exactly as before.
+ */
+function resendReadKey() {
+  return (process.env.RESEND_READ_API_KEY || '').trim();
+}
+
 /** True when we should prefer the API over SMTP. */
 function usingResendApi() {
   const mode = transportMode();
@@ -332,9 +356,17 @@ export function htmlToText(html) {
     .trim();
 }
 
-async function send(mailOptions) {
+/**
+ * `kind` labels the message in the hand-off log — "verification", "booking",
+ * and so on. Without it the log says a send was slow but not which template,
+ * and the verification code is the only one where latency actually costs a
+ * signup.
+ */
+async function send(mailOptions, kind = 'unknown') {
   // Never send HTML on its own.
   if (!mailOptions.text) mailOptions = { ...mailOptions, text: htmlToText(mailOptions.html) };
+  const recipient = Array.isArray(mailOptions.to) ? mailOptions.to[0] : mailOptions.to;
+
   if (usingResendApi()) {
     const startedAt = Date.now();
     try {
@@ -343,14 +375,18 @@ async function send(mailOptions) {
       lastSend = { at: new Date().toISOString(), ms };
       lastSendError = null;
       if (ms > 3000) console.warn(`[frea email] handoff to Resend took ${ms}ms`);
+      recordMailHandoff({ to: recipient, kind, ms, ok: true, messageId: result.messageId });
       return result;
     } catch (err) {
-      lastSend = { at: new Date().toISOString(), ms: Date.now() - startedAt, failed: true };
+      const ms = Date.now() - startedAt;
+      lastSend = { at: new Date().toISOString(), ms, failed: true };
       lastSendError = { at: new Date().toISOString(), error: err.message };
+      recordMailHandoff({ to: recipient, kind, ms, ok: false, error: err.message });
       throw err;
     }
   }
 
+  const startedAt = Date.now();
   const mailer = await getEmailTransporter();
   const info = await mailer.sendMail({ from: mailFrom(), ...mailOptions });
   let previewUrl = null;
@@ -358,6 +394,9 @@ async function send(mailOptions) {
     previewUrl = nodemailer.getTestMessageUrl(info) || null;
     if (previewUrl) console.log(`[frea email] Preview: ${previewUrl}`);
   } catch (_) { /* not an Ethereal transport */ }
+  recordMailHandoff({
+    to: recipient, kind, ms: Date.now() - startedAt, ok: true, messageId: info.messageId
+  });
   return { messageId: info.messageId, previewUrl };
 }
 
@@ -417,7 +456,7 @@ export async function sendVerificationEmail({ email, code, token, universityName
       </div>
       <p style="font-size: 12.5px; color: #94a3b8; margin-top: 18px;">If you didn't request this, you can safely ignore this email — nothing will happen.</p>
     `),
-  });
+  }, 'verification');
 }
 
 // ─── Booking confirmations ──────────────────────────────
@@ -480,7 +519,7 @@ export async function sendBookingConfirmationEmail({ booking, mentor, icsContent
       content: icsContent,
       contentType: 'text/calendar; charset=utf-8; method=REQUEST',
     }],
-  });
+  }, 'booking-confirmation');
 }
 
 /** The same session, sent to the mentor so it lands in their calendar too. */
@@ -514,7 +553,7 @@ export async function sendMentorBookingNotification({ booking, mentor, icsConten
       content: icsContent,
       contentType: 'text/calendar; charset=utf-8; method=REQUEST',
     }],
-  });
+  }, 'mentor-booking-notice');
 }
 
 /** Tells the other party when one side cancels. */
@@ -539,7 +578,7 @@ export async function sendCancellationEmail({ booking, mentor, icsContent, to })
       content: icsContent,
       contentType: 'text/calendar; charset=utf-8; method=CANCEL',
     }] : [],
-  });
+  }, 'cancellation');
 }
 
 // ─── Purchases ──────────────────────────────────────────
@@ -574,7 +613,7 @@ export async function sendPurchaseReceiptEmail({ order, resource }) {
         <strong>free 20-minute calls</strong> on frea.
       </p>
     `),
-  });
+  }, 'purchase-receipt');
 }
 
 /** Tells the mentor they made a sale. */
@@ -597,5 +636,5 @@ export async function sendSaleNotificationEmail({ order, mentor }) {
         See all your sales in your <a href="${baseUrl()}/mentor-dashboard" style="color: #ff6f1e; font-weight: 700;">mentor portal</a>.
       </p>
     `),
-  });
+  }, 'sale-notice');
 }
