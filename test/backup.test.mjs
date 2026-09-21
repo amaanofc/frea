@@ -95,6 +95,21 @@ test('a snapshot is restorable as the database', () => {
   assert.equal(restored.bookings.length, 1);
 });
 
+test('a skip is distinguishable from a write', () => {
+  // The skip result carries the name of the snapshot it matched, so a caller
+  // testing only for `name` logs "backup written" every interval on a quiet
+  // platform — the log says the thing you most want to be true while nothing
+  // is happening.
+  write({ mentors: [{ id: 1 }], bookings: [], marker: 'settled' });
+  const written = takeBackup();
+  assert.ok(written.name && !written.skipped, 'a real write has no skipped flag');
+  assert.equal(typeof written.size, 'number', 'a real write reports its size');
+
+  const skipped = takeBackup();
+  assert.ok(skipped.skipped, 'an unchanged database reports skipped');
+  assert.equal(skipped.size, undefined, 'a skip has no size — it wrote nothing');
+});
+
 test('snapshots leave no temp files behind', () => {
   const stray = fs.readdirSync(BACKUP_DIR).filter(n => n.endsWith('.tmp'));
   assert.deepEqual(stray, []);

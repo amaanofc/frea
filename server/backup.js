@@ -113,7 +113,8 @@ function prune() {
 export function startBackupSchedule() {
   try {
     const first = takeBackup();
-    if (first.name) console.log(`[backup] ${first.name} (${first.size} bytes)`);
+    if (first.skipped) console.log(`[backup] no change since ${first.name} — nothing written`);
+    else if (first.name) console.log(`[backup] ${first.name} (${first.size} bytes)`);
   } catch (err) {
     console.warn('[backup] initial snapshot failed:', err.message);
   }
@@ -121,8 +122,15 @@ export function startBackupSchedule() {
   const timer = setInterval(() => {
     try {
       const result = takeBackup();
-      if (result.name) {
-        console.log(`[backup] ${result.name}${result.pruned ? ` — pruned ${result.pruned}` : ''}`);
+
+      // A skip carries the name of the snapshot it matched, so testing for
+      // `name` alone reported "backup written" every interval on a quiet
+      // platform — a log that says the thing you most want to be true, while
+      // nothing is happening. Say which it was.
+      if (result.skipped) {
+        console.log(`[backup] no change since ${result.name} — nothing written`);
+      } else if (result.name) {
+        console.log(`[backup] ${result.name} (${result.size} bytes)${result.pruned ? ` — pruned ${result.pruned}` : ''}`);
       }
     } catch (err) {
       console.warn('[backup] snapshot failed:', err.message);
