@@ -15,6 +15,8 @@ import {
   toDisplayTime,
   isCanonicalDate,
   isPastDate,
+  isSlotPast,
+  toDisplayTimeRange,
   dayIndexFor,
   ukTimezoneLabel,
   DAY_SHORT,
@@ -477,12 +479,34 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
     // A day in the past is never bookable, however the mentor's rota reads.
     const past = isPastDate(dateStr);
 
-    const availableSlots = past ? [] : recurringSlots.filter(slot => {
-      const isBooked = bookings.some(
+    /**
+     * Every slot on the rota, with the reason it cannot be taken.
+     *
+     * Previously only the bookable ones came back, so a day that was fully
+     * booked and a day the mentor never offered looked identical — an empty
+     * list — and today's elapsed slots were not filtered at all, because the
+     * only check was on the calendar date. A student could book 2pm at 5pm.
+     *
+     * Returning the whole rota with `booked` / `passed` lets the calendar grey
+     * out what has gone rather than silently dropping it, which is the
+     * difference between "nothing here" and "you have just missed these".
+     */
+    const slotDetail = recurringSlots.map(slot => {
+      const booked = bookings.some(
         b => b.date === dateStr && b.time === slot && b.status !== 'cancelled'
       );
-      return !isBooked;
+      const passed = past || isSlotPast(dateStr, slot);
+      return {
+        time: slot,
+        display: toDisplayTime(slot),
+        range: toDisplayTimeRange(slot),
+        booked,
+        passed,
+        bookable: !booked && !passed
+      };
     });
+
+    const availableSlots = slotDetail.filter(s => s.bookable).map(s => s.time);
 
     daysResult.push({
       date: dateStr,
@@ -493,18 +517,23 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
       isPast: past,
       slots: availableSlots,
       slotsDisplay: availableSlots.map(toDisplayTime),
+      slotDetail,
       hasSlots: availableSlots.length > 0,
-      slotCount: availableSlots.length
+      slotCount: availableSlots.length,
+      // Distinguishes "the mentor works today but it has all gone" from "the
+      // mentor does not work today at all".
+      rotaCount: slotDetail.length
     });
 
-    availableSlots.forEach(slot => {
+    slotDetail.filter(s => s.bookable).forEach(s => {
       allOpenSlots.push({
         date: dateStr,
         displayDate,
         dayOfWeek: dayOfWeekStr,
         dayNumber: day,
-        time: slot,
-        timeDisplay: toDisplayTime(slot),
+        time: s.time,
+        timeDisplay: s.display,
+        timeRange: s.range,
         slotBadge: '20-min video call'
       });
     });
@@ -555,6 +584,14 @@ export function createBooking({ mentorId, studentEmail, date, time }) {
   }
   if (isPastDate(canonicalDate)) {
     throw new Error('That date has already passed. Please choose an upcoming slot.');
+  }
+
+  // The date check alone let a stale calendar book a slot that had already
+  // started — open the page at nine, book the two o'clock at five, and the
+  // server agreed. A page left open for hours is the normal case, not the
+  // exotic one, so this has to be enforced here rather than only in the UI.
+  if (isSlotPast(canonicalDate, canonicalTime)) {
+    throw new Error('That slot has already started. Please choose a later one.');
   }
 
   const db = loadDb();

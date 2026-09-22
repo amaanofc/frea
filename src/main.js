@@ -4497,22 +4497,36 @@ function renderCalendarDOM() {
   contentHtml += `</div>`;
 
   // Slot Selection Section
-  if (selectedDayObj && selectedDayObj.hasSlots) {
+  // The whole rota for the day, not just what is left. A slot that has been
+  // taken or has already started is shown greyed rather than dropped, so the
+  // student can see the day had five slots and they have missed three —
+  // which reads very differently from an empty list.
+  const rota = selectedDayObj?.slotDetail || [];
+  if (selectedDayObj && rota.length) {
     contentHtml += `
       <div class="frea-cal__slots-wrap">
         <div class="frea-cal__slots-header">
           <div class="frea-cal__slots-title">
-            Open slots for ${selectedDayObj.displayDate}
+            Slots for ${escapeHtml(selectedDayObj.displayDate)}
           </div>
-          <span class="frea-cal__slots-sub">select a 20-min session (BST)</span>
+          <span class="frea-cal__slots-sub">${selectedDayObj.slotCount} of ${rota.length} still open · 20-min sessions (UK time)</span>
         </div>
         <div class="frea-cal__chips">
-          ${selectedDayObj.slots.map(slot => {
-      const isSlotSelected = calendarState.selectedSlot === slot && calendarState.selectedDate === selectedDayObj.date;
-      // The chip carries the canonical "HH:MM" and shows the friendly form.
+          ${rota.map(s => {
+      const isSlotSelected = calendarState.selectedSlot === s.time && calendarState.selectedDate === selectedDayObj.date;
+      // Unbookable chips stay in the list but are inert and labelled with
+      // the reason, so "gone" and "never offered" cannot be confused.
+      if (!s.bookable) {
+        return `
+              <span class="frea-cal__chip frea-cal__chip--gone" title="${s.booked ? 'Already booked' : 'This slot has already started'}">
+                <span>${escapeHtml(s.range)}</span>
+                <span class="frea-cal__chip-reason">${s.booked ? 'booked' : 'gone'}</span>
+              </span>
+            `;
+      }
       return `
-              <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${slot}', '${selectedDayObj.date}', '${selectedDayObj.displayDate}')">
-                <span>${toDisplayTime(slot)}</span>
+              <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${s.time}', '${selectedDayObj.date}', '${escapeHtml(selectedDayObj.displayDate)}')">
+                <span>${escapeHtml(s.range)}</span>
               </button>
             `;
     }).join('')}

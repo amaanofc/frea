@@ -175,6 +175,60 @@ export function slotToUtcRange(canonicalDate, canonicalTime, durationMinutes = S
   return { start, end, offsetMinutes };
 }
 
+/**
+ * How close to a slot's start we stop letting it be booked.
+ *
+ * Zero would technically work, but a student booking a call that begins in
+ * ninety seconds gets a mentor who has had no notice and an invite that lands
+ * after the call should have started. Ten minutes is short enough to still
+ * feel same-day and long enough for both sides to see the email.
+ */
+export const BOOKING_LEAD_MINUTES = 10;
+
+/**
+ * Has this slot's start already gone by — or is it too soon to book?
+ *
+ * `isPastDate` only ever compared calendar days, so every slot on the current
+ * day stayed open no matter what the clock said: at 5pm the 2pm slot was
+ * still offered, still bookable, and produced a confirmed booking for a call
+ * three hours in the past. This compares the actual instant, resolved through
+ * London's offset, so BST and GMT both behave.
+ */
+export function isSlotPast(canonicalDate, canonicalTime, leadMinutes = BOOKING_LEAD_MINUTES) {
+  if (!isCanonicalDate(canonicalDate)) return true;
+  const time = toCanonicalTime(canonicalTime);
+  if (!time) return true;
+  const { start } = slotToUtcRange(canonicalDate, time);
+  return start.getTime() <= Date.now() + leadMinutes * 60_000;
+}
+
+/**
+ * "14:00" -> "2:00 – 2:20 PM".
+ *
+ * Sessions are twenty minutes but only the start was ever shown, so a rota of
+ * hourly starts read as "2 PM" and left the student guessing whether they had
+ * booked the hour, the half hour, or something else. Showing the span is the
+ * difference between knowing what you booked and assuming.
+ */
+export function toDisplayTimeRange(canonicalTime, durationMinutes = SESSION_MINUTES) {
+  const start = toCanonicalTime(canonicalTime);
+  if (!start) return String(canonicalTime || '');
+
+  const [h, m] = start.split(':').map(Number);
+  const endTotal = h * 60 + m + durationMinutes;
+  const end = `${String(Math.floor(endTotal / 60) % 24).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
+
+  const startLabel = toDisplayTime(start);
+  const endLabel = toDisplayTime(end);
+  // "2:00 – 2:20 PM" rather than "2:00 PM – 2:20 PM" when both sit in the
+  // same half of the day; the repeated meridiem is just noise.
+  const startMeridiem = startLabel.slice(-2);
+  const endMeridiem = endLabel.slice(-2);
+  return startMeridiem === endMeridiem
+    ? `${startLabel.slice(0, -3)} – ${endLabel}`
+    : `${startLabel} – ${endLabel}`;
+}
+
 /** Human timezone label for a given date (BST in summer, GMT in winter). */
 export function ukTimezoneLabel(canonicalDate) {
   const { offsetMinutes } = slotToUtcRange(canonicalDate, '12:00');

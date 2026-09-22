@@ -5362,3 +5362,30 @@ body {
   margin-top: 9px;
   text-align: center;
 }
+
+/* ─── Slots that can no longer be taken ────────────────── */
+/*
+ * Shown rather than removed. A day whose slots have all gone used to render
+ * as an empty list, identical to a day the mentor never worked — so a student
+ * could not tell "you have just missed these" from "there was never anything
+ * here". Greyed and inert, with the reason spelled out.
+ */
+.frea-cal__chip--gone {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  user-select: none;
+}
+
+.frea-cal__chip--gone .frea-cal__chip-reason {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  opacity: 0.8;
+}
