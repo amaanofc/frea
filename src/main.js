@@ -1106,10 +1106,10 @@ function renderBecomeMentor() {
           </div>
 
           <div class="mentor-form-group">
-            <label class="mentor-form-label">Official Student Email <span>* (must end in .ac.uk)</span></label>
-            <input type="email" class="mentor-form-input" id="bm-email" required placeholder="e.g. yourname@imperial.ac.uk or s123456@ed.ac.uk" oninput="window.handleMentorEmailInput(this.value)">
+            <label class="mentor-form-label">Where should we send booking notices? <span>*</span></label>
+            <input type="email" class="mentor-form-input" id="bm-email" required placeholder="e.g. you@gmail.com" oninput="window.handleMentorEmailInput(this.value)">
             <div id="bm-uni-detect-badge" style="display: none;"></div>
-            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">We use .ac.uk verification to keep the platform free from commercial recruiters.</span>
+            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Your university already verified you, so this can be any inbox you actually read — a personal one usually arrives faster than a university address.</span>
           </div>
 
           <!-- LinkedIn Verification URL -->
@@ -2974,9 +2974,12 @@ async function handleBecomeMentorSubmit(e) {
   const submitBtn = e.target.querySelector('button[type="submit"]');
   clearFormError('bm-form-error');
 
-  // Strict .ac.uk validation
-  if (!email || !email.endsWith('.ac.uk')) {
-    showFormError('bm-form-error', 'Please use your university email, ending in .ac.uk — for example s123456@ed.ac.uk.', 'bm-email');
+  // Shape only. The university proved who this is before the form opened;
+  // this address is just where booking notices go, and requiring .ac.uk
+  // would send them straight back into the filtering that made mail
+  // unusable in the first place.
+  if (!email || !/^[^@s]+@[^@s]+.[^@s]+$/.test(email)) {
+    showFormError('bm-form-error', 'Please enter a valid email address we can send booking notices to.', 'bm-email');
     document.getElementById('bm-email')?.focus();
     return;
   }
@@ -5546,6 +5549,18 @@ window.mentorSignOut = mentorSignOut;
 
 let mentorLoginPendingEmail = '';
 
+/**
+ * Mentors sign in the same way students do: through their university.
+ *
+ * This page used to send a six-digit code to a .ac.uk address, which is
+ * exactly the path that did not work — Proofpoint and its equivalents were
+ * accepting those messages and delivering them nowhere. A mentor locked out
+ * of their own calendar and earnings by a filter they cannot see is worse
+ * than a student who cannot book.
+ *
+ * The university's pseudonym owns the profile, so signing in restores it
+ * whatever address they have since chosen for their mail.
+ */
 function renderMentorLogin() {
   return `
     <div class="mentor-login-page" style="min-height: 75vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px;">
@@ -5553,68 +5568,53 @@ function renderMentorLogin() {
         <div style="width: 58px; height: 58px; border-radius: 14px; background: #fff7ed; border: 2px solid var(--color-marker-orange); color: var(--color-marker-orange); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; font-size: 26px;">
           🔑
         </div>
-        <span class="doc-badge doc-badge--free" style="margin-bottom: 8px;">Senior Mentor Security Portal</span>
         <h1 style="font-size: 28px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin: 6px 0 10px 0;">
           mentor sign in
         </h1>
         <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 24px;">
-          Sign in to your private senior dashboard using your official university email to manage your 1-on-1 call slots, achievements, and playbooks.
+          Sign in with your university to reach your availability, bookings and earnings.
         </p>
-
-        <div id="mentor-login-step-email">
-          <div class="mentor-form-group" style="text-align: left; margin-bottom: 16px;">
-            <label class="mentor-form-label" style="font-size: 13px;">Your University .ac.uk Email</label>
-            <input type="email" id="mentor-login-email-input" class="mentor-form-input" placeholder="e.g. aanya@imperial.ac.uk" style="padding: 12px 14px; font-size: 15px;" onkeydown="if(event.key==='Enter') window.sendMentorLoginOTP()">
-            <div id="mentor-login-email-error" style="color: #ef4444; font-size: 12.5px; margin-top: 6px; display: none;"></div>
-          </div>
-
-          <button type="button" id="mentor-send-otp-btn" class="pill-btn pill-btn--animated" style="width: 100%; padding: 13px;" onclick="window.sendMentorLoginOTP()">
-            <span class="pill-btn__inner" style="justify-content: center;">
-              <span>send one-time code (OTP)</span>
-              <span class="pill-btn__arrow">→</span>
-            </span>
-          </button>
-
-          <!-- Quick access chips for testing -->
-          <div style="margin-top: 24px; padding-top: 18px; border-top: 1px dashed rgba(23,23,23,0.15); text-align: left;">
-            <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">Quick Dev Accounts:</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('aanya@imperial.ac.uk')">Aanya (Imperial)</button>
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('callum@lse.ac.uk')">Callum (LSE)</button>
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('priya@ucl.ac.uk')">Priya (UCL)</button>
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('noah@bristol.ac.uk')">Noah (Bristol)</button>
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('oliver@ox.ac.uk')">Oliver (Oxford)</button>
-              <button type="button" class="filter-pill" style="font-size: 11px; padding: 4px 8px;" onclick="window.fillMentorLogin('sophia@ed.ac.uk')">Sophia (Edinburgh)</button>
-            </div>
-          </div>
+        <button type="button" id="mentor-studid-btn" class="uni-signin-btn">
+          <span>${ICONS.shieldTick}</span>
+          <span>verify with your university</span>
+        </button>
+        <div class="uni-signin-note">
+          You'll sign in on your own university's login page. Your password never reaches frea.
         </div>
-
-        <div id="mentor-login-step-otp" style="display: none;">
-          <div style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 12px; margin-bottom: 18px; font-size: 13px;">
-            We sent a 6-digit code to <strong id="mentor-login-target-email"></strong>
-            <div id="mentor-login-dev-code" style="margin-top: 6px; font-size: 12px; color: #16a34a; font-weight: 700;"></div>
-          </div>
-
-          <div style="margin-bottom: 18px;">
-            <input type="text" id="mentor-login-otp-input" maxlength="6" placeholder="• • • • • •" style="letter-spacing: 10px; font-size: 26px; font-weight: 800; font-family: monospace; text-align: center; width: 220px; padding: 10px 14px; border: 2px solid var(--color-charcoal); border-radius: 12px; background: #fff;" onkeydown="if(event.key==='Enter') window.verifyMentorLoginOTP()">
-            <div id="mentor-login-otp-error" style="color: #ef4444; font-size: 12.5px; margin-top: 6px; display: none;"></div>
-          </div>
-
-          <div style="display: flex; gap: 10px;">
-            <button type="button" class="pill-btn pill-btn--subtle" style="padding: 10px 16px;" onclick="window.backToMentorEmailStep()">← back</button>
-            <button type="button" id="mentor-verify-btn" class="pill-btn pill-btn--animated" style="flex: 1; padding: 12px;" onclick="window.verifyMentorLoginOTP()">
-              <span class="pill-btn__inner" style="justify-content: center;">
-                <span>verify & enter portal</span>
-                <span class="pill-btn__arrow">✓</span>
-              </span>
-            </button>
-          </div>
-        </div>
+        <div id="mentor-login-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 12px; display: none;"></div>
+        <p style="font-size: 12.5px; opacity: 0.6; margin-top: 20px; line-height: 1.5;">
+          No mentor profile yet? <a href="/become-a-mentor" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')" style="color: var(--color-marker-orange); font-weight: 700;">become a mentor</a> — it takes a couple of minutes.
+        </p>
       </div>
     </div>
     ${renderFooter()}
   `;
 }
+
+/** Wires the mentor sign-in button once the page is in the DOM. */
+function initMentorLoginPage() {
+  const btn = document.getElementById('mentor-studid-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    startUniversityVerification({
+      trigger: btn,
+      errorElId: 'mentor-login-error',
+      onVerified: () => { navigateTo('/mentor-dashboard'); },
+      renderEmailStep: (result) => {
+        // A mentor whose university we have never seen before still needs to
+        // tell us where booking notices should go.
+        const host = document.querySelector('.mentor-login-page > div');
+        if (!host) return;
+        host.innerHTML = contactEmailStepHtml({ institution: result.institution });
+        wireContactEmailStep({
+          ticket: result.ticket,
+          onVerified: () => { navigateTo('/mentor-dashboard'); }
+        });
+      }
+    });
+  });
+}
+window.initMentorLoginPage = initMentorLoginPage;
 
 async function sendMentorLoginOTP() {
   const emailInput = document.getElementById('mentor-login-email-input');
@@ -7052,7 +7052,10 @@ function renderPage() {
     initAdminDashboard();
   } else if (path === '/mentor-dashboard') {
     app.innerHTML = renderMentorDashboard();
-    initMentorDashboard();
+    // renderMentorDashboard falls back to the sign-in page when there is no
+    // mentor session, so wire whichever of the two actually rendered.
+    if (document.getElementById('mentor-studid-btn')) initMentorLoginPage();
+    else initMentorDashboard();
   } else if (path.startsWith('/verify')) {
     app.innerHTML = renderEmailVerificationResult(route);
   } else if (path.startsWith('/mentor/')) {

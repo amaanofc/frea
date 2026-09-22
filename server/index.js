@@ -19,6 +19,7 @@ import {
   getAllMentors,
   getMentorById,
   findMentorByEmail,
+  findMentorByAuthIdentifier,
   getMonthlySlotsForMentor,
   createBooking,
   cancelBooking,
@@ -423,10 +424,24 @@ app.post('/api/auth/send-verification',
   // platform. Administrators are the one exception: they are named explicitly
   // in ADMIN_EMAILS, which is server-side config, so the address is already
   // trusted and need not be a university one.
-  if (!cleanEmail || (!cleanEmail.endsWith('.ac.uk') && !isAdminEmail(cleanEmail))) {
-    return res.status(400).json({
+  /**
+   * Administrators only, now.
+   *
+   * Students and mentors verify through their university's identity provider;
+   * this path exists solely so the people who run frea can still get in. That
+   * matters because an administrator's address is not a university one at all,
+   * and because university sign-in is brokered by a free third-party service
+   * with no SLA — if it is down, the operators must still be able to reach
+   * the admin dashboard.
+   *
+   * Leaving it open to any .ac.uk address would also quietly reinstate the
+   * broken path: a student could still request a code that Proofpoint would
+   * throw away, and conclude frea was broken.
+   */
+  if (!cleanEmail || !isAdminEmail(cleanEmail)) {
+    return res.status(403).json({
       success: false,
-      error: 'A genuine UK university email ending in ".ac.uk" is required (e.g. s123456@ed.ac.uk).'
+      error: 'Email codes are for frea administrators. Students and mentors sign in with their university.'
     });
   }
 
@@ -509,8 +524,9 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
       affiliations: result.affiliations,
       contactEmail: known.contactEmail
     });
-    const mentor = findMentorByEmail(known.contactEmail);
-    const session = createSession({ email: known.contactEmail, mentorId: mentor?.id || null });
+    // By pseudonym, not address: the contact address is theirs to change.
+    const mentor = findMentorByAuthIdentifier(result.authIdentifier);
+    const session = createSession({ email: known.contactEmail, mentorId: mentor?.id || null, authIdentifier: result.authIdentifier });
     console.log(`[studid] returning student from ${result.scope || result.entityId}`);
     return reply({
       ok: true, needsEmail: false,
@@ -583,8 +599,8 @@ app.post('/api/auth/studid/complete', rateLimit({ max: 20, windowMs: 10 * 60_000
   });
   markEmailVerified(clean);
 
-  const mentor = findMentorByEmail(clean);
-  const session = createSession({ email: clean, mentorId: mentor?.id || null });
+  const mentor = findMentorByAuthIdentifier(proof.authIdentifier);
+  const session = createSession({ email: clean, mentorId: mentor?.id || null, authIdentifier: proof.authIdentifier });
 
   res.json({
     success: true,
@@ -1040,8 +1056,19 @@ app.post('/api/bookings/:id/cancel', wrap(async (req, res) => {
 app.post('/api/mentors/apply', requireVerified, wrap(async (req, res) => {
   const appData = req.body;
 
-  // Apply as yourself: the record is bound to the verified session email.
+  // Apply as yourself. The profile is owned by the university's pseudonym,
+  // not the address — the address is only where mail goes, and a mentor
+  // changing it must not hand their profile and payouts to whoever verifies
+  // with it next.
   const email = req.session.email;
+  const authIdentifier = req.session.authIdentifier;
+
+  if (!authIdentifier) {
+    return res.status(403).json({
+      success: false,
+      error: 'Mentor profiles require university sign-in. Please verify with your university first.'
+    });
+  }
 
   if (!appData.name || !appData.university) {
     return res.status(400).json({
@@ -1050,8 +1077,8 @@ app.post('/api/mentors/apply', requireVerified, wrap(async (req, res) => {
     });
   }
 
-  const result = createMentorApplication({ ...appData, email });
-  const session = createSession({ email, mentorId: result.mentor.id });
+  const result = createMentorApplication({ ...appData, email, authIdentifier });
+  const session = createSession({ email, mentorId: result.mentor.id, authIdentifier });
 
   res.status(201).json({
     success: true,

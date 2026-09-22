@@ -442,6 +442,21 @@ export function findMentorByEmail(email) {
   return db.mentors.find(m => m.email && m.email.toLowerCase() === cleanEmail) || null;
 }
 
+/**
+ * The lookup that decides whether a signed-in student is also a mentor.
+ *
+ * By pseudonym rather than address, because the address is now contact
+ * information the mentor can change at will. Matching on it would mean a
+ * mentor who switched to a different mailbox silently lost their profile,
+ * their schedule and their payouts — and, worse, that whoever later verified
+ * with that address would inherit them.
+ */
+export function findMentorByAuthIdentifier(authIdentifier) {
+  if (!authIdentifier) return null;
+  const db = loadDb();
+  return db.mentors.find(m => m.authIdentifier === authIdentifier) || null;
+}
+
 export function getMentorById(id) {
   const db = loadDb();
   return db.mentors.find(m => m.id === parseInt(id)) || null;
@@ -757,14 +772,27 @@ function clampPrice(value) {
 
 export function createMentorApplication(appData) {
   const email = (appData.email || '').trim().toLowerCase();
-  if (!email || !email.endsWith('.ac.uk')) {
-    throw new Error('Application verification failed: A genuine UK student email ending in ".ac.uk" is required.');
+  const authIdentifier = (appData.authIdentifier || '').trim();
+
+  // Studenthood is proven by the university's identity provider before this
+  // is ever called, so the address is no longer asked to carry it — it is a
+  // contact address, usually personal, because .ac.uk mail was being filtered
+  // away unseen and a mentor who cannot receive a booking notice is no use to
+  // anyone.
+  if (!email || !isEmailVerified(email)) {
+    throw new Error('Please verify with your university before creating a mentor profile.');
+  }
+  if (!authIdentifier) {
+    throw new Error('Your university sign-in could not be read. Please verify again.');
   }
 
   const db = loadDb();
 
-  // Check if mentor already exists by email
-  let mentor = db.mentors.find(m => m.email && m.email.toLowerCase() === email);
+  // Matched on the university's pseudonym, not the address. A mentor may
+  // change where they want their mail; they cannot change who their
+  // institution says they are, which is what should own the profile — and the
+  // payouts attached to it.
+  let mentor = db.mentors.find(m => m.authIdentifier && m.authIdentifier === authIdentifier);
 
   if (mentor) {
     // Update existing mentor profile
@@ -791,6 +819,9 @@ export function createMentorApplication(appData) {
       id: nextId,
       name: cleanText(appData.name, 80),
       email,
+      // The university's pseudonym for this person. It is what owns the
+      // profile from here on; `email` is only where their mail goes.
+      authIdentifier,
       year: cleanText(appData.year, 40) || '2nd year',
       major: cleanText(appData.major || appData.degree, 80) || 'Undergraduate',
       university: cleanText(appData.university, 100),

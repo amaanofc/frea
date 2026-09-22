@@ -24,7 +24,18 @@ export function isAdminEmail(email) {
   return allowed.includes(clean);
 }
 
-export function createSession({ email, mentorId = null }) {
+/**
+ * `authIdentifier` is the university's stable pseudonym for this person, set
+ * on every session opened through university sign-in.
+ *
+ * It rides on the session because it, not the email, is now the identity:
+ * the address is contact information the student chooses and can change,
+ * while the pseudonym is what the institution vouched for. Anything deciding
+ * who someone *is* — which mentor profile is theirs, whether they are
+ * blocked — should read this. Admin sessions, which still come from an email
+ * code, carry null.
+ */
+export function createSession({ email, mentorId = null, authIdentifier = null }) {
   const db = loadDb();
   const clean = (email || '').trim().toLowerCase();
   const token = crypto.randomBytes(32).toString('hex');
@@ -38,6 +49,7 @@ export function createSession({ email, mentorId = null }) {
     token,
     email: clean,
     mentorId: mentorId == null ? null : parseInt(mentorId, 10),
+    authIdentifier: authIdentifier || null,
     isAdmin: isAdminEmail(clean),
     createdAt: new Date().toISOString(),
     expiresAt: now + SESSION_TTL_MS
