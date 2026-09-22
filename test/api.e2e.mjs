@@ -71,7 +71,14 @@ console.log('\n─── 2. Booking: validation ───');
 const studentEmail = 'e2e.booker@ed.ac.uk';
 const studentToken = await signIn(studentEmail);
 {
-  const anon = await call('POST', '/bookings', { body: { mentorId: 1, date: '2026-09-21', time: '10:00' } });
+  // Computed, not hardcoded. This was a fixed date, which passed right up
+  // until that date arrived and then quietly became a past one — after which
+  // the server rejected it as such before ever reaching the rota check the
+  // assertion is about, and the whole &&-chained suite stopped at this line.
+  // A test that only works until a particular morning is not a test.
+  const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const anon = await call('POST', '/bookings', { body: { mentorId: 1, date: soon, time: '10:00' } });
   ok('booking requires verification', anon.status === 401, JSON.stringify(anon.json));
 
   const past = await call('POST', '/bookings', {
@@ -79,8 +86,10 @@ const studentToken = await signIn(studentEmail);
   });
   ok('past date rejected', past.status === 400 && /passed/i.test(past.json.error), JSON.stringify(past.json));
 
+  // 03:33 is on no mentor's rota on any weekday, so this stays off-rota
+  // whatever `soon` lands on.
   const offRota = await call('POST', '/bookings', {
-    token: studentToken, body: { mentorId: 1, date: '2026-09-21', time: '03:33' }
+    token: studentToken, body: { mentorId: 1, date: soon, time: '03:33' }
   });
   ok('off-rota time rejected', offRota.status === 400 && /not available/i.test(offRota.json.error), JSON.stringify(offRota.json));
 

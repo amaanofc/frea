@@ -61,9 +61,19 @@ test('the verification email carries an explicit text part with the code', async
   const body = fn.slice(0, fn.indexOf('\n}'));
 
   assert.match(body, /text: \[/, 'sendVerificationEmail should set text explicitly');
-  assert.match(body, /Your frea verification code is: \$\{code\}/,
+  assert.match(body, /Your frea verification code is \$\{code\}/,
     'the plain-text part must contain the code');
-  assert.match(body, /verifyUrl/, 'the plain-text part must contain the verify link');
+
+  // The one-click link is deliberately gone, and this is the assertion that
+  // keeps it gone. A URL carrying a secret is what gateways detonate in a
+  // sandbox before releasing the message — minutes of delay, and often the
+  // quarantine decision itself. Manchester's Proofpoint accepted the old mail
+  // and it never reached a mailbox. Re-adding a link here is a deliverability
+  // regression, not a feature.
+  assert.ok(!/verifyUrl/.test(body),
+    'the verification email must not carry a tokenised login link');
+  assert.ok(!/https?:\/\//.test(body),
+    'the verification email must not carry any URL');
 });
 
 test('send() fills in a text part when one is not supplied', async () => {

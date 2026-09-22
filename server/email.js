@@ -421,41 +421,55 @@ const button = (href, label) => `
 
 // ─── Email verification ─────────────────────────────────
 
-export async function sendVerificationEmail({ email, code, token, universityName = '' }) {
-  const verifyUrl = `${baseUrl()}/verify?token=${token}&email=${encodeURIComponent(email)}`;
-
+/**
+ * Deliberately plain, and it should stay that way.
+ *
+ * This message was styled like the rest of the product — brand wordmark, an
+ * orange "Verify email instantly →" call-to-action, a dashed code panel, a
+ * padlock emoji, a coloured "why we verify" note. Every one of those is a
+ * feature that filters score against a sender with no reputation, and the
+ * combination (new domain + six digits + a tokenised login link + urgency) is
+ * indistinguishable from credential phishing to a scoring engine. Manchester's
+ * Proofpoint gateway accepted it and it never reached a mailbox.
+ *
+ * So: no call-to-action button, no emoji, no brand colour, one short
+ * paragraph. It should read like a bank's one-time passcode, because that is
+ * the genre of mail that reliably gets through.
+ *
+ * The one-click verify link is gone too. It was the strongest single signal —
+ * a URL carrying a secret, which gateways detonate in a sandbox before
+ * releasing the message, adding minutes of delay and often the quarantine
+ * decision itself. The code already rides in the subject line, so the link was
+ * buying convenience at the cost of arrival. `/api/auth/verify` still accepts
+ * tokens, so nothing downstream breaks and this is a one-function revert if
+ * the trade turns out to be wrong.
+ */
+export async function sendVerificationEmail({ email, code }) {
   return send({
     to: email,
-    subject: `Your frea verification code: ${code}`,
+    // The code rides in the subject so it is readable from a notification or
+    // a preview pane without opening anything.
+    subject: `${code} is your frea verification code`,
     // Written out rather than derived: the code is the payload, and it should
     // not depend on how a tag-stripper happens to lay the page out.
     text: [
-      'Verify your UK student email',
+      `Your frea verification code is ${code}`,
       '',
-      `Your frea verification code is: ${code}`,
+      'Enter it on joinfrea.com to confirm your university email address.',
+      'The code expires in 24 hours and can be used once.',
       '',
-      'Enter it on the site, or open this link:',
-      verifyUrl,
+      "If you didn't request this, you can ignore this email.",
       '',
-      'The code is valid for 24 hours and can be used once.',
-      '',
-      "If you didn't request this, you can ignore this email — nothing happens.",
+      'frea - free peer mentoring for UK university students',
     ].join('\n'),
-    html: shell(`
-      <h1 style="font-size: 22px; font-weight: 700; color: #171717; margin: 0 0 10px;">Verify your UK student email</h1>
-      <p style="font-size: 15px; color: #475569; line-height: 1.6; margin-bottom: 20px;">
-        ${universityName ? `We detected your institution as <strong>${universityName}</strong>. ` : ''}Use the six-digit code below, or tap the button.
-      </p>
-      <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 22px; text-align: center; margin-bottom: 8px;">
-        <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #0f172a; display: block;">${code}</span>
-        <div style="font-size: 12px; color: #64748b; margin-top: 8px;">Valid for 24 hours · single use</div>
-      </div>
-      ${button(verifyUrl, 'Verify email instantly →')}
-      <div style="font-size: 13px; color: #64748b; background: #fff7ed; border-left: 3px solid #ff6f1e; padding: 12px 16px; border-radius: 6px;">
-        🔒 <strong>Why we verify:</strong> frea checks every .ac.uk address so mentoring stays between genuine UK students — and stays free.
-      </div>
-      <p style="font-size: 12.5px; color: #94a3b8; margin-top: 18px;">If you didn't request this, you can safely ignore this email — nothing will happen.</p>
-    `),
+    html: `
+  <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #222222; max-width: 480px;">
+    <p style="margin: 0 0 18px;">Your frea verification code is</p>
+    <p style="font-family: Consolas, Menlo, monospace; font-size: 32px; font-weight: 700; letter-spacing: 5px; margin: 0 0 18px; color: #111111;">${code}</p>
+    <p style="margin: 0 0 18px;">Enter it on joinfrea.com to confirm your university email address. The code expires in 24 hours and can be used once.</p>
+    <p style="margin: 0 0 24px;">If you didn't request this, you can ignore this email.</p>
+    <p style="margin: 0; font-size: 13px; color: #666666;">frea &mdash; free peer mentoring for UK university students</p>
+  </div>`,
   }, 'verification');
 }
 

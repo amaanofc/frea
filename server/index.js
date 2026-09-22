@@ -401,7 +401,12 @@ app.get('/api/health', (req, res) => {
 app.post('/api/auth/send-verification',
   rateLimit({ max: 100, windowMs: 10 * 60_000, key: req => `ip:${req.ip}` }),
   rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
-  const { email, universityName } = req.body;
+  // `universityName` used to be sent in the body and interpolated into the
+  // verification email. It came from the client, went into the HTML without
+  // escaping, and left our domain with valid SPF and DKIM — an injection
+  // straight into mail that receivers trust. The plain template no longer
+  // mentions the institution at all, so the field is simply ignored.
+  const { email } = req.body;
   const cleanEmail = (email || '').trim().toLowerCase();
 
   // Students must prove a .ac.uk address — that rule is the whole basis of the
@@ -423,7 +428,7 @@ app.post('/api/auth/send-verification',
 
   let emailResult = null;
   try {
-    emailResult = await sendVerificationEmail({ email: cleanEmail, code, token, universityName });
+    emailResult = await sendVerificationEmail({ email: cleanEmail, code });
   } catch (mailErr) {
     console.error('[auth] Verification email failed:', mailErr.message);
     return res.status(502).json({
@@ -636,9 +641,7 @@ app.post('/api/auth/mentor-login', rateLimit({ max: 5, windowMs: 60_000, key: by
 
   let emailResult = null;
   try {
-    emailResult = await sendVerificationEmail({
-      email: cleanEmail, code, token, universityName: mentor.university
-    });
+    emailResult = await sendVerificationEmail({ email: cleanEmail, code });
   } catch (mailErr) {
     console.error('[auth] Mentor sign-in email failed:', mailErr.message);
     return res.status(502).json({
