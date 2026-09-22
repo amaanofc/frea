@@ -31,8 +31,6 @@ import {
   deleteResource,
   claimResource,
   downloadResource,
-  requestMentorLoginOTP,
-  verifyMentorLogin,
   fetchPaymentConfig,
   startCheckout,
   fetchCheckoutStatus,
@@ -52,8 +50,6 @@ import {
   startSignIn,
   verifyWithUniversity,
   completeUniversitySignIn,
-  signInWithMicrosoft,
-  microsoftAuthAvailable
 } from './api.js';
 import { ICONS } from './icons.js';
 import { applyRouteMeta } from './seo.js';
@@ -2626,14 +2622,14 @@ function contactEmailStepHtml({ institution }) {
       <span>${ICONS.shieldTick}</span>
       <span>Verified${institution ? ` with <strong>${escapeHtml(institution)}</strong>` : ''}</span>
     </div>
-    <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Where should we send your invite?</label>
+    <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Your personal email</label>
     <div class="modal__input-row">
       <input type="email" class="modal__input" id="contact-email" placeholder="e.g. you@gmail.com" autocomplete="email">
       <button id="contact-email-btn" class="pill-btn pill-btn--dark">continue</button>
     </div>
     <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
     <div style="font-size: 12px; opacity: 0.6; margin-top: 8px;">
-      Use whichever inbox you actually read — a personal one is fine, and usually arrives faster than a university address.
+      Not your university address — those filter our mail, so codes and invites often never arrive. Use Gmail, Outlook, or whatever you actually read.
     </div>
   `;
 }
@@ -2647,12 +2643,27 @@ function wireContactEmailStep({ ticket, onVerified }) {
 
   const submit = async () => {
     const email = input.value.trim().toLowerCase();
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    const fail = (message) => {
       if (errorEl) {
         errorEl.style.display = 'block';
-        errorEl.innerText = 'Please enter a valid email address.';
+        errorEl.innerText = message;
       }
-      return;
+    };
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return fail('Please enter a valid email address.');
+    }
+
+    // The server refuses these too, before consuming the ticket, so a student
+    // who types their university address can simply retype without verifying
+    // again. Catching it here explains it the moment they typed it.
+    //
+    // This is the address every sign-in code and invite goes to, and .ac.uk
+    // mail is precisely what does not arrive — accepting one would hand them
+    // an account whose codes vanish, which is the original failure wearing a
+    // different hat and far harder to diagnose once they are registered.
+    if (email.endsWith('.ac.uk')) {
+      return fail('Please use a personal email — university addresses filter our mail, so codes and invites often never arrive.');
     }
 
     btn.disabled = true;
@@ -2676,95 +2687,6 @@ function wireContactEmailStep({ ticket, onVerified }) {
   btn.addEventListener('click', submit);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
   input.focus();
-}
-
-// ─── Sign in with Microsoft ─────────────────────────────
-//
-// Roughly four in five .ac.uk addresses are filtered by Microsoft or a gateway
-// in front of it, which is where multi-minute verification codes come from.
-// Signing in through the university's own tenant skips the inbox entirely, so
-// this is offered first and the emailed code becomes the fallback — not the
-// other way round.
-
-let MS_AUTH_AVAILABLE = false;
-
-/** Asked once at boot so every later render can decide synchronously. */
-async function detectMicrosoftAuth() {
-  try {
-    MS_AUTH_AVAILABLE = await microsoftAuthAvailable();
-  } catch (_) {
-    MS_AUTH_AVAILABLE = false;
-  }
-}
-
-function microsoftAuthReady() {
-  return MS_AUTH_AVAILABLE;
-}
-
-/**
- * The button plus the "or" divider, or nothing at all when Entra is not
- * configured — so a deploy without the credentials looks exactly as it did.
- */
-function microsoftSignInHtml({ id = 'ms-signin-btn', note = '' } = {}) {
-  if (!MS_AUTH_AVAILABLE) return '';
-  return `
-    <button type="button" id="${escapeHtml(id)}" class="ms-signin-btn">
-      <svg width="17" height="17" viewBox="0 0 23 23" aria-hidden="true">
-        <rect x="1" y="1" width="10" height="10" fill="#f25022"/>
-        <rect x="12" y="1" width="10" height="10" fill="#7fba00"/>
-        <rect x="1" y="12" width="10" height="10" fill="#00a4ef"/>
-        <rect x="12" y="12" width="10" height="10" fill="#ffb900"/>
-      </svg>
-      <span>sign in with your university account</span>
-    </button>
-    ${note ? `<div class="ms-signin-note">${escapeHtml(note)}</div>` : ''}
-    <div class="ms-signin-divider"><span>or verify by email</span></div>
-  `;
-}
-
-/**
- * Wires the button rendered above.
- *
- * `onSuccess` runs once the session exists. Errors are shown in place rather
- * than thrown: the email form is still sitting right below, and a student
- * whose tenant blocks third-party apps needs to be pointed at it, not left
- * with a dead button.
- */
-function wireMicrosoftSignIn({ id = 'ms-signin-btn', errorElId = null, onSuccess } = {}) {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-
-  const original = btn.innerHTML;
-  btn.addEventListener('click', async () => {
-    const errorEl = errorElId ? document.getElementById(errorElId) : null;
-    if (errorEl) errorEl.style.display = 'none';
-    btn.disabled = true;
-    btn.innerHTML = '<span>opening sign-in…</span>';
-
-    try {
-      // Called synchronously inside the handler: the popup only opens while
-      // the click is still being handled.
-      const result = await signInWithMicrosoft();
-      trackEvent('microsoft_signin_success', { domain: String(result.email || '').split('@').pop() });
-      await refreshEntitlements();
-      updateNavbarMentorStatus();
-      showToast('Verified with your university account.');
-      if (typeof onSuccess === 'function') onSuccess(result);
-    } catch (err) {
-      btn.disabled = false;
-      btn.innerHTML = original;
-      // Closing the window is an ordinary cancel, not a failure worth shouting
-      // about.
-      if (/closed before it finished/i.test(err.message)) return;
-      trackEvent('microsoft_signin_failed', { reason: err.message });
-      if (errorEl) {
-        errorEl.style.display = 'block';
-        errorEl.innerText = err.message;
-      } else {
-        showToast(err.message);
-      }
-    }
-  });
 }
 
 // ─── Email verification & session ─────
@@ -3124,8 +3046,17 @@ async function handleBecomeMentorSubmit(e) {
   // this address is just where booking notices go, and requiring .ac.uk
   // would send them straight back into the filtering that made mail
   // unusable in the first place.
-  if (!email || !/^[^@s]+@[^@s]+.[^@s]+$/.test(email)) {
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     showFormError('bm-form-error', 'Please enter a valid email address we can send booking notices to.', 'bm-email');
+    document.getElementById('bm-email')?.focus();
+    return;
+  }
+
+  // Booking notices have to reach a mentor, and .ac.uk mail is what does
+  // not arrive — a mentor who never sees a booking is worse than a student
+  // who cannot make one.
+  if (email.endsWith('.ac.uk')) {
+    showFormError('bm-form-error', 'Please use a personal email — university addresses filter our mail, so booking notices often never arrive.', 'bm-email');
     document.getElementById('bm-email')?.focus();
     return;
   }
@@ -4822,20 +4753,8 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
     });
   }
 
-  // Verified through the university tenant: the gate is satisfied, so repaint
-  // it in its confirmed state rather than sending them back to the email form.
-  wireMicrosoftSignIn({
-    id: 'ms-signin-booking',
-    errorElId: 'booking-error-msg',
-    onSuccess: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
-  });
-
-  // Only after "not you?". An unprompted focus on first open would pop the
-  // keyboard over the slot summary on a phone before it has been read.
-  if (focusEmail) {
-    const input = document.getElementById('booking-email');
-    if (input) input.focus();
-  }
+  // `focusEmail` is a leftover from when this gate held an email field of its
+  // own; the sign-in flow owns that focus now and manages it per step.
 }
 
 /**
@@ -5668,8 +5587,6 @@ async function mentorSignOut() {
 }
 window.mentorSignOut = mentorSignOut;
 
-let mentorLoginPendingEmail = '';
-
 /**
  * Mentors sign in the same way students do: through their university.
  *
@@ -5715,140 +5632,6 @@ function initMentorLoginPage() {
 }
 window.initMentorLoginPage = initMentorLoginPage;
 
-async function sendMentorLoginOTP() {
-  const emailInput = document.getElementById('mentor-login-email-input');
-  const errorEl = document.getElementById('mentor-login-email-error');
-  const btn = document.getElementById('mentor-send-otp-btn');
-  const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-
-  if (!email || !email.includes('@') || !email.endsWith('.ac.uk')) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = 'Please enter your official UK university email ending in .ac.uk';
-    }
-    return;
-  }
-
-  if (errorEl) errorEl.style.display = 'none';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerText = 'sending code...';
-  }
-
-  try {
-    const res = await requestMentorLoginOTP(email);
-    mentorLoginPendingEmail = email;
-
-    document.getElementById('mentor-login-step-email').style.display = 'none';
-    document.getElementById('mentor-login-step-otp').style.display = 'block';
-    document.getElementById('mentor-login-target-email').innerText = email;
-
-    // In dev there is no SMTP, so surface the test-inbox link. The code itself
-    // is never sent to the browser.
-    const devCodeEl = document.getElementById('mentor-login-dev-code');
-    if (devCodeEl) {
-      devCodeEl.innerHTML = res.previewUrl
-        ? `<span>Dev mode — <a href="${escapeHtml(res.previewUrl)}" target="_blank" rel="noopener noreferrer" style="color: #15803d; font-weight: 700; text-decoration: underline;">open the test inbox to read your code ↗</a></span>`
-        : '';
-      devCodeEl.style.display = res.previewUrl ? 'block' : 'none';
-    }
-
-    const otpInput = document.getElementById('mentor-login-otp-input');
-    if (otpInput) otpInput.focus();
-  } catch (err) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      if (err.notRegistered) {
-        errorEl.innerHTML = `
-          <div style="background: #fff7ed; border: 1.5px solid #ff6f1e; border-radius: 8px; padding: 10px 12px; margin-top: 6px; color: #9a3412;">
-            ${err.message || 'No mentor account found for this email.'}
-            <div style="margin-top: 8px;">
-              <button type="button" class="pill-btn pill-btn--animated" style="padding: 6px 12px; font-size: 12px;" onclick="window.navigateTo('/become-a-mentor')">
-                Become a mentor now (no interview) →
-              </button>
-            </div>
-          </div>
-        `;
-      } else {
-        errorEl.innerText = err.message || 'Could not send verification code.';
-      }
-    }
-    if (btn) {
-      btn.disabled = false;
-      btn.innerText = 'send one-time code (OTP)';
-    }
-  }
-}
-window.sendMentorLoginOTP = sendMentorLoginOTP;
-
-function fillMentorLogin(email) {
-  const input = document.getElementById('mentor-login-email-input');
-  if (input) {
-    input.value = email;
-    sendMentorLoginOTP();
-  }
-}
-window.fillMentorLogin = fillMentorLogin;
-
-function backToMentorEmailStep() {
-  document.getElementById('mentor-login-step-email').style.display = 'block';
-  document.getElementById('mentor-login-step-otp').style.display = 'none';
-  const btn = document.getElementById('mentor-send-otp-btn');
-  if (btn) {
-    btn.disabled = false;
-    btn.innerText = 'send one-time code (OTP)';
-  }
-}
-window.backToMentorEmailStep = backToMentorEmailStep;
-
-async function verifyMentorLoginOTP() {
-  const input = document.getElementById('mentor-login-otp-input');
-  const errorEl = document.getElementById('mentor-login-otp-error');
-  const btn = document.getElementById('mentor-verify-btn');
-  const code = input ? input.value.trim() : '';
-
-  if (!code || code.length < 6) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = 'Please enter the 6-digit verification code.';
-    }
-    return;
-  }
-
-  if (btn) {
-    btn.disabled = true;
-    btn.innerText = 'verifying...';
-  }
-
-  try {
-    // verifyMentorLogin persists the session itself. There is no offline
-    // fallback and no master code: only a genuine emailed code signs you in.
-    const res = await verifyMentorLogin(mentorLoginPendingEmail, code);
-
-    const idx = MENTORS.findIndex(m => m.id === res.mentor.id);
-    if (idx >= 0) MENTORS[idx] = { ...MENTORS[idx], ...res.mentor };
-    else MENTORS.unshift(res.mentor);
-
-    mentorScheduleData = null;
-    mentorLinksData = null;
-
-    await refreshEntitlements();
-    updateNavbarMentorStatus();
-    showToast(`Welcome back, ${res.mentor.name}.`);
-    navigateTo('/mentor-dashboard');
-    renderPage();
-  } catch (err) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = err.message || 'That code was not recognised. Please try again.';
-    }
-    if (btn) {
-      btn.disabled = false;
-      btn.innerText = 'verify & enter portal';
-    }
-  }
-}
-window.verifyMentorLoginOTP = verifyMentorLoginOTP;
 
 let activeDashboardTab = 'schedule';
 let mentorScheduleData = null;
@@ -7499,7 +7282,6 @@ async function init() {
   // Then reconcile with the server, in a fixed order. Mentors and the session
   // must land before resources, or a resource whose mentor has not arrived yet
   // is attributed to a synthesised stub and the portal can misattribute.
-  detectMicrosoftAuth();
   hydratePaymentConfig();
   await syncLiveMentors();
   await restoreSession();

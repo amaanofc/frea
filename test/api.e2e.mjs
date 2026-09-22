@@ -165,17 +165,25 @@ console.log('\n─── 4. Cancellation frees the slot ───');
 
 console.log('\n─── 5. Mentor auth & the schedule round-trip ───');
 {
-  const mentorEmail = readDb().mentors.find(m => m.email)?.email;
-  const login = await call('POST', '/auth/mentor-login', { body: { email: mentorEmail } });
-  ok('mentor login sends a code', login.json.success === true, JSON.stringify(login.json));
-  ok('mentor login does not leak the code', !JSON.stringify(login.json).match(/\b\d{6}\b/));
+  // There is no separate mentor login any more: a mentor is a signed-in
+  // student who has a profile. The university vouches once, the email is
+  // the handle afterwards, and the profile is owned by the pseudonym.
+  const mentorEmail = addr('mentor');
+  const studentToken2 = await signIn(mentorEmail);
+  ok('mentor session issued', typeof studentToken2 === 'string');
 
-  const mentorToken = (await call('POST', '/auth/mentor-verify', {
-    body: { email: mentorEmail, code: codeFor(mentorEmail) }
-  })).json.sessionToken;
-  ok('mentor session issued', typeof mentorToken === 'string');
+  const applied = await call('POST', '/mentors/apply', {
+    token: studentToken2,
+    body: { name: 'E2E Mentor', university: 'University of Leeds', major: 'Physics' }
+  });
+  ok('mentor profile created from a verified session', applied.json.success === true, JSON.stringify(applied.json).slice(0, 160));
+
+  // Applying promotes the session: the token from before the profile existed
+  // still carries mentorId null, so the one apply hands back is the mentor one.
+  const mentorToken = applied.json.sessionToken;
 
   const mentorId = readDb().mentors.find(m => m.email === mentorEmail).id;
+  ok('profile is owned by the university pseudonym', Boolean(readDb().mentors.find(m => m.id === mentorId)?.authIdentifier));
 
   // Another mentor's record must be off limits.
   const otherId = readDb().mentors.find(m => m.id !== mentorId).id;
@@ -320,8 +328,9 @@ console.log('\n─── 6. Resources, entitlement & downloads ───');
   const rivalMentor = readDb().mentors.find(m => m.email && m.id !== globalThis.__mentorId);
   if (rivalMentor) {
     const rivalToken = await (async () => {
-      await call('POST', '/auth/mentor-login', { body: { email: rivalMentor.email } });
-      const r = await call('POST', '/auth/mentor-verify', { body: { email: rivalMentor.email, code: codeFor(rivalMentor.email) } });
+      seedIdentity(rivalMentor.email);
+      await call('POST', '/auth/send-verification', { body: { email: rivalMentor.email } });
+      const r = await call('POST', '/auth/verify-code', { body: { email: rivalMentor.email, code: codeFor(rivalMentor.email) } });
       return r.json.sessionToken;
     })();
     const steal = await call('DELETE', `/resources/${freeId}`, { token: rivalToken });

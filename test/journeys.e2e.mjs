@@ -216,15 +216,15 @@ step('JOURNEY 4 — mentor signs in, builds profile, sets availability, publishe
   const { email } = globalThis.J3;
 
   // Sign out and back in through the real mentor login.
-  const login = await call('POST', '/auth/mentor-login', { body: { email } });
-  ok('mentor login recognises the account', login.json.success, JSON.stringify(login.json));
+  // Sign back in the way everyone does now: the email is the handle, and
+  // the session resolves to their mentor profile via the pseudonym the
+  // university vouched for.
+  const token = await verify(email);
+  ok('mentor signs back in with the emailed code', typeof token === 'string');
 
-  const verified = await call('POST', '/auth/mentor-verify', {
-    body: { email, code: codeFor(email) }
-  });
-  ok('mentor signs in with the emailed code', verified.json.success);
-  const token = verified.json.sessionToken;
-  const mentorId = verified.json.mentor.id;
+  const me = await call('GET', '/auth/me', { token });
+  ok('session resolves to their mentor profile', Boolean(me.json.session?.mentorId), JSON.stringify(me.json.session));
+  const mentorId = me.json.session.mentorId;
 
   // Profile editing, including adding more links.
   const profile = await call('PUT', `/mentors/${mentorId}`, {

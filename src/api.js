@@ -143,24 +143,6 @@ export async function signOut() {
   clearSession();
 }
 
-export async function requestMentorLoginOTP(email) {
-  return request('/auth/mentor-login', { method: 'POST', body: { email } });
-}
-
-export async function verifyMentorLogin(email, code) {
-  const json = await request('/auth/mentor-verify', { method: 'POST', body: { email, code } });
-  setSession({
-    email,
-    sessionToken: json.sessionToken,
-    isMentor: true,
-    isAdmin: json.isAdmin,
-    mentorId: json.mentor.id,
-    name: json.mentor.name,
-    university: json.mentor.university
-  });
-  return json;
-}
-
 // ─── Mentors ────────────────────────────────────────────
 
 export async function fetchMentors(filters = {}) {
@@ -444,91 +426,6 @@ export async function fetchPayoutStatus() {
 export async function starMentor(mentorId) {
   const json = await request(`/mentors/${mentorId}/star`, { method: 'POST' });
   return json.data;
-}
-
-// ─── Sign in with Microsoft ─────────────────────────────
-
-/** Whether the deploy has Entra configured; the button is hidden if not. */
-export async function microsoftAuthAvailable() {
-  try {
-    // request() hands back the whole { success, data } envelope rather than
-    // unwrapping it, so the flag is one level down.
-    const json = await request('/auth/microsoft/status');
-    return Boolean(json?.data?.available);
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
- * Runs the whole Entra flow in a popup and resolves with the new session.
- *
- * A popup rather than a full-page redirect because this is called from inside
- * the booking modal: redirecting would discard the slot the student had picked
- * and drop them back on the home page to start again. The popup keeps the SPA
- * alive underneath, so verification is something that happens *beside* the
- * booking rather than instead of it.
- *
- * Must be called straight from a click handler — browsers only allow
- * window.open while a user gesture is being handled.
- */
-export function signInWithMicrosoft() {
-  return new Promise((resolve, reject) => {
-    const w = 520, h = 640;
-    const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
-    const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
-    const popup = window.open(
-      `${API_BASE}/auth/microsoft/start`,
-      'frea-microsoft-signin',
-      `width=${w},height=${h},left=${left},top=${top}`
-    );
-
-    if (!popup) {
-      reject(new Error('Your browser blocked the sign-in window. Allow pop-ups for this site, or verify with your email instead.'));
-      return;
-    }
-
-    let settled = false;
-    const finish = (fn, arg) => {
-      if (settled) return;
-      settled = true;
-      window.removeEventListener('message', onMessage);
-      clearInterval(poll);
-      fn(arg);
-    };
-
-    function onMessage(event) {
-      // Both checks matter: the origin stops any other page posting a forged
-      // session in, and the source tag stops us reacting to unrelated
-      // postMessage traffic on our own origin.
-      if (event.origin !== window.location.origin) return;
-      if (!event.data || event.data.source !== 'frea-microsoft-auth') return;
-
-      if (!event.data.ok) {
-        finish(reject, new Error(event.data.error || 'Microsoft sign-in failed.'));
-        return;
-      }
-
-      setSession({
-        email: event.data.email,
-        sessionToken: event.data.sessionToken,
-        isMentor: event.data.isMentor,
-        isAdmin: event.data.isAdmin,
-        mentorId: null,
-        name: null,
-        university: null
-      });
-      finish(resolve, event.data);
-    }
-
-    window.addEventListener('message', onMessage);
-
-    // Closing the popup is a silent cancel — without this the caller's button
-    // stays in its pending state forever.
-    const poll = setInterval(() => {
-      if (popup.closed) finish(reject, new Error('Sign-in window was closed before it finished.'));
-    }, 500);
-  });
 }
 
 // ─── University sign-in (Studid) ────────────────────────
