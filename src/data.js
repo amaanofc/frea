@@ -980,19 +980,19 @@ export const FAQ_ITEMS = [
   },
   {
     question: "who can book a call?",
-    answer: "any current student or recent graduate at an accredited UK university with an official '.ac.uk' student email address. you can book with seniors at your own university or explore mentors from Oxford, Cambridge, Imperial, LSE, and across the Russell Group."
+    answer: "any current student or recent graduate at an accredited UK university. you sign in through your own university to prove it. you can book with seniors at your own university or explore mentors from Oxford, Cambridge, Imperial, LSE, and across the Russell Group."
   },
   {
     question: "what happens during the 20-minute call?",
-    answer: "it's a relaxed 1-on-1 Google Meet call. you can ask for a CV roast, interview advice, module survival tips, or general guidance on breaking into top firms and research labs. no corporate jargon, no awkward networking pressure."
+    answer: "it's a relaxed 1-on-1 video call. you can ask for a CV roast, interview advice, module survival tips, or general guidance on breaking into top firms and research labs. no corporate jargon, no awkward networking pressure."
   },
   {
     question: "how do i become a senior mentor?",
-    answer: "if you're a 2nd year, 3rd year, master's student or recent grad with valuable university or career experience, you can submit an application via our 'become a mentor' page. we verify your student status and onboard you in under 24 hours."
+    answer: "if you're a 2nd year, 3rd year, master's student or recent grad with valuable university or career experience, you can submit an application via our 'become a mentor' page. you sign in through your university, which confirms your student status instantly — no waiting on an approval queue."
   },
   {
-    question: "why do we require a '.ac.uk' university email?",
-    answer: "in the UK, '.ac.uk' domains are strictly controlled by Jisc and exclusively issued to verified higher education institutions. this ensures our community consists entirely of genuine university peers."
+    question: "how do you check people are really students?",
+    answer: "you sign in through your own university's login, over the UK Access Management Federation — the same system your university uses for its own services. your password never reaches frea, and your institution confirms you're a current student. it's a stronger check than an emailed code, and it's instant."
   }
 ];
 

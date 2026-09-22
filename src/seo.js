@@ -13,7 +13,7 @@
 const SITE_NAME = 'frea';
 const DEFAULT_DESCRIPTION =
   'Book a free 20-minute 1-on-1 with a senior UK university student who has already '
-  + 'done what you are trying to do. Free for verified .ac.uk students.';
+  + 'done what you are trying to do. Free for verified UK university students.';
 
 /** Absolute URL for a path, based on where this page is actually served. */
 export function absoluteUrl(path = '/') {
@@ -63,7 +63,7 @@ export function metaForRoute(path, context = {}) {
     '/become-a-mentor': {
       title: 'Become a mentor — share what you learned · frea',
       description:
-        'Verify your .ac.uk email and your profile goes live immediately. No interview. '
+        'Sign in through your university and your profile goes live immediately. No interview. '
         + 'Set your own availability, publish resources, keep 95% of anything you sell.'
     },
     '/my-sessions': {

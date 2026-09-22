@@ -375,7 +375,7 @@ function renderLanding() {
                   </span>
                 </button>
               </div>
-              <span class="hero__quiet-caption">20-min Google Meets · no sign-up fees · always free for UK students</span>
+              <span class="hero__quiet-caption">20-min video calls · no sign-up fees · always free for UK students</span>
             </div>
           </div>
 
@@ -423,7 +423,7 @@ function renderLanding() {
               <div class="hero__sticky-note">
                 <div class="hero__sticky-pin"></div>
                 <div class="hero__sticky-text">“don't grind 500 leetcodes. pick 2 projects you can passionately defend for 20 mins.”</div>
-                <span class="hero__sticky-author">— aanya @ google meet</span>
+                <span class="hero__sticky-author">— aanya @ frea</span>
               </div>
 
               <!-- Floating Live Booking Toast -->
@@ -467,7 +467,7 @@ function renderLanding() {
     `<svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="16" y="12" width="32" height="40" rx="4" fill="#f7efe9" stroke="#171717" stroke-width="2.5"/><line x1="24" y1="22" x2="40" y2="22" stroke="#171717" stroke-width="2" stroke-linecap="round"/><line x1="24" y1="30" x2="36" y2="30" stroke="#171717" stroke-width="2" stroke-linecap="round"/><circle cx="38" cy="38" r="5" fill="#ff6f1e"/></svg>`
   )}
             ${handArrow()}
-            ${howStep('03', 'book a 20-min call', 'pick a date on their interactive calendar. jump on Google Meet with your .ac.uk email, 100% free.',
+            ${howStep('03', 'book a 20-min call', 'pick a date on their interactive calendar, sign in with your university, and jump on a video call. 100% free.',
     STICKER_SVGS.coffee || `<svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="14" y="20" width="28" height="24" rx="4" fill="#f7efe9" stroke="#171717" stroke-width="2.5"/><path d="M42 26h6a5 5 0 010 10h-6" stroke="#171717" stroke-width="2.5"/><path d="M22 16c0-3 3-5 3-5s3 3 3 5M30 16c0-3 3-5 3-5s3 3 3 5" stroke="#ff6f1e" stroke-width="2" stroke-linecap="round"/></svg>`
   )}
           </div>
@@ -518,12 +518,12 @@ function renderLanding() {
             <div class="mission-card">
               <div class="mission-card__icon">${ICONS.gift}</div>
               <h3 class="mission-card__title">100% free, always</h3>
-              <p class="mission-card__desc">zero hidden fees or subscription traps. built by UK students, for UK students with an active .ac.uk email.</p>
+              <p class="mission-card__desc">zero hidden fees or subscription traps. built by UK students, for UK students — verified through your own university login.</p>
             </div>
             <div class="mission-card">
               <div class="mission-card__icon">${ICONS.shieldTick}</div>
               <h3 class="mission-card__title">verified seniors</h3>
-              <p class="mission-card__desc">every mentor confirms a real .ac.uk address before their profile goes live, and links their LinkedIn so you can check who you're talking to.</p>
+              <p class="mission-card__desc">every mentor signs in through their own university before their profile goes live, and links their LinkedIn so you can check who you're talking to.</p>
             </div>
           </div>
         </div>
@@ -988,7 +988,7 @@ function renderProfile(mentorId) {
         <!-- Interactive Clean Vanilla Month Calendar -->
         <div class="profile__section">
           <h3 class="profile__section-title">pick a date & time</h3>
-          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all sessions are 20-min Google Meets · 100% free · select an orange day, then choose your time</span>
+          <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all sessions are 20-min video calls · 100% free · select an orange day, then choose your time</span>
 
           <div id="profile-calendar-root" class="frea-cal-root">
             <div style="text-align: center; padding: 40px 20px; opacity: 0.7;">
@@ -1020,7 +1020,7 @@ function renderBecomeMentor() {
         </p>
         <div class="become-mentor__verification-banner">
           <span>${ICONS.shieldTick}</span>
-          <span>Open to all 2nd+ years, master's students & recent grads with an active <strong>.ac.uk</strong> email</span>
+          <span>Open to all 2nd+ years, master's students & recent grads — verified through your <strong>university login</strong></span>
         </div>
       </div>
 
@@ -1140,7 +1140,7 @@ function renderBecomeMentor() {
             <div style="background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 12px; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start;">
               <span style="color: #16a34a; display: inline-flex; align-items: center; margin-top: 2px;">${ICONS.shieldTick}</span>
               <div style="font-size: 13.5px; line-height: 1.5; color: #15803d;">
-                <strong>Instant Onboarding · Zero Interviews:</strong> We don't require gatekept committee interviews. Simply verify your official .ac.uk student email with LinkedIn confirmation, and your profile & booking calendar go live immediately across the platform!
+                <strong>Instant Onboarding · Zero Interviews:</strong> We don't require gatekept committee interviews. Simply sign in through your university and add your LinkedIn, and your profile & booking calendar go live immediately across the platform!
               </div>
             </div>
           </div>
@@ -1190,7 +1190,7 @@ function renderBecomeMentor() {
                   <div class="live-postit-preview__text" id="live-postit-text">
                     “Give your best tip here...”
                   </div>
-                  <span class="live-postit-preview__author" id="live-postit-author">— you @ google meet</span>
+                  <span class="live-postit-preview__author" id="live-postit-author">— you @ frea</span>
                 </div>
               </div>
             </div>
@@ -1287,7 +1287,7 @@ function renderBecomeMentor() {
                 <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
               </span>
             </button>
-            <div style="font-size: 13px; opacity: 0.65; margin-top: 10px;">no interviews · instant activation upon .ac.uk email verification</div>
+            <div style="font-size: 13px; opacity: 0.65; margin-top: 10px;">no interviews · instant activation once your university confirms you</div>
           </div>
         </form>
       </div>
@@ -2397,7 +2397,7 @@ window.handleDocumentFileSelect = handleDocumentFileSelect;
  *   known address    -> code to that inbox -> session
  *   unknown address  -> university sign-in -> nominate an inbox -> session
  */
-function renderAuthFlow({ host, actionName = 'continue', onSignedIn }) {
+function renderAuthFlow({ host, actionName = 'continue', email: startEmail = '', onSignedIn }) {
   if (!host) return;
 
   const finish = async () => {
@@ -2429,6 +2429,9 @@ function renderAuthFlow({ host, actionName = 'continue', onSignedIn }) {
 
     const input = host.querySelector('#auth-email');
     const btn = host.querySelector('#auth-continue');
+    // Some gates already know the address — a mentor application, a resource
+    // claim — so do not make them type it again.
+    if (startEmail) input.value = startEmail;
 
     const submit = async () => {
       const email = (input.value || '').trim().toLowerCase();
@@ -2738,12 +2741,10 @@ async function openVerificationModal({ email, universityName, actionName, onVeri
   window.__verifyUniversity = universityName || '';
   window.__verifyAction = actionName || 'continue';
 
-  // No email supplied by the caller: ask for one first.
-  if (!email) {
-    renderVerificationEmailStep(actionName);
-    return;
-  }
-  await dispatchVerificationCode(email, universityName, actionName);
+  // One flow either way. It used to branch here: with an address in hand it
+  // jumped straight to mailing a code, which now only works for someone
+  // already registered — and silently failed for everyone else.
+  renderVerificationEmailStep(actionName, email || '');
 }
 window.openVerificationModal = openVerificationModal;
 
@@ -2767,7 +2768,7 @@ function verificationShell(inner) {
  * emailed code was being filtered away before students ever saw it, and the
  * university vouching for them directly is both faster and a stronger claim.
  */
-function renderVerificationEmailStep(actionName) {
+function renderVerificationEmailStep(actionName, email = '') {
   const modal = document.getElementById('modal-content');
   if (!modal) return;
 
@@ -2792,186 +2793,11 @@ function renderVerificationEmailStep(actionName) {
   renderAuthFlow({
     host: document.getElementById('verify-gate'),
     actionName,
+    email,
     onSignedIn: finishIntent
   });
 }
 
-async function submitVerificationEmail() {
-  const input = document.getElementById('verify-email-input');
-  const errorEl = document.getElementById('verify-email-error');
-  const btn = document.getElementById('verify-email-btn');
-  const email = input ? input.value.trim().toLowerCase() : '';
-
-  // Shape only. Students need .ac.uk, administrators do not, and the server
-  // holds that rule (ADMIN_EMAILS). Enforcing it here as well meant an admin
-  // address was rejected in the browser and the request was never sent.
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = 'Please enter a valid email address.';
-    }
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span>sending...</span>'; }
-  await dispatchVerificationCode(email, getUniversityFromEmail(email), window.__verifyAction);
-}
-window.submitVerificationEmail = submitVerificationEmail;
-
-async function dispatchVerificationCode(email, universityName, actionName) {
-  const modal = document.getElementById('modal-content');
-  if (!modal) return;
-
-  modal.innerHTML = verificationShell(`
-    <h2 style="font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">sending your code…</h2>
-    <p style="font-size: 14px; opacity: 0.7;">to ${escapeHtml(email)}</p>
-  `);
-  openOverlay();
-
-  let sendResult = null;
-  try {
-    sendResult = await sendEmailVerification(email, universityName || getUniversityFromEmail(email));
-  } catch (err) {
-    modal.innerHTML = verificationShell(`
-      <h2 style="font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 8px;">couldn't send your code</h2>
-      <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 18px;">${escapeHtml(err.message)}</p>
-      <button type="button" class="pill-btn pill-btn--subtle" onclick="window.openVerificationModal({ email: '' })">try a different email</button>
-    `);
-    return;
-  }
-
-  renderVerificationCodeStep(email, universityName, actionName, sendResult?.previewUrl);
-}
-
-function renderVerificationCodeStep(email, universityName, actionName, previewUrl) {
-  const modal = document.getElementById('modal-content');
-  if (!modal) return;
-
-  modal.innerHTML = verificationShell(`
-    <h2 style="font-size: 24px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">check your inbox</h2>
-    <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 20px;">
-      We've sent a 6-digit code to <strong>${escapeHtml(email)}</strong>. Enter it below to
-      ${escapeHtml(actionName || 'continue')}.
-    </p>
-
-    <div style="margin-bottom: 20px;">
-      <input type="text" id="verification-otp-input" maxlength="6" inputmode="numeric" placeholder="• • • • • •" autocomplete="one-time-code" style="letter-spacing: 12px; font-size: 26px; font-weight: 800; font-family: monospace; text-align: center; width: 240px; padding: 10px 14px; border: 2px solid var(--color-charcoal); border-radius: 12px; background: #fff; outline: none;">
-      <div id="verification-otp-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 8px; display: none;"></div>
-    </div>
-
-    ${previewUrl ? `
-      <div style="background: #f0fdf4; border: 1.5px dashed #16a34a; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 12.5px; color: #15803d; line-height: 1.5;">
-        Dev mode — no SMTP configured, so this went to a test inbox.
-        <a href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener noreferrer" style="color: #15803d; font-weight: 700; text-decoration: underline;">Open it to read your code ↗</a>
-      </div>` : ''}
-
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <button type="button" id="verify-otp-btn" class="pill-btn pill-btn--animated" style="width: 100%; padding: 12px;" onclick="window.submitVerificationCode(${jsArg(email)})">
-        <span class="pill-btn__inner" style="justify-content: center;">
-          <span>verify &amp; proceed</span>
-          <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
-        </span>
-      </button>
-      <div style="display: flex; justify-content: center; gap: 14px; margin-top: 6px; font-size: 13px;">
-        <button type="button" style="background: none; border: none; color: var(--color-marker-orange); font-weight: 700; cursor: pointer; text-decoration: underline;" onclick="window.resendVerificationCode(${jsArg(email)}, ${jsArg(universityName || '')})">Resend code</button>
-        <button type="button" style="background: none; border: none; opacity: 0.6; cursor: pointer;" onclick="closeModal()">Cancel</button>
-      </div>
-
-      <!-- Some universities hold mail from young domains in a quarantine the
-           student cannot see, so "resend" achieves nothing and they are stuck
-           with no way forward. This is the way forward: replying from the
-           address itself proves control of it just as well as a code does. -->
-      <details style="margin-top: 14px; text-align: left; font-size: 12.5px; line-height: 1.55;">
-        <summary style="cursor: pointer; color: var(--color-marker-orange); font-weight: 700; text-align: center; list-style: none;">Didn't get the code?</summary>
-        <div style="margin-top: 10px; padding: 12px 14px; background: #f8fafc; border: 1.5px solid rgba(23,23,23,0.12); border-radius: 10px; opacity: 0.85;">
-          <p style="margin: 0 0 8px;">Try these first:</p>
-          <ul style="margin: 0 0 10px; padding-left: 18px;">
-            <li>Check your junk or spam folder.</li>
-            <li>Give it two or three minutes — some universities hold new senders briefly.</li>
-            <li>Make sure the address is right, then press <strong>Resend code</strong>.</li>
-          </ul>
-          <p style="margin: 0;">
-            Still nothing? A few universities filter mail from new domains before it
-            ever reaches you. Email
-            <a href="mailto:hello@joinfrea.com?subject=Verify%20my%20student%20email" style="color: var(--color-marker-orange); font-weight: 700;">hello@joinfrea.com</a>
-            <strong>from your university address</strong> and we'll verify you by hand —
-            sending from it proves it's yours just as well as a code does.
-          </p>
-        </div>
-      </details>
-    </div>
-  `);
-
-  openOverlay();
-
-  const otpInput = document.getElementById('verification-otp-input');
-  if (otpInput) {
-    otpInput.focus();
-    otpInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') window.submitVerificationCode(email);
-    });
-  }
-}
-
-async function submitVerificationCode(email) {
-  const input = document.getElementById('verification-otp-input');
-  const errorEl = document.getElementById('verification-otp-error');
-  const btn = document.getElementById('verify-otp-btn');
-  const code = input ? input.value.trim() : '';
-
-  if (!code || code.length < 6) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = 'Please enter the 6-digit verification code.';
-    }
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.innerText = 'verifying...'; }
-
-  try {
-    await verifyEmailCode(email, code);
-    await refreshEntitlements();
-    updateNavbarMentorStatus();
-    showToast('Email verified.');
-
-    if (typeof window.__currentOnVerified === 'function') {
-      const modal = document.getElementById('modal-content');
-      if (modal) {
-        modal.innerHTML = `
-          <div style="padding: 48px 24px; text-align: center;">
-            <div style="width: 44px; height: 44px; border: 3px solid #e5e7eb; border-top: 3px solid var(--color-marker-orange); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px auto;"></div>
-            <h3 style="font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--color-charcoal); margin-bottom: 6px;">verified — one moment…</h3>
-          </div>
-        `;
-      }
-      const fn = window.__currentOnVerified;
-      window.__currentOnVerified = null;
-      fn();
-    } else {
-      closeModal();
-      renderPage();
-    }
-  } catch (err) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = err.message || 'Verification failed. Please try again.';
-    }
-    if (btn) { btn.disabled = false; btn.innerText = 'verify & proceed'; }
-  }
-}
-window.submitVerificationCode = submitVerificationCode;
-
-async function resendVerificationCode(email, uni) {
-  try {
-    const res = await sendEmailVerification(email, uni);
-    showToast(`New code sent to ${email}`);
-    if (res.previewUrl) window.open(res.previewUrl, '_blank', 'noopener');
-  } catch (e) {
-    showToast(`Could not resend code: ${e.message}`);
-  }
-}
-window.resendVerificationCode = resendVerificationCode;
 
 /** Pulls the server's view of what this student owns into the render cache. */
 async function refreshEntitlements() {
@@ -3791,8 +3617,8 @@ function openSuggestionModal() {
         </div>
 
         <div class="mentor-form-group" style="margin-bottom: 18px;">
-          <label class="mentor-form-label" style="font-size: 13px; font-weight: 700;">Your .ac.uk Student Email <span style="font-weight: 400; opacity: 0.6;">(optional, to notify you when added)</span></label>
-          <input type="email" id="suggestion-email-input" class="mentor-form-input" placeholder="e.g. yourname@university.ac.uk" style="padding: 10px 14px; font-size: 13.5px;">
+          <label class="mentor-form-label" style="font-size: 13px; font-weight: 700;">Your email <span style="font-weight: 400; opacity: 0.6;">(optional, to notify you when added)</span></label>
+          <input type="email" id="suggestion-email-input" class="mentor-form-input" placeholder="e.g. you@gmail.com" style="padding: 10px 14px; font-size: 13.5px;">
         </div>
 
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -4362,7 +4188,7 @@ function renderFooter() {
       </div>
       <div class="footer__bottom" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <span>© 2026 frea. built with care for UK university students who deserve honest guidance.</span>
-        <span style="opacity: 0.85; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">${ICONS.shieldTick} .ac.uk verified · Jisc educational governance</span>
+        <span style="opacity: 0.85; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">${ICONS.shieldTick} university verified · UK Access Management Federation</span>
       </div>
     </footer>
   `;
@@ -5294,7 +5120,7 @@ async function renderAdminApplicationsList() {
             <div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <h3 style="font-size: 19px; font-weight: 800; color: var(--color-charcoal); font-family: var(--font-display); margin: 0;">${escapeHtml(app.name)}</h3>
-                <span class="uni-detect-badge" style="font-size: 11.5px; padding: 2px 8px;">${ICONS.shieldTick} .ac.uk verified</span>
+                <span class="uni-detect-badge" style="font-size: 11.5px; padding: 2px 8px;">${ICONS.shieldTick} university verified</span>
               </div>
               <div style="font-size: 13.5px; opacity: 0.8; margin-top: 2px;">
                 ${escapeHtml(app.year || 'Senior')} · ${escapeHtml(app.major || 'Undergraduate')} @ <strong>${escapeHtml(app.university)}</strong>

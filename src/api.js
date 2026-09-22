@@ -3,8 +3,9 @@
 // ─────────────────────────────────────────────
 //
 // Every authenticated call carries the session token issued when the student
-// or mentor proved their .ac.uk email. Access decisions live on the server;
-// this file only asks.
+// or mentor signed in — through their university the first time, by a code to
+// their own inbox after that. Access decisions live on the server; this file
+// only asks.
 
 import { MENTORS } from './data.js';
 
