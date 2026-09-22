@@ -8,6 +8,7 @@
 //   npm run test:regressions
 
 import fs from 'fs';
+import { seedIdentity } from './_identity.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -39,6 +40,7 @@ async function call(method, p, { body, token } = {}) {
 }
 
 async function verify(email) {
+  seedIdentity(email);
   await call('POST', '/auth/send-verification', { body: { email } });
   const r = await call('POST', '/auth/verify-code', { body: { email, code: codeFor(email) } });
   return r.json.sessionToken;

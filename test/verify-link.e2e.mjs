@@ -11,6 +11,7 @@
 // link they never used.
 
 import fs from 'node:fs';
+import { seedIdentity } from './_identity.mjs';
 import { DB_FILE } from '../server/paths.js';
 
 const API = (process.argv[2] || 'http://localhost:3001') + '/api';
@@ -32,6 +33,7 @@ async function call(method, path, body) {
 }
 
 async function issueToken(email) {
+  seedIdentity(email);
   await call('POST', '/auth/send-verification', { email });
   await new Promise(r => setTimeout(r, 300));
   const db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));

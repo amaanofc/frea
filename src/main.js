@@ -49,6 +49,7 @@ import {
   fetchMe,
   signOut,
   starMentor,
+  startSignIn,
   verifyWithUniversity,
   completeUniversitySignIn,
   signInWithMicrosoft,
@@ -2378,6 +2379,171 @@ window.handleDocumentFileSelect = handleDocumentFileSelect;
 
 
 
+
+// ─── Sign in ────────────────────────────────────────────
+//
+// One flow, rendered into whatever container asks for it — the booking gate,
+// the shared action gate, the mentor sign-in page.
+//
+// Email first, always. The university proves who someone is exactly once, at
+// registration; every sign-in after that only has to prove they still hold the
+// inbox they nominated, and a code to a personal address does that perfectly
+// well. The thing that was broken was .ac.uk filtering, not email.
+//
+// It also keeps graduates. University SSO stops working the day they leave,
+// and mentors here are often recent graduates, so an account that outlives the
+// degree is a requirement rather than a nicety.
+
+/**
+ * Renders the whole sign-in flow into `host` and calls `onSignedIn` once a
+ * session exists, by whichever route.
+ *
+ *   known address    -> code to that inbox -> session
+ *   unknown address  -> university sign-in -> nominate an inbox -> session
+ */
+function renderAuthFlow({ host, actionName = 'continue', onSignedIn }) {
+  if (!host) return;
+
+  const finish = async () => {
+    await refreshEntitlements();
+    updateNavbarMentorStatus();
+    if (typeof onSignedIn === 'function') onSignedIn();
+  };
+
+  const showError = (message) => {
+    const el = host.querySelector('.auth-flow__error');
+    if (!el) { showToast(message); return; }
+    el.style.display = 'block';
+    el.innerText = message;
+  };
+
+  // ── Step 1: who are you?
+  const renderEmailStep = () => {
+    host.innerHTML = `
+      <label class="auth-flow__label">Your email</label>
+      <div class="modal__input-row">
+        <input type="email" class="modal__input" id="auth-email" placeholder="e.g. you@gmail.com" autocomplete="email">
+        <button id="auth-continue" class="pill-btn pill-btn--dark">continue</button>
+      </div>
+      <div id="auth-flow-error" class="auth-flow__error"></div>
+      <div class="auth-flow__hint">
+        New to frea? We'll verify you with your university — it takes a few seconds.
+      </div>
+    `;
+
+    const input = host.querySelector('#auth-email');
+    const btn = host.querySelector('#auth-continue');
+
+    const submit = async () => {
+      const email = (input.value || '').trim().toLowerCase();
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return showError('Please enter a valid email address.');
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'checking…';
+      try {
+        const { known } = await startSignIn(email);
+        if (known) renderCodeStep(email);
+        else renderRegisterStep(email);
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'continue';
+        showError(err.message);
+      }
+    };
+
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    input.focus();
+  };
+
+  // ── Step 2a: we know you — prove you still hold the inbox.
+  const renderCodeStep = (email) => {
+    host.innerHTML = `
+      <div class="auth-flow__sent">
+        We've sent a 6-digit code to <strong>${escapeHtml(email)}</strong>
+      </div>
+      <div class="modal__input-row">
+        <input type="text" inputmode="numeric" maxlength="6" class="modal__input auth-flow__code" id="auth-code" placeholder="••••••" autocomplete="one-time-code">
+        <button id="auth-verify" class="pill-btn pill-btn--dark">sign in</button>
+      </div>
+      <div id="auth-flow-error" class="auth-flow__error"></div>
+      <div class="auth-flow__hint">
+        <button type="button" class="auth-flow__link" id="auth-back">use a different email</button>
+      </div>
+    `;
+
+    const input = host.querySelector('#auth-code');
+    const btn = host.querySelector('#auth-verify');
+
+    const submit = async () => {
+      const code = (input.value || '').trim();
+      if (code.length < 6) return showError('Please enter the 6-digit code.');
+
+      btn.disabled = true;
+      btn.innerText = 'signing in…';
+      try {
+        await verifyEmailCode(email, code);
+        trackEvent('signin_code_success', {});
+        showToast('Signed in.');
+        await finish();
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'sign in';
+        showError(err.message);
+      }
+    };
+
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    host.querySelector('#auth-back').addEventListener('click', renderEmailStep);
+    input.focus();
+  };
+
+  // ── Step 2b: we don't know you — the university vouches, then you
+  // nominate an inbox for next time.
+  const renderRegisterStep = (email) => {
+    host.innerHTML = `
+      <div class="auth-flow__sent">
+        We don't recognise <strong>${escapeHtml(email)}</strong> yet — let's get you set up.
+      </div>
+      <button type="button" id="auth-studid" class="uni-signin-btn">
+        <span>${ICONS.shieldTick}</span>
+        <span>verify with your university</span>
+      </button>
+      <div class="uni-signin-note">
+        You'll sign in on your own university's login page. Your password never reaches frea.
+      </div>
+      <div id="auth-flow-error" class="auth-flow__error"></div>
+      <div class="auth-flow__hint">
+        <button type="button" class="auth-flow__link" id="auth-back">use a different email</button>
+      </div>
+    `;
+
+    const btn = host.querySelector('#auth-studid');
+    host.querySelector('#auth-back').addEventListener('click', renderEmailStep);
+
+    btn.addEventListener('click', () => {
+      startUniversityVerification({
+        trigger: btn,
+        errorElId: 'auth-flow-error',
+        onVerified: finish,
+        renderEmailStep: (result) => {
+          // Verified, but they have not told us where mail should go. Offer
+          // the address they already typed rather than asking twice.
+          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
+          const field = host.querySelector('#contact-email');
+          if (field) field.value = email;
+          wireContactEmailStep({ ticket: result.ticket, onVerified: finish });
+        }
+      });
+    });
+  };
+
+  renderEmailStep();
+}
+
 // ─── University verification ────────────────────────────
 //
 // The emailed code is gone from the student path. Roughly four in five .ac.uk
@@ -2691,41 +2857,21 @@ function renderVerificationEmailStep(actionName) {
   };
 
   modal.innerHTML = verificationShell(`
-    <h2 style="font-size: 24px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">verify you're a student</h2>
+    <h2 style="font-size: 24px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">sign in to frea</h2>
     <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 18px;">
-      frea is free for verified UK students. Sign in with your university to
+      frea is free for verified UK students. Sign in to
       ${escapeHtml(actionName || 'continue')}.
     </p>
-    <div id="verify-gate">
-      <button type="button" id="studid-verify-btn" class="uni-signin-btn">
-        <span>${ICONS.shieldTick}</span>
-        <span>verify with your university</span>
-      </button>
-      <div class="uni-signin-note">
-        You'll sign in on your own university's login page. Your password never reaches frea.
-      </div>
-      <div id="verify-email-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 10px; display: none;"></div>
-    </div>
+    <div id="verify-gate"></div>
   `);
 
   openOverlay();
 
-  const btn = document.getElementById('studid-verify-btn');
-  if (btn) {
-    btn.addEventListener('click', () => {
-      startUniversityVerification({
-        trigger: btn,
-        errorElId: 'verify-email-error',
-        onVerified: finishIntent,
-        renderEmailStep: (result) => {
-          const host = document.getElementById('verify-gate');
-          if (!host) return;
-          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
-          wireContactEmailStep({ ticket: result.ticket, onVerified: finishIntent });
-        }
-      });
-    });
-  }
+  renderAuthFlow({
+    host: document.getElementById('verify-gate'),
+    actionName,
+    onSignedIn: finishIntent
+  });
 }
 
 async function submitVerificationEmail() {
@@ -4655,44 +4801,19 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
         </div>
         <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
       ` : `
-        <!-- The university proves this, not an emailed code. Four in five
-             .ac.uk addresses are filtered by Microsoft or a gateway in front
-             of it, and Manchester's silently discarded ours. The IdP's word
-             is both faster and a stronger claim than a code ever was. -->
-        <button type="button" id="studid-verify-btn" class="uni-signin-btn">
-          <span>${ICONS.shieldTick}</span>
-          <span>verify with your university</span>
-        </button>
-        <div class="uni-signin-note">
-          You'll sign in on your own university's login page. Your password never reaches frea.
-        </div>
-        <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 10px; display: none;"></div>
+        <div id="booking-auth-flow"></div>
       `}
     </div>
   `;
 
   // Wired here rather than inline: every new on*= handler is another reason
   // the CSP still carries script-src 'unsafe-inline'.
-  const verifyBtn = document.getElementById('studid-verify-btn');
-  if (verifyBtn) {
-    verifyBtn.addEventListener('click', () => {
-      startUniversityVerification({
-        trigger: verifyBtn,
-        errorElId: 'booking-error-msg',
-        // Repaint in place so the slot they picked survives verification.
-        onVerified: () => renderBookingModal({ mentor, selectedDay, selectedSlot }),
-        renderEmailStep: (result) => {
-          const host = document.getElementById('booking-gate');
-          if (!host) return;
-          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
-          wireContactEmailStep({
-            ticket: result.ticket,
-            onVerified: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
-          });
-        }
-      });
-    });
-  }
+  renderAuthFlow({
+    host: document.getElementById('booking-auth-flow'),
+    actionName: 'book this chat',
+    // Repaint in place so the slot they picked survives signing in.
+    onSignedIn: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
+  });
 
   const notYouBtn = document.getElementById('booking-not-you');
   if (notYouBtn) {
@@ -5572,16 +5693,9 @@ function renderMentorLogin() {
           mentor sign in
         </h1>
         <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 24px;">
-          Sign in with your university to reach your availability, bookings and earnings.
+          Sign in to reach your availability, bookings and earnings.
         </p>
-        <button type="button" id="mentor-studid-btn" class="uni-signin-btn">
-          <span>${ICONS.shieldTick}</span>
-          <span>verify with your university</span>
-        </button>
-        <div class="uni-signin-note">
-          You'll sign in on your own university's login page. Your password never reaches frea.
-        </div>
-        <div id="mentor-login-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 12px; display: none;"></div>
+        <div id="mentor-auth-flow" style="text-align: left;"></div>
         <p style="font-size: 12.5px; opacity: 0.6; margin-top: 20px; line-height: 1.5;">
           No mentor profile yet? <a href="/become-a-mentor" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')" style="color: var(--color-marker-orange); font-weight: 700;">become a mentor</a> — it takes a couple of minutes.
         </p>
@@ -5591,27 +5705,12 @@ function renderMentorLogin() {
   `;
 }
 
-/** Wires the mentor sign-in button once the page is in the DOM. */
+/** Hands the sign-in card to the shared auth flow once it is in the DOM. */
 function initMentorLoginPage() {
-  const btn = document.getElementById('mentor-studid-btn');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    startUniversityVerification({
-      trigger: btn,
-      errorElId: 'mentor-login-error',
-      onVerified: () => { navigateTo('/mentor-dashboard'); },
-      renderEmailStep: (result) => {
-        // A mentor whose university we have never seen before still needs to
-        // tell us where booking notices should go.
-        const host = document.querySelector('.mentor-login-page > div');
-        if (!host) return;
-        host.innerHTML = contactEmailStepHtml({ institution: result.institution });
-        wireContactEmailStep({
-          ticket: result.ticket,
-          onVerified: () => { navigateTo('/mentor-dashboard'); }
-        });
-      }
-    });
+  renderAuthFlow({
+    host: document.getElementById('mentor-auth-flow'),
+    actionName: 'reach your mentor dashboard',
+    onSignedIn: () => { navigateTo('/mentor-dashboard'); }
   });
 }
 window.initMentorLoginPage = initMentorLoginPage;
@@ -7054,7 +7153,7 @@ function renderPage() {
     app.innerHTML = renderMentorDashboard();
     // renderMentorDashboard falls back to the sign-in page when there is no
     // mentor session, so wire whichever of the two actually rendered.
-    if (document.getElementById('mentor-studid-btn')) initMentorLoginPage();
+    if (document.getElementById('mentor-auth-flow')) initMentorLoginPage();
     else initMentorDashboard();
   } else if (path.startsWith('/verify')) {
     app.innerHTML = renderEmailVerificationResult(route);

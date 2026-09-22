@@ -612,3 +612,21 @@ export async function completeUniversitySignIn(ticket, email) {
   });
   return json;
 }
+
+/**
+ * Step one of signing in: does this address belong to anyone?
+ *
+ * Resolves `{ known: true }` when a code has been sent, or `{ known: false }`
+ * when the address is not registered and the caller should send them through
+ * university verification instead. A rejected request is a real failure —
+ * "not registered" is an answer, not an error.
+ */
+export async function startSignIn(email) {
+  try {
+    await request('/auth/send-verification', { method: 'POST', body: { email } });
+    return { known: true };
+  } catch (err) {
+    if (err.status === 404) return { known: false };
+    throw err;
+  }
+}

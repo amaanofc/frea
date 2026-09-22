@@ -5389,3 +5389,53 @@ body {
   text-decoration: none;
   opacity: 0.8;
 }
+
+/* ─── Sign-in flow ─────────────────────────────────────── */
+.auth-flow__label {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.auth-flow__sent {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.auth-flow__code {
+  letter-spacing: 8px;
+  font-family: Consolas, Menlo, monospace;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-flow__error {
+  color: var(--color-marker-orange);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+  display: none;
+}
+
+.auth-flow__hint {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+/* Looks like a link, is a button — a real <a> here would need an href that
+ * goes nowhere, and an on*= handler is what keeps the CSP loose. */
+.auth-flow__link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

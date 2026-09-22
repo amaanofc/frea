@@ -20,6 +20,7 @@ import {
   getMentorById,
   findMentorByEmail,
   findMentorByAuthIdentifier,
+  findIdentityByContactEmail,
   getMonthlySlotsForMentor,
   createBooking,
   cancelBooking,
@@ -425,23 +426,26 @@ app.post('/api/auth/send-verification',
   // in ADMIN_EMAILS, which is server-side config, so the address is already
   // trusted and need not be a university one.
   /**
-   * Administrators only, now.
+   * A code goes only to an address we already know.
    *
-   * Students and mentors verify through their university's identity provider;
-   * this path exists solely so the people who run frea can still get in. That
-   * matters because an administrator's address is not a university one at all,
-   * and because university sign-in is brokered by a free third-party service
-   * with no SLA — if it is down, the operators must still be able to reach
-   * the admin dashboard.
+   * The university proves who someone is once, at registration. Every sign-in
+   * after that only has to prove they still hold the inbox they nominated —
+   * and a code to a personal inbox is a perfectly good proof of that, because
+   * the thing that was broken was .ac.uk filtering, not email. Codes to
+   * personal addresses have been arriving throughout.
    *
-   * Leaving it open to any .ac.uk address would also quietly reinstate the
-   * broken path: a student could still request a code that Proofpoint would
-   * throw away, and conclude frea was broken.
+   * Sending to an address we do not recognise would be worse than useless: it
+   * would mail a stranger a code for an account that does not exist, and turn
+   * this endpoint into a way to spray mail at arbitrary addresses. So an
+   * unknown address is told, without a code and without leaking whether it is
+   * registered elsewhere, to go and verify with their university.
    */
-  if (!cleanEmail || !isAdminEmail(cleanEmail)) {
-    return res.status(403).json({
+  const identity = findIdentityByContactEmail(cleanEmail);
+  if (!cleanEmail || (!identity && !isAdminEmail(cleanEmail))) {
+    return res.status(404).json({
       success: false,
-      error: 'Email codes are for frea administrators. Students and mentors sign in with their university.'
+      needsRegistration: true,
+      error: 'We do not recognise that email. Verify with your university to get set up.'
     });
   }
 
@@ -713,8 +717,22 @@ app.post('/api/auth/verify-code', rateLimit({ max: 10, windowMs: 60_000, key: by
   }
 
   const result = verifyEmailCode(email, code);
-  const mentor = findMentorByEmail(result.email);
-  const session = createSession({ email: result.email, mentorId: mentor?.id || null });
+
+  // The code proves possession of the inbox; the identity behind it is what
+  // the university vouched for at registration. Carrying the pseudonym onto
+  // the session is what lets a returning student keep their mentor profile —
+  // matching on the address instead would hand that profile to whoever
+  // happened to hold the address next.
+  const identity = findIdentityByContactEmail(result.email);
+  const mentor = identity
+    ? findMentorByAuthIdentifier(identity.authIdentifier)
+    : findMentorByEmail(result.email);
+
+  const session = createSession({
+    email: result.email,
+    mentorId: mentor?.id || null,
+    authIdentifier: identity?.authIdentifier || null
+  });
 
   res.json({
     success: true,

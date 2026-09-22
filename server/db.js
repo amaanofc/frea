@@ -2063,3 +2063,20 @@ export function contactEmailTakenBy(email, authIdentifier) {
     .find(i => i.contactEmail === clean && i.authIdentifier !== authIdentifier);
   return clash || null;
 }
+
+/**
+ * The identity behind a contact address, for signing in.
+ *
+ * Registration proves who someone is through their university; every sign-in
+ * afterwards only has to prove they still hold the inbox they nominated, and
+ * this is the lookup that connects the two. It is also what keeps a graduate
+ * in their account: university SSO stops working the day they leave, and
+ * mentors are often recent graduates, so an account that outlives the degree
+ * is a requirement rather than a convenience.
+ */
+export function findIdentityByContactEmail(email) {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return null;
+  const db = loadDb();
+  return (db.studentIdentities || []).find(i => i.contactEmail === clean) || null;
+}

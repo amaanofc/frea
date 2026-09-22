@@ -3,12 +3,25 @@
 // operator would, since the API no longer returns them.
 
 import fs from 'fs';
+import { seedIdentity } from './_identity.mjs';
 
 const API = 'http://localhost:3001/api';
 
 import { localOnly } from './_local-only.mjs';
 localOnly(API, { suite: 'api.e2e.mjs' });
 const DB = new URL('../server/data.json', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+
+/**
+ * Fresh addresses each run.
+ *
+ * The fixtures were fixed strings, and the code endpoints are rate limited
+ * per address — ten verifications a minute. Running the suite twice inside
+ * that window therefore failed on "too many attempts" rather than on
+ * anything real, which is a miserable signal to debug against. A run id
+ * keeps each pass isolated; reset:dev clears the accumulated identities.
+ */
+const RUN = Date.now().toString(36);
+const addr = (who) => `e2e.${who}.${RUN}@ed.ac.uk`;
 
 let pass = 0, fail = 0;
 const ok = (label, cond, detail = '') => {
@@ -17,6 +30,7 @@ const ok = (label, cond, detail = '') => {
 };
 
 const readDb = () => JSON.parse(fs.readFileSync(DB, 'utf8'));
+
 const codeFor = (email) => {
   const t = readDb().verificationTokens.find(t => t.email === email.toLowerCase());
   return t ? t.code : null;
@@ -36,6 +50,7 @@ async function call(method, path, { body, token } = {}) {
 
 /** Verify an email and return its session token. */
 async function signIn(email) {
+  seedIdentity(email);
   await call('POST', '/auth/send-verification', { body: { email } });
   const code = codeFor(email);
   const r = await call('POST', '/auth/verify-code', { body: { email, code } });
@@ -44,7 +59,8 @@ async function signIn(email) {
 
 console.log('\n─── 1. Verification & sessions ───');
 {
-  const email = 'e2e.student@ed.ac.uk';
+  const email = addr('student');
+  seedIdentity(email);
   const send = await call('POST', '/auth/send-verification', { body: { email } });
   ok('send-verification succeeds', send.json.success);
   ok('response does NOT contain the code', !JSON.stringify(send.json).match(/\b\d{6}\b/), JSON.stringify(send.json));
@@ -68,7 +84,7 @@ console.log('\n─── 1. Verification & sessions ───');
 }
 
 console.log('\n─── 2. Booking: validation ───');
-const studentEmail = 'e2e.booker@ed.ac.uk';
+const studentEmail = addr('booker');
 const studentToken = await signIn(studentEmail);
 {
   // Computed, not hardcoded. This was a fixed date, which passed right up
@@ -124,7 +140,7 @@ let bookingId = null, cancelToken = null;
   ok('booked slot removed from availability', !stillThere, `${open.date} ${open.time}`);
 
   // A different student must not be able to take the same slot.
-  const other = await signIn('e2e.rival@ed.ac.uk');
+  const other = await signIn(addr('rival'));
   const clash = await call('POST', '/bookings', {
     token: other, body: { mentorId: 1, date: open.date, time: open.time }
   });
@@ -235,6 +251,18 @@ console.log('\n─── 6. Resources, entitlement & downloads ───');
   ok('free resource published', free.status === 201, JSON.stringify(free.json));
   ok('listing hides the on-disk filename', !free.json.data.fileName, JSON.stringify(free.json.data));
 
+  // Start from payouts definitely off. The fixture below turns them on and
+  // never turned them back off, so a second run on the same data arrived here
+  // with payouts already enabled and the refusal below never happened — the
+  // suite passed alone and failed whenever it ran twice without a reset.
+  {
+    const db = readDb();
+    const me = db.mentors.find(m => m.id === globalThis.__mentorId);
+    delete me.stripeAccountId;
+    me.payoutsEnabled = false;
+    fs.writeFileSync(DB, JSON.stringify(db, null, 2));
+  }
+
   // Pricing requires payout onboarding, so a mentor who has not done it is
   // refused — we must never take money we cannot forward.
   const paid = await call('POST', '/resources', {
@@ -269,7 +297,7 @@ console.log('\n─── 6. Resources, entitlement & downloads ───');
   const anonDl = await fetch(`${API}/resources/${freeId}/download`);
   ok('anonymous download refused', anonDl.status === 401);
 
-  const buyerToken = await signIn('e2e.buyer@ed.ac.uk');
+  const buyerToken = await signIn(addr('buyer'));
 
   const freeDl = await fetch(`${API}/resources/${freeId}/download`, {
     headers: { Authorization: `Bearer ${buyerToken}` }

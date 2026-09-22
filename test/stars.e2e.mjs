@@ -10,6 +10,7 @@
 const API = (process.argv[2] || 'http://localhost:3001') + '/api';
 
 import { localOnly } from './_local-only.mjs';
+import { seedIdentity } from './_identity.mjs';
 localOnly(API, { suite: 'stars.e2e.mjs' });
 
 let pass = 0, fail = 0;
@@ -35,6 +36,7 @@ async function call(method, path, { token, body } = {}) {
 
 /** Verified session for an arbitrary .ac.uk address. */
 async function sessionFor(email) {
+  seedIdentity(email);
   await call('POST', '/auth/send-verification', { body: { email } });
   const dbRes = await fetch(`${API}/health`);        // keep the server warm
   await dbRes.text();
