@@ -62,9 +62,19 @@ import {
   getStarCounts,
   hasStarred,
   markEmailVerified,
+  saveStudidState,
+  consumeStudidState,
+  findStudentIdentity,
+  upsertStudentIdentity,
+  contactEmailTakenBy,
   mailHandoffStats,
   recentMailHandoffs
 } from './db.js';
+
+import {
+  startVerification,
+  completeVerification
+} from './studid.js';
 
 import {
   microsoftConfigured,
@@ -443,6 +453,145 @@ app.post('/api/auth/send-verification',
     email: cleanEmail,
     // Ethereal preview link in dev only — never the code itself.
     previewUrl: emailResult?.previewUrl || null
+  });
+}));
+
+// ─── Student verification via university SSO ────────────
+
+/** Step one: send the student to their university's login. */
+app.get('/api/auth/studid/start', rateLimit({ max: 20, windowMs: 10 * 60_000 }), wrap(async (req, res) => {
+  const { url } = await startVerification();
+  res.redirect(url);
+}));
+
+/**
+ * Step two: they come back from their university.
+ *
+ * Runs in a popup, so it answers with a page that posts the outcome to the
+ * opener and closes. A full-page redirect would take the booking modal and
+ * the slot they had chosen down with it.
+ *
+ * A returning student is signed straight in. A new one gets a short-lived
+ * ticket instead of a session, because we still need somewhere to send their
+ * calendar invites and have not asked yet.
+ */
+app.get('/api/auth/studid/callback', wrap(async (req, res) => {
+  const origin = (process.env.PUBLIC_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+
+  const reply = (payload) => {
+    res.type('html').send(`<!doctype html>
+<meta charset="utf-8">
+<title>Signing you in…</title>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; text-align: center; color: #334155;">
+<p>${payload.ok ? 'Verified — you can close this window.' : 'Sign-in did not complete. You can close this window.'}</p>
+<script>
+  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  try { if (window.opener) window.opener.postMessage({ source: 'frea-studid-auth', ...payload }, ${JSON.stringify(origin)}); } catch (e) {}
+  window.close();
+</script>
+</body>`);
+  };
+
+  let result;
+  try {
+    result = await completeVerification(req.query.state);
+  } catch (err) {
+    return reply({ ok: false, error: err.message });
+  }
+
+  const known = findStudentIdentity(result.authIdentifier);
+
+  if (known && known.contactEmail) {
+    // Seen before: refresh what the university told us and sign them in.
+    upsertStudentIdentity({
+      authIdentifier: result.authIdentifier,
+      entityId: result.entityId,
+      affiliations: result.affiliations,
+      contactEmail: known.contactEmail
+    });
+    const mentor = findMentorByEmail(known.contactEmail);
+    const session = createSession({ email: known.contactEmail, mentorId: mentor?.id || null });
+    console.log(`[studid] returning student from ${result.scope || result.entityId}`);
+    return reply({
+      ok: true, needsEmail: false,
+      email: known.contactEmail,
+      sessionToken: session.token,
+      isMentor: Boolean(mentor),
+      isAdmin: session.isAdmin,
+      institution: result.scope
+    });
+  }
+
+  // First time: hold the proof against a ticket until they give us an address.
+  const ticket = crypto.randomBytes(24).toString('hex');
+  saveStudidState({
+    state: `pending:${ticket}`,
+    verificationId: `verified:${result.authIdentifier}`,
+    secretToken: JSON.stringify({
+      authIdentifier: result.authIdentifier,
+      entityId: result.entityId,
+      affiliations: result.affiliations
+    }),
+    expiresAt: Date.now() + 30 * 60 * 1000
+  });
+
+  console.log(`[studid] new student from ${result.scope || result.entityId}`);
+  reply({ ok: true, needsEmail: true, ticket, institution: result.scope });
+}));
+
+/**
+ * Step three, for a new student: bind a contact address and open the session.
+ *
+ * Any provider. This address is not proof of anything — the university
+ * already vouched for them — it is only where invites and confirmations go,
+ * and a personal mailbox is precisely the point, because it does not sit
+ * behind the filtering that made .ac.uk mail unusable.
+ */
+app.post('/api/auth/studid/complete', rateLimit({ max: 20, windowMs: 10 * 60_000 }), wrap(async (req, res) => {
+  const { ticket, email } = req.body || {};
+  const clean = (email || '').trim().toLowerCase();
+
+  if (!clean || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) {
+    return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+  }
+
+  const row = consumeStudidState(`pending:${ticket}`);
+  if (!row) {
+    return res.status(400).json({ success: false, error: 'That verification expired. Please verify with your university again.' });
+  }
+
+  let proof;
+  try {
+    proof = JSON.parse(row.secretToken);
+  } catch (_) {
+    return res.status(400).json({ success: false, error: 'That verification could not be read. Please try again.' });
+  }
+
+  const clash = contactEmailTakenBy(clean, proof.authIdentifier);
+  if (clash) {
+    return res.status(409).json({
+      success: false,
+      error: 'That email address is already in use by another student. Please use a different one.'
+    });
+  }
+
+  upsertStudentIdentity({
+    authIdentifier: proof.authIdentifier,
+    entityId: proof.entityId,
+    affiliations: proof.affiliations,
+    contactEmail: clean
+  });
+  markEmailVerified(clean);
+
+  const mentor = findMentorByEmail(clean);
+  const session = createSession({ email: clean, mentorId: mentor?.id || null });
+
+  res.json({
+    success: true,
+    email: clean,
+    sessionToken: session.token,
+    isMentor: Boolean(mentor),
+    isAdmin: session.isAdmin
   });
 }));
 

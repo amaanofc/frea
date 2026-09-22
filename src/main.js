@@ -49,6 +49,8 @@ import {
   fetchMe,
   signOut,
   starMentor,
+  verifyWithUniversity,
+  completeUniversitySignIn,
   signInWithMicrosoft,
   microsoftAuthAvailable
 } from './api.js';
@@ -2375,6 +2377,141 @@ async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
 window.handleDocumentFileSelect = handleDocumentFileSelect;
 
 
+
+// ─── University verification ────────────────────────────
+//
+// The emailed code is gone from the student path. Roughly four in five .ac.uk
+// addresses are filtered by Microsoft or a security gateway in front of it,
+// and Manchester's accepted our mail then delivered it nowhere reachable — no
+// inbox, no junk, no quarantine. Nothing on our side was wrong; the receiving
+// institution simply declined.
+//
+// So the university vouches for the student directly, over the federation its
+// own IdP belongs to, and the address we ask for afterwards is only where
+// invites go. A personal mailbox has no gateway in front of it, which is why
+// confirmations now arrive at all.
+
+/**
+ * Runs verification, then either finishes or asks where to send invites.
+ *
+ * `onVerified` runs once a session exists — after the contact address for a
+ * first-time student, immediately for a returning one.
+ */
+async function startUniversityVerification({ trigger, errorElId, onVerified, renderEmailStep }) {
+  const errorEl = errorElId ? document.getElementById(errorElId) : null;
+  if (errorEl) errorEl.style.display = 'none';
+
+  const original = trigger ? trigger.innerHTML : null;
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.innerHTML = '<span>opening your university sign-in…</span>';
+  }
+
+  const fail = (message) => {
+    if (trigger) {
+      trigger.disabled = false;
+      trigger.innerHTML = original;
+    }
+    // Closing the window is an ordinary cancel, not worth shouting about.
+    if (/closed before it finished/i.test(message)) return;
+    trackEvent('studid_verify_failed', { reason: message });
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = message;
+    } else {
+      showToast(message);
+    }
+  };
+
+  let result;
+  try {
+    // Called synchronously from the click: browsers only allow window.open
+    // while a user gesture is being handled.
+    result = await verifyWithUniversity();
+  } catch (err) {
+    return fail(err.message);
+  }
+
+  trackEvent('studid_verify_success', { institution: result.institution || null, returning: !result.needsEmail });
+
+  if (result.needsEmail) {
+    // Verified, but we have nowhere to send the calendar invite yet.
+    renderEmailStep(result);
+    return;
+  }
+
+  await refreshEntitlements();
+  updateNavbarMentorStatus();
+  showToast('Verified with your university.');
+  if (typeof onVerified === 'function') onVerified(result);
+}
+
+/**
+ * The contact-address step, shown once the university has already vouched.
+ *
+ * Any provider, and deliberately so: this address proves nothing — the
+ * institution already did that — it is only where invites and confirmations
+ * go. A personal one is the point, because it is not behind the filtering
+ * that made university mail unusable.
+ */
+function contactEmailStepHtml({ institution }) {
+  return `
+    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px; color: #15803d; display: flex; align-items: center; gap: 8px;">
+      <span>${ICONS.shieldTick}</span>
+      <span>Verified${institution ? ` with <strong>${escapeHtml(institution)}</strong>` : ''}</span>
+    </div>
+    <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Where should we send your invite?</label>
+    <div class="modal__input-row">
+      <input type="email" class="modal__input" id="contact-email" placeholder="e.g. you@gmail.com" autocomplete="email">
+      <button id="contact-email-btn" class="pill-btn pill-btn--dark">continue</button>
+    </div>
+    <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
+    <div style="font-size: 12px; opacity: 0.6; margin-top: 8px;">
+      Use whichever inbox you actually read — a personal one is fine, and usually arrives faster than a university address.
+    </div>
+  `;
+}
+
+/** Wires the contact-address step and opens the session on submit. */
+function wireContactEmailStep({ ticket, onVerified }) {
+  const btn = document.getElementById('contact-email-btn');
+  const input = document.getElementById('contact-email');
+  const errorEl = document.getElementById('booking-error-msg');
+  if (!btn || !input) return;
+
+  const submit = async () => {
+    const email = input.value.trim().toLowerCase();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = 'Please enter a valid email address.';
+      }
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'saving…';
+    try {
+      await completeUniversitySignIn(ticket, email);
+      await refreshEntitlements();
+      updateNavbarMentorStatus();
+      showToast('Verified — you are all set.');
+      if (typeof onVerified === 'function') onVerified();
+    } catch (err) {
+      btn.disabled = false;
+      btn.innerText = 'continue';
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = err.message;
+      }
+    }
+  };
+
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  input.focus();
+}
+
 // ─── Sign in with Microsoft ─────────────────────────────
 //
 // Roughly four in five .ac.uk addresses are filtered by Microsoft or a gateway
@@ -2534,49 +2671,60 @@ function verificationShell(inner) {
   `;
 }
 
+/**
+ * The shared gate for every student-only action — starring, claiming a
+ * resource, downloading, reporting, applying to mentor.
+ *
+ * Same university sign-in as the booking gate, for the same reason: the
+ * emailed code was being filtered away before students ever saw it, and the
+ * university vouching for them directly is both faster and a stronger claim.
+ */
 function renderVerificationEmailStep(actionName) {
   const modal = document.getElementById('modal-content');
   if (!modal) return;
 
+  const finishIntent = () => {
+    const fn = window.__currentOnVerified;
+    window.__currentOnVerified = null;
+    if (typeof fn === 'function') fn();
+    else { closeModal(); renderPage(); }
+  };
+
   modal.innerHTML = verificationShell(`
-    <h2 style="font-size: 24px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">verify your student email</h2>
+    <h2 style="font-size: 24px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">verify you're a student</h2>
     <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 18px;">
-      frea is free for verified UK students. Enter your university email ending in
-      <strong>.ac.uk</strong> to ${escapeHtml(actionName || 'continue')}.
+      frea is free for verified UK students. Sign in with your university to
+      ${escapeHtml(actionName || 'continue')}.
     </p>
-    ${microsoftSignInHtml({ id: 'ms-signin-verify' })}
-    <div style="margin-bottom: 16px;">
-      <input type="email" id="verify-email-input" class="mentor-form-input" placeholder="e.g. s123456@ed.ac.uk" style="text-align: center;" autocomplete="email">
-      <div id="verify-email-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 8px; display: none;"></div>
+    <div id="verify-gate">
+      <button type="button" id="studid-verify-btn" class="uni-signin-btn">
+        <span>${ICONS.shieldTick}</span>
+        <span>verify with your university</span>
+      </button>
+      <div class="uni-signin-note">
+        You'll sign in on your own university's login page. Your password never reaches frea.
+      </div>
+      <div id="verify-email-error" style="color: #ef4444; font-size: 13px; font-weight: 600; margin-top: 10px; display: none;"></div>
     </div>
-    <button type="button" id="verify-email-btn" class="pill-btn pill-btn--animated" style="width: 100%; padding: 12px;" onclick="window.submitVerificationEmail()">
-      <span class="pill-btn__inner" style="justify-content: center;">
-        <span>send my code</span>
-        <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
-      </span>
-    </button>
   `);
 
   openOverlay();
 
-  // Signing in through the tenant satisfies whatever this modal was opened
-  // to gate, so run that intent straight away rather than asking for a code
-  // the student no longer needs.
-  wireMicrosoftSignIn({
-    id: 'ms-signin-verify',
-    errorElId: 'verify-email-error',
-    onSuccess: () => {
-      const fn = window.__currentOnVerified;
-      window.__currentOnVerified = null;
-      if (typeof fn === 'function') fn();
-      else { closeModal(); renderPage(); }
-    }
-  });
-
-  const input = document.getElementById('verify-email-input');
-  if (input) {
-    input.focus();
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') window.submitVerificationEmail(); });
+  const btn = document.getElementById('studid-verify-btn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      startUniversityVerification({
+        trigger: btn,
+        errorElId: 'verify-email-error',
+        onVerified: finishIntent,
+        renderEmailStep: (result) => {
+          const host = document.getElementById('verify-gate');
+          if (!host) return;
+          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
+          wireContactEmailStep({ ticket: result.ticket, onVerified: finishIntent });
+        }
+      });
+    });
   }
 }
 
@@ -4469,11 +4617,11 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
       </li>
       <li class="modal__step">
         <span class="modal__step-icon">${ICONS.shieldTick}</span>
-        <span>verified via your official UK university <strong>.ac.uk</strong> email</span>
+        <span>verified through your <strong>university login</strong> — no email code to wait for</span>
       </li>
     </ul>
 
-    <div style="margin-top: 20px;">
+    <div id="booking-gate" style="margin-top: 20px;">
       ${alreadyVerified ? `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;">
           <div style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #15803d; flex-wrap: wrap;">
@@ -4490,23 +4638,45 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
         </div>
         <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
       ` : `
-        ${microsoftSignInHtml({ id: 'ms-signin-booking' })}
-        <label style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 6px;">Your UK University Student Email:</label>
-        <div class="modal__input-row">
-          <input type="email" class="modal__input" id="booking-email" placeholder="e.g. s123456@ed.ac.uk or name@imperial.ac.uk">
-          <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
-        </div>
-        <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
-        <div style="font-size: 12px; opacity: 0.6; margin-top: 8px; display: flex; align-items: center; gap: 5px;">
+        <!-- The university proves this, not an emailed code. Four in five
+             .ac.uk addresses are filtered by Microsoft or a gateway in front
+             of it, and Manchester's silently discarded ours. The IdP's word
+             is both faster and a stronger claim than a code ever was. -->
+        <button type="button" id="studid-verify-btn" class="uni-signin-btn">
           <span>${ICONS.shieldTick}</span>
-          <span>We'll email you a 6-digit code to confirm you're a genuine UK student. That's what keeps frea free.</span>
+          <span>verify with your university</span>
+        </button>
+        <div class="uni-signin-note">
+          You'll sign in on your own university's login page. Your password never reaches frea.
         </div>
+        <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 10px; display: none;"></div>
       `}
     </div>
   `;
 
   // Wired here rather than inline: every new on*= handler is another reason
   // the CSP still carries script-src 'unsafe-inline'.
+  const verifyBtn = document.getElementById('studid-verify-btn');
+  if (verifyBtn) {
+    verifyBtn.addEventListener('click', () => {
+      startUniversityVerification({
+        trigger: verifyBtn,
+        errorElId: 'booking-error-msg',
+        // Repaint in place so the slot they picked survives verification.
+        onVerified: () => renderBookingModal({ mentor, selectedDay, selectedSlot }),
+        renderEmailStep: (result) => {
+          const host = document.getElementById('booking-gate');
+          if (!host) return;
+          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
+          wireContactEmailStep({
+            ticket: result.ticket,
+            onVerified: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
+          });
+        }
+      });
+    });
+  }
+
   const notYouBtn = document.getElementById('booking-not-you');
   if (notYouBtn) {
     notYouBtn.addEventListener('click', () => {
@@ -4584,14 +4754,11 @@ async function confirmBooking(mentorId) {
     return;
   }
 
-  if (!email.endsWith('.ac.uk')) {
-    if (errorEl) {
-      errorEl.style.display = 'block';
-      errorEl.innerText = 'Please use your official university email (ending in .ac.uk) to verify your UK student status.';
-    }
-    if (emailInput) emailInput.style.borderColor = '#ff6f1e';
-    return;
-  }
+  // No .ac.uk check here any more. The session was opened by the student's
+  // own university identity provider, and the address on it is the contact
+  // one they chose — usually personal, which is the whole point, since
+  // university mail was being filtered away unseen. Requiring .ac.uk here
+  // would reject every student the new flow verifies.
 
   const mentor = MENTORS.find(m => m.id === parseInt(mentorId));
 

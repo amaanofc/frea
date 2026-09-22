@@ -530,3 +530,85 @@ export function signInWithMicrosoft() {
     }, 500);
   });
 }
+
+// ─── University sign-in (Studid) ────────────────────────
+
+/**
+ * Verifies the student through their own university's login, in a popup.
+ *
+ * Resolves either with a live session (a returning student) or with
+ * `needsEmail` and a ticket — a first-time student whose university has
+ * vouched for them but who has not yet told us where to send invites.
+ *
+ * Popup rather than redirect: this is called from inside the booking modal,
+ * and a redirect would discard the slot they had picked.
+ */
+export function verifyWithUniversity() {
+  return new Promise((resolve, reject) => {
+    const w = 560, h = 700;
+    const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
+    const popup = window.open(
+      `${API_BASE}/auth/studid/start`,
+      'frea-university-signin',
+      `width=${w},height=${h},left=${left},top=${top}`
+    );
+
+    if (!popup) {
+      reject(new Error('Your browser blocked the sign-in window. Please allow pop-ups for this site and try again.'));
+      return;
+    }
+
+    let settled = false;
+    let poll;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('message', onMessage);
+      clearInterval(poll);
+      fn(arg);
+    };
+
+    function onMessage(event) {
+      // Origin stops another page posting a forged session in; the source tag
+      // stops us reacting to unrelated traffic on our own origin.
+      if (event.origin !== window.location.origin) return;
+      if (!event.data || event.data.source !== 'frea-studid-auth') return;
+
+      if (!event.data.ok) {
+        finish(reject, new Error(event.data.error || 'University sign-in failed.'));
+        return;
+      }
+
+      if (!event.data.needsEmail) {
+        setSession({
+          email: event.data.email,
+          sessionToken: event.data.sessionToken,
+          isMentor: event.data.isMentor,
+          isAdmin: event.data.isAdmin,
+          mentorId: null, name: null, university: null
+        });
+      }
+      finish(resolve, event.data);
+    }
+
+    window.addEventListener('message', onMessage);
+
+    poll = setInterval(() => {
+      if (popup.closed) finish(reject, new Error('Sign-in window was closed before it finished.'));
+    }, 500);
+  });
+}
+
+/** Binds a contact address to a freshly verified student and opens the session. */
+export async function completeUniversitySignIn(ticket, email) {
+  const json = await request('/auth/studid/complete', { method: 'POST', body: { ticket, email } });
+  setSession({
+    email: json.email,
+    sessionToken: json.sessionToken,
+    isMentor: json.isMentor,
+    isAdmin: json.isAdmin,
+    mentorId: null, name: null, university: null
+  });
+  return json;
+}

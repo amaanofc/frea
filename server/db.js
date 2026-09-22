@@ -289,6 +289,8 @@ function migrate(db) {
   db.reports = db.reports || [];
   db.mailLog = Array.isArray(db.mailLog) ? db.mailLog : [];
   db.oauthStates = Array.isArray(db.oauthStates) ? db.oauthStates : [];
+  db.studidStates = Array.isArray(db.studidStates) ? db.studidStates : [];
+  db.studentIdentities = Array.isArray(db.studentIdentities) ? db.studentIdentities : [];
   db.stats = db.stats || {};
   if (typeof db.stats.totalBookings !== 'number') db.stats.totalBookings = 0;
   if (typeof db.stats.averageRating !== 'number') db.stats.averageRating = 4.9;
@@ -531,8 +533,14 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
 
 export function createBooking({ mentorId, studentEmail, date, time }) {
   const email = (studentEmail || '').trim().toLowerCase();
-  if (!email || !email.endsWith('.ac.uk')) {
-    throw new Error('Verification failed: You must use an official UK university email ending in ".ac.uk"');
+  // The address no longer carries the proof, so it is no longer what gets
+  // checked. Students verify through their university's own identity
+  // provider and then tell us where to send invites — usually a personal
+  // mailbox, precisely because university mail was being filtered into
+  // oblivion. What matters is that this address belongs to someone who has
+  // verified, which is what the verified list records for both routes.
+  if (!email || !isEmailVerified(email)) {
+    throw new Error('Verification failed: please verify with your university before booking.');
   }
 
   // Accept either canonical or legacy display input, then work canonically.
@@ -1477,8 +1485,11 @@ export function splitPrice(price) {
 
 export function createPendingOrder({ resourceId, buyerEmail }) {
   const cleanEmail = (buyerEmail || '').trim().toLowerCase();
-  if (!cleanEmail || !cleanEmail.endsWith('.ac.uk')) {
-    throw new Error('A genuine UK student email ending in .ac.uk is required for download access and receipts.');
+  // Verified, not university-shaped — see createBooking. The receipt has to
+  // reach an inbox the buyer actually reads, and for a paid download that
+  // matters more here than anywhere else.
+  if (!cleanEmail || !isEmailVerified(cleanEmail)) {
+    throw new Error('Please verify with your university before purchasing.');
   }
 
   const resource = getResourceById(resourceId);
@@ -1884,4 +1895,103 @@ export function consumeOAuthState(state) {
   if (!row) return null;
   if ((row.expiresAt || 0) <= now) return null;
   return row;
+}
+
+// ─── University sign-in (Studid) ────────────────────────
+
+/** One row per sign-in attempt, held between leaving for the IdP and returning. */
+export function saveStudidState({ state, verificationId, secretToken, expiresAt }) {
+  const db = loadDb();
+  const now = Date.now();
+  db.studidStates = (Array.isArray(db.studidStates) ? db.studidStates : [])
+    .filter(s => (s.expiresAt || 0) > now);
+  db.studidStates.push({
+    state, verificationId, secretToken,
+    expiresAt: expiresAt || (now + 30 * 60 * 1000),
+    createdAt: new Date().toISOString()
+  });
+  saveDb(db);
+}
+
+/**
+ * Reads a state row and deletes it in the same step.
+ *
+ * Single use, because the row holds the secret that reads the verification
+ * result back — a replayed callback would otherwise mint a second session
+ * from one sign-in.
+ */
+export function consumeStudidState(state) {
+  if (!state) return null;
+  const db = loadDb();
+  const now = Date.now();
+  const all = Array.isArray(db.studidStates) ? db.studidStates : [];
+  const row = all.find(s => s.state === state);
+  db.studidStates = all.filter(s => s.state !== state && (s.expiresAt || 0) > now);
+  saveDb(db);
+  if (!row || (row.expiresAt || 0) <= now) return null;
+  return row;
+}
+
+/**
+ * The link between a university identity and the contact address we mail.
+ *
+ * `authIdentifier` is the university's stable pseudonym for this student, and
+ * it is the real primary key now that no .ac.uk address is collected. The
+ * contact email is whatever they asked us to write to — usually personal, and
+ * deliberately not proof of anything.
+ *
+ * Keying on the pseudonym rather than the address is what stops one student
+ * holding unlimited accounts by typing a different mailbox each time, and it
+ * is what lets a returning student sign in without re-entering anything.
+ */
+export function findStudentIdentity(authIdentifier) {
+  if (!authIdentifier) return null;
+  const db = loadDb();
+  return (db.studentIdentities || []).find(i => i.authIdentifier === authIdentifier) || null;
+}
+
+/** Records a first sign-in, or refreshes what the university last told us. */
+export function upsertStudentIdentity({ authIdentifier, entityId, affiliations = [], contactEmail }) {
+  const db = loadDb();
+  db.studentIdentities = Array.isArray(db.studentIdentities) ? db.studentIdentities : [];
+
+  const clean = (contactEmail || '').trim().toLowerCase();
+  const existing = db.studentIdentities.find(i => i.authIdentifier === authIdentifier);
+
+  if (existing) {
+    existing.entityId = entityId;
+    existing.affiliations = affiliations;
+    if (clean) existing.contactEmail = clean;
+    existing.lastSeenAt = new Date().toISOString();
+  } else {
+    db.studentIdentities.push({
+      authIdentifier,
+      entityId,
+      affiliations,
+      contactEmail: clean,
+      createdAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString()
+    });
+  }
+
+  saveDb(db);
+  return findStudentIdentity(authIdentifier);
+}
+
+/**
+ * Whether a contact address already belongs to a different university
+ * identity.
+ *
+ * The address is unverified now, so without this one student could type
+ * another's address and receive their calendar invites and confirmations.
+ * Two people cannot share one contact address; the same person returning is
+ * fine, which is why the pseudonym is compared rather than just the address.
+ */
+export function contactEmailTakenBy(email, authIdentifier) {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return null;
+  const db = loadDb();
+  const clash = (db.studentIdentities || [])
+    .find(i => i.contactEmail === clean && i.authIdentifier !== authIdentifier);
+  return clash || null;
 }

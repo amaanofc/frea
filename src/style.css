@@ -5318,3 +5318,47 @@ body {
   background: currentColor;
   opacity: 0.35;
 }
+
+/* ─── Verify with your university ──────────────────────── */
+/*
+ * The primary action in the booking gate now, since it is the only way a
+ * student proves themselves. Sized and weighted accordingly — this used to be
+ * an email field and a "confirm chat" button, and the button it replaces was
+ * the loudest thing in the modal.
+ */
+.uni-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--color-charcoal, #171717);
+  border: none;
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.uni-signin-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.uni-signin-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+.uni-signin-note {
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1.5;
+  margin-top: 9px;
+  text-align: center;
+}
