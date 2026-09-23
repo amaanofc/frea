@@ -2535,7 +2535,8 @@ function renderAuthFlow({ host, actionName = 'continue', email: startEmail = '',
           host.innerHTML = contactEmailStepHtml({ institution: result.institution });
           const field = host.querySelector('#contact-email');
           if (field) field.value = email;
-          wireContactEmailStep({ ticket: result.ticket, onVerified: finish });
+          // Nominating an address does not sign you in; proving it does.
+          wireContactEmailStep({ ticket: result.ticket, onCodeSent: renderCodeStep });
         }
       });
     });
@@ -2639,7 +2640,7 @@ function contactEmailStepHtml({ institution }) {
 }
 
 /** Wires the contact-address step and opens the session on submit. */
-function wireContactEmailStep({ ticket, onVerified }) {
+function wireContactEmailStep({ ticket, onCodeSent }) {
   const btn = document.getElementById('contact-email-btn');
   const input = document.getElementById('contact-email');
   const errorEl = document.getElementById('booking-error-msg');
@@ -2674,10 +2675,7 @@ function wireContactEmailStep({ ticket, onVerified }) {
     btn.innerText = 'saving…';
     try {
       await completeUniversitySignIn(ticket, email);
-      await refreshEntitlements();
-      updateNavbarMentorStatus();
-      showToast('Verified — you are all set.');
-      if (typeof onVerified === 'function') onVerified();
+      if (typeof onCodeSent === 'function') onCodeSent(email);
     } catch (err) {
       btn.disabled = false;
       btn.innerText = 'continue';

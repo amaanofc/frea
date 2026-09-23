@@ -21,6 +21,8 @@ import {
   findMentorByEmail,
   findMentorByAuthIdentifier,
   findIdentityByContactEmail,
+  savePendingBinding,
+  consumePendingBinding,
   getMonthlySlotsForMentor,
   createBooking,
   cancelBooking,
@@ -539,7 +541,9 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
     });
     // By pseudonym, not address: the contact address is theirs to change.
     const mentor = findMentorByAuthIdentifier(result.authIdentifier);
-    const session = createSession({ email: known.contactEmail, mentorId: mentor?.id || null, authIdentifier: result.authIdentifier });
+    // A returning student: this address was proven by code when they
+    // registered, and only they hold this pseudonym.
+    const session = createSession({ email: known.contactEmail, mentorId: mentor?.id || null, authIdentifier: result.authIdentifier, emailProven: true });
     console.log(`[studid] returning student from ${result.scope || result.entityId}`);
     return reply({
       ok: true, needsEmail: false,
@@ -626,25 +630,56 @@ app.post('/api/auth/studid/complete', rateLimit({ max: 100, windowMs: 10 * 60_00
     });
   }
 
-  upsertStudentIdentity({
-    authIdentifier: proof.authIdentifier,
-    entityId: proof.entityId,
-    affiliations: proof.affiliations,
-    institutionName: proof.institutionName,
-    scope: proof.scope,
-    contactEmail: clean
+  /**
+   * No session yet, and nothing written to the identity.
+   *
+   * This address has not been proven — the person typed it, nothing more. It
+   * used to open a session immediately, and because session.email is what
+   * authorises entitlements, bookings and cancellation, and because
+   * createSession derived isAdmin from it, anyone holding any account at any
+   * of the thousands of institutions the federation covers could complete an
+   * honest university login, nominate the administrator's address, and be
+   * handed an admin session. From there /api/admin/backup returns the whole
+   * database, session tokens included.
+   *
+   * So the address is proven the same way every later sign-in proves it: a
+   * code to that inbox. The binding is held aside until the code comes back,
+   * which means claiming somebody else's address achieves nothing — the code
+   * goes to them, and the claim expires unused.
+   */
+  savePendingBinding({
+    email: clean,
+    proof: {
+      authIdentifier: proof.authIdentifier,
+      entityId: proof.entityId,
+      affiliations: proof.affiliations,
+      institutionName: proof.institutionName,
+      scope: proof.scope
+    }
   });
-  markEmailVerified(clean);
 
-  const mentor = findMentorByAuthIdentifier(proof.authIdentifier);
-  const session = createSession({ email: clean, mentorId: mentor?.id || null, authIdentifier: proof.authIdentifier });
+  const code = String(crypto.randomInt(100000, 1000000));
+  saveVerificationToken({
+    email: clean,
+    token: crypto.randomBytes(24).toString('hex'),
+    code,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000
+  });
+
+  try {
+    await sendVerificationEmail({ email: clean, code });
+  } catch (mailErr) {
+    console.error('[studid] could not send the binding code:', mailErr.message);
+    return res.status(502).json({
+      success: false,
+      error: 'We could not send your confirmation code just now. Please try again in a moment.'
+    });
+  }
 
   res.json({
     success: true,
+    needsCode: true,
     email: clean,
-    sessionToken: session.token,
-    isMentor: Boolean(mentor),
-    isAdmin: session.isAdmin,
     institution: proof.institutionName || proof.scope || null
   });
 }));
@@ -657,6 +692,20 @@ app.post('/api/auth/verify-code', rateLimit({ max: 10, windowMs: 60_000, key: by
   }
 
   const result = verifyEmailCode(email, code);
+
+  /**
+   * A first registration finishes here, not at /studid/complete.
+   *
+   * The university vouched for them, they nominated an inbox, and this code
+   * is the proof they can read it. Only now is the binding written — so
+   * nominating somebody else's address never got the claimant anything: the
+   * code went to its owner.
+   */
+  const pending = consumePendingBinding(result.email);
+  if (pending?.proof?.authIdentifier) {
+    upsertStudentIdentity({ ...pending.proof, contactEmail: result.email });
+    markEmailVerified(result.email);
+  }
 
   // The code proves possession of the inbox; the identity behind it is what
   // the university vouched for at registration. Carrying the pseudonym onto
@@ -671,7 +720,9 @@ app.post('/api/auth/verify-code', rateLimit({ max: 10, windowMs: 60_000, key: by
   const session = createSession({
     email: result.email,
     mentorId: mentor?.id || null,
-    authIdentifier: identity?.authIdentifier || null
+    authIdentifier: identity?.authIdentifier || null,
+    // A code to this inbox is exactly what was just proven.
+    emailProven: true
   });
 
   res.json({
@@ -694,7 +745,9 @@ app.get('/api/auth/verify', wrap(async (req, res) => {
 
   const result = verifyEmailToken(token);
   const mentor = findMentorByEmail(result.email);
-  const session = createSession({ email: result.email, mentorId: mentor?.id || null });
+  // Holding a token that was only ever mailed to this address proves the
+  // inbox, exactly as a code does.
+  const session = createSession({ email: result.email, mentorId: mentor?.id || null, emailProven: true });
 
   res.json({
     success: true,
@@ -971,7 +1024,14 @@ app.post('/api/mentors/apply', requireVerified, wrap(async (req, res) => {
   }
 
   const result = createMentorApplication({ ...appData, email, authIdentifier });
-  const session = createSession({ email, mentorId: result.mentor.id, authIdentifier });
+  // Inherited, never asserted: becoming a mentor proves nothing new about the
+  // address, so this session is exactly as trusted as the one that made it.
+  const session = createSession({
+    email,
+    mentorId: result.mentor.id,
+    authIdentifier,
+    emailProven: Boolean(req.session.emailProven)
+  });
 
   res.status(201).json({
     success: true,

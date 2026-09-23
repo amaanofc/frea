@@ -292,6 +292,7 @@ function migrate(db) {
   db.mailLog = Array.isArray(db.mailLog) ? db.mailLog : [];
   db.oauthStates = Array.isArray(db.oauthStates) ? db.oauthStates : [];
   db.studidStates = Array.isArray(db.studidStates) ? db.studidStates : [];
+  db.pendingBindings = Array.isArray(db.pendingBindings) ? db.pendingBindings : [];
   db.studentIdentities = Array.isArray(db.studentIdentities) ? db.studentIdentities : [];
   db.stats = db.stats || {};
   if (typeof db.stats.totalBookings !== 'number') db.stats.totalBookings = 0;
@@ -1163,7 +1164,12 @@ export function updateMentorProfile(id, updates) {
   if (updates.name) mentor.name = cleanText(updates.name, 80);
   if (updates.year) mentor.year = cleanText(updates.year, 40);
   if (updates.major) mentor.major = cleanText(updates.major, 80);
-  if (updates.university) mentor.university = cleanText(updates.university, 100);
+  // `university` is deliberately absent. It is derived from whoever vouched
+  // for the mentor at sign-in, and createMentorApplication refuses to invent
+  // one — but this route was still honouring it from the request body, so a
+  // mentor could apply honestly and then PUT their own record to any
+  // institution they liked and wear the verified badge beside it. Editing
+  // your own profile is the obvious place that gets exercised.
   if (updates.bio) mentor.bio = cleanText(updates.bio, 1200);
   if (updates.topTip) mentor.topTip = cleanText(updates.topTip, 140);
   if (updates.topTipColor) mentor.topTipColor = safePostitColor(updates.topTipColor);
@@ -2102,4 +2108,48 @@ export function findIdentityByContactEmail(email) {
   if (!clean) return null;
   const db = loadDb();
   return (db.studentIdentities || []).find(i => i.contactEmail === clean) || null;
+}
+
+// ─── Contact address awaiting proof ─────────────────────
+
+/**
+ * A university identity and the address someone has asked us to bind to it,
+ * held until a code proves they can read that inbox.
+ *
+ * Nothing here grants anything. It exists precisely so that nominating an
+ * address does not, on its own, carry authority: the identity is not written
+ * and no session is opened until the code comes back. Claiming someone else's
+ * address therefore achieves nothing — the code is delivered to them, and the
+ * claim expires unused.
+ *
+ * Keyed by address, so a second attempt simply replaces the first rather than
+ * leaving a queue of stale claims on one inbox.
+ */
+export function savePendingBinding({ email, proof, expiresAt }) {
+  const db = loadDb();
+  const clean = (email || '').trim().toLowerCase();
+  const now = Date.now();
+  db.pendingBindings = (Array.isArray(db.pendingBindings) ? db.pendingBindings : [])
+    .filter(b => b.email !== clean && (b.expiresAt || 0) > now);
+  db.pendingBindings.push({
+    email: clean,
+    proof,
+    expiresAt: expiresAt || (now + 24 * 60 * 60 * 1000),
+    createdAt: new Date().toISOString()
+  });
+  saveDb(db);
+}
+
+/** Reads a pending binding and deletes it in the same step. */
+export function consumePendingBinding(email) {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) return null;
+  const db = loadDb();
+  const now = Date.now();
+  const all = Array.isArray(db.pendingBindings) ? db.pendingBindings : [];
+  const row = all.find(b => b.email === clean);
+  db.pendingBindings = all.filter(b => b.email !== clean && (b.expiresAt || 0) > now);
+  saveDb(db);
+  if (!row || (row.expiresAt || 0) <= now) return null;
+  return row;
 }

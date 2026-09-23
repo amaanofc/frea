@@ -501,17 +501,16 @@ export function verifyWithUniversity() {
 }
 
 /** Binds a contact address to a freshly verified student and opens the session. */
+/**
+ * Nominates a contact address for a freshly verified student.
+ *
+ * Opens no session: it asks the server to mail a code to that address, and
+ * the session comes from proving it, exactly as every later sign-in does.
+ * Nominating an address is not proof of holding it, and anything that treats
+ * it as proof hands authority to whoever typed it.
+ */
 export async function completeUniversitySignIn(ticket, email) {
-  const json = await request('/auth/studid/complete', { method: 'POST', body: { ticket, email } });
-  setSession({
-    email: json.email,
-    sessionToken: json.sessionToken,
-    isMentor: json.isMentor,
-    isAdmin: json.isAdmin,
-    institution: json.institution || null,
-    mentorId: null, name: null, university: null
-  });
-  return json;
+  return request('/auth/studid/complete', { method: 'POST', body: { ticket, email } });
 }
 
 /**

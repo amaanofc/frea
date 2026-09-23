@@ -10,7 +10,7 @@
     "build": "node scripts/generate-brand-assets.mjs && vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node --test test/payments.test.mjs test/frontend.test.mjs test/backup.test.mjs test/email.test.mjs test/slots.test.mjs",
+    "test": "node --test test/payments.test.mjs test/frontend.test.mjs test/backup.test.mjs test/email.test.mjs test/slots.test.mjs test/authz.test.mjs",
     "test:api": "node test/api.e2e.mjs",
     "test:unit": "node --test test/payments.test.mjs",
     "test:backup": "node --test test/backup.test.mjs",

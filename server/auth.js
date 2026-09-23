@@ -35,7 +35,7 @@ export function isAdminEmail(email) {
  * blocked — should read this. Admin sessions, which still come from an email
  * code, carry null.
  */
-export function createSession({ email, mentorId = null, authIdentifier = null }) {
+export function createSession({ email, mentorId = null, authIdentifier = null, emailProven = false }) {
   const db = loadDb();
   const clean = (email || '').trim().toLowerCase();
   const token = crypto.randomBytes(32).toString('hex');
@@ -50,7 +50,11 @@ export function createSession({ email, mentorId = null, authIdentifier = null })
     email: clean,
     mentorId: mentorId == null ? null : parseInt(mentorId, 10),
     authIdentifier: authIdentifier || null,
-    isAdmin: isAdminEmail(clean),
+    // Administrator only ever on a session whose address was proven by a code
+    // to that inbox. Deriving it from any address the caller supplied is how
+    // nominating the admin's address during registration handed out admin.
+    isAdmin: Boolean(emailProven) && isAdminEmail(clean),
+    emailProven: Boolean(emailProven),
     createdAt: new Date().toISOString(),
     expiresAt: now + SESSION_TTL_MS
   };
@@ -66,8 +70,9 @@ export function getSession(token) {
   const session = (db.sessions || []).find(s => s.token === token);
   if (!session) return null;
   if (Date.now() > session.expiresAt) return null;
-  // Admin list is env-driven, so re-evaluate rather than trusting the stored flag.
-  return { ...session, isAdmin: isAdminEmail(session.email) };
+  // Admin list is env-driven, so re-evaluate rather than trusting the stored
+  // flag — but never promote a session whose address was never proven.
+  return { ...session, isAdmin: Boolean(session.emailProven) && isAdminEmail(session.email) };
 }
 
 export function destroySession(token) {
