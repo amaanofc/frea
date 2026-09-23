@@ -472,7 +472,20 @@ app.post('/api/auth/send-verification',
 // ─── Student verification via university SSO ────────────
 
 /** Step one: send the student to their university's login. */
-app.get('/api/auth/studid/start', rateLimit({ max: 20, windowMs: 10 * 60_000 }), wrap(async (req, res) => {
+/**
+ * Step one: send the student to their university's login.
+ *
+ * The cap is deliberately generous, for the reason spelled out above
+ * send-verification: universities put thousands of students behind a handful
+ * of NAT addresses, so a per-IP limit is really a per-campus limit. Twenty in
+ * ten minutes would have given an entire university twenty registrations in
+ * ten minutes — during freshers week that locks out the institution, and it
+ * stops no attacker, who can rotate addresses freely.
+ *
+ * What this is actually for is not letting us hammer Studid, who run the
+ * federation gateway for nothing.
+ */
+app.get('/api/auth/studid/start', rateLimit({ max: 100, windowMs: 10 * 60_000, key: req => `ip:${req.ip}` }), wrap(async (req, res) => {
   const { url } = await startVerification();
   res.redirect(url);
 }));
@@ -561,7 +574,7 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
  * and a personal mailbox is precisely the point, because it does not sit
  * behind the filtering that made .ac.uk mail unusable.
  */
-app.post('/api/auth/studid/complete', rateLimit({ max: 20, windowMs: 10 * 60_000 }), wrap(async (req, res) => {
+app.post('/api/auth/studid/complete', rateLimit({ max: 100, windowMs: 10 * 60_000, key: req => `ip:${req.ip}` }), wrap(async (req, res) => {
   const { ticket, email } = req.body || {};
   const clean = (email || '').trim().toLowerCase();
 
