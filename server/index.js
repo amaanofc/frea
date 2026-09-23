@@ -433,8 +433,23 @@ app.post('/api/auth/send-verification',
    * Sending to an address we do not recognise would be worse than useless: it
    * would mail a stranger a code for an account that does not exist, and turn
    * this endpoint into a way to spray mail at arbitrary addresses. So an
-   * unknown address is told, without a code and without leaking whether it is
-   * registered elsewhere, to go and verify with their university.
+   * unknown address is sent no code and told to go and verify with their
+   * university instead.
+   *
+   * That answer is an enumeration oracle, and deliberately so: anyone can ask
+   * this endpoint whether a given address has a frea account and get a
+   * straight yes or no. It is the price of asking for the address first, which
+   * is what lets a returning student sign in without going back through their
+   * institution, and what keeps graduates in their accounts after their
+   * university login stops working.
+   *
+   * It is accepted rather than overlooked. Membership here is not sensitive on
+   * its own — mentor profiles are public by design — and the alternative,
+   * answering identically either way, would mean either mailing codes to
+   * strangers or leaving the student staring at a screen that claims a code is
+   * coming when none is. If membership ever does become sensitive, this is the
+   * line that has to change, and changing it means reworking the flow, not
+   * just the wording.
    */
   const identity = findIdentityByContactEmail(cleanEmail);
   if (!cleanEmail || (!identity && !isAdminEmail(cleanEmail))) {
