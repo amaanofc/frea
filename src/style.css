@@ -5439,3 +5439,18 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* A form field that states a fact rather than collecting one. Used for the
+ * university, which comes from whoever vouched for the mentor at sign-in and
+ * is deliberately not theirs to choose. */
+.mentor-form-static {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  font-size: 14.5px;
+  color: #15803d;
+}

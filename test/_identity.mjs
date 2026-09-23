@@ -26,6 +26,11 @@ export function seedIdentity(email) {
       authIdentifier: `e2e-${clean}@test.ac.uk`,
       entityId: 'https://idp.test.ac.uk/shibboleth',
       affiliations: ['student'],
+      // A mentor profile takes its university from here and refuses to be
+      // created without it, because the applicant is no longer allowed to
+      // name their own institution.
+      institutionName: 'University of Leeds',
+      scope: 'test.ac.uk',
       contactEmail: clean,
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString()

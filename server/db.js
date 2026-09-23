@@ -786,6 +786,25 @@ export function createMentorApplication(appData) {
     throw new Error('Your university sign-in could not be read. Please verify again.');
   }
 
+  /**
+   * The institution comes from whoever vouched for them, never from the form.
+   *
+   * It used to be a dropdown, which was survivable only while the .ac.uk
+   * address beside it corroborated the answer. Now that the address is a
+   * personal one, nothing in the form relates to the institution at all — so a
+   * Manchester student could select Oxford and wear a "university verified"
+   * badge saying so, on a platform whose entire premise is verified peers.
+   *
+   * `institutionName` is the federation's own name for the tenant. The scope
+   * (`manchester.ac.uk`) is the fallback when that lookup failed: less pretty,
+   * still true, and never the applicant's opinion.
+   */
+  const identity = findStudentIdentity(authIdentifier);
+  const verifiedUniversity = identity?.institutionName || identity?.scope || null;
+  if (!verifiedUniversity) {
+    throw new Error('We could not confirm which university you signed in with. Please verify again.');
+  }
+
   const db = loadDb();
 
   // Matched on the university's pseudonym, not the address. A mentor may
@@ -797,7 +816,7 @@ export function createMentorApplication(appData) {
   if (mentor) {
     // Update existing mentor profile
     if (appData.name) mentor.name = cleanText(appData.name, 80);
-    if (appData.university) mentor.university = cleanText(appData.university, 100);
+    mentor.university = verifiedUniversity;
     if (appData.major || appData.degree) mentor.major = cleanText(appData.major || appData.degree, 80);
     if (appData.year) mentor.year = cleanText(appData.year, 40);
     if (appData.topTip) mentor.topTip = cleanText(appData.topTip, 140);
@@ -824,8 +843,8 @@ export function createMentorApplication(appData) {
       authIdentifier,
       year: cleanText(appData.year, 40) || '2nd year',
       major: cleanText(appData.major || appData.degree, 80) || 'Undergraduate',
-      university: cleanText(appData.university, 100),
-      bio: cleanText(appData.bio, 1200) || ('Senior student at ' + cleanText(appData.university, 100) + '. Happy to chat about course survival, applications, and student life.'),
+      university: verifiedUniversity,
+      bio: cleanText(appData.bio, 1200) || ('Senior student at ' + verifiedUniversity + '. Happy to chat about course survival, applications, and student life.'),
       topTip: cleanText(appData.topTip, 140) || 'Reach out to older students early and test your revision methods!',
       topTipColor: safePostitColor(postitColor),
       achievements: appData.achievements && appData.achievements.length > 0 ? appData.achievements : ['verified-mentor'],
@@ -885,7 +904,7 @@ export function createMentorApplication(appData) {
   const application = {
     id: 'frea-app-' + Date.now(),
     name: appData.name,
-    university: appData.university,
+    university: verifiedUniversity,
     major: appData.major || appData.degree,
     year: appData.year,
     email,
@@ -2019,7 +2038,7 @@ export function findStudentIdentity(authIdentifier) {
 }
 
 /** Records a first sign-in, or refreshes what the university last told us. */
-export function upsertStudentIdentity({ authIdentifier, entityId, affiliations = [], contactEmail }) {
+export function upsertStudentIdentity({ authIdentifier, entityId, affiliations = [], contactEmail, institutionName = null, scope = null }) {
   const db = loadDb();
   db.studentIdentities = Array.isArray(db.studentIdentities) ? db.studentIdentities : [];
 
@@ -2029,6 +2048,8 @@ export function upsertStudentIdentity({ authIdentifier, entityId, affiliations =
   if (existing) {
     existing.entityId = entityId;
     existing.affiliations = affiliations;
+    if (institutionName) existing.institutionName = institutionName;
+    if (scope) existing.scope = scope;
     if (clean) existing.contactEmail = clean;
     existing.lastSeenAt = new Date().toISOString();
   } else {
@@ -2036,6 +2057,8 @@ export function upsertStudentIdentity({ authIdentifier, entityId, affiliations =
       authIdentifier,
       entityId,
       affiliations,
+      institutionName,
+      scope,
       contactEmail: clean,
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString()

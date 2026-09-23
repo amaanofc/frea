@@ -1033,13 +1033,14 @@ function renderBecomeMentor() {
             </div>
 
             <div class="mentor-form-group">
-              <label class="mentor-form-label">UK University <span>*</span></label>
-              <select class="mentor-form-select" id="bm-uni" required>
-                ${UK_UNIVERSITIES.filter(u => u !== 'All UK Universities').map(u => `
-                  <option value="${u}">${u}</option>
-                `).join('')}
-                <option value="Other UK University">Other UK University</option>
-              </select>
+              <label class="mentor-form-label">UK University</label>
+              <!-- Not a choice. Your institution is whoever vouched for you at
+                   sign-in; letting people pick it would let a Manchester
+                   student wear an Oxford badge marked "verified". -->
+              <div class="mentor-form-static" id="bm-uni-display">
+                ${ICONS.shieldTick} <strong>${escapeHtml(verifiedInstitution() || 'confirmed at sign-in')}</strong>
+              </div>
+              <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Taken from your university sign-in — this is what makes the verified badge mean something.</span>
             </div>
           </div>
 
@@ -2702,6 +2703,18 @@ function getSessionToken() {
   return getSession()?.sessionToken || null;
 }
 
+/**
+ * The institution that vouched for this session, never a self-declared one.
+ *
+ * Read from the server rather than stored at sign-in so it survives a session
+ * restored from localStorage, and so it cannot be edited by anyone poking at
+ * their own storage — the server re-derives it from the identity record on
+ * every /auth/me.
+ */
+function verifiedInstitution() {
+  return getSession()?.institution || null;
+}
+
 function verifiedEmail() {
   return getSession()?.email || null;
 }
@@ -2850,7 +2863,10 @@ window.downloadBookingInvite = downloadBookingInvite;
 async function handleBecomeMentorSubmit(e) {
   e.preventDefault();
   const name = document.getElementById('bm-name')?.value.trim();
-  const uni = document.getElementById('bm-uni')?.value;
+  // The server takes the institution from the session and ignores anything
+  // sent here; this is only so the optimistic local render matches what
+  // comes back rather than flashing a different university for a moment.
+  const uni = verifiedInstitution() || '';
   const major = document.getElementById('bm-major')?.value.trim();
   const year = document.getElementById('bm-year')?.value;
   const email = document.getElementById('bm-email')?.value.trim().toLowerCase();
@@ -2920,7 +2936,6 @@ async function handleBecomeMentorSubmit(e) {
     try {
       const applicationData = {
         name,
-        university: uni,
         degree: major,
         year,
         email,

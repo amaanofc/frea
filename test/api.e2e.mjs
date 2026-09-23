@@ -172,11 +172,19 @@ console.log('\n─── 5. Mentor auth & the schedule round-trip ───');
   const studentToken2 = await signIn(mentorEmail);
   ok('mentor session issued', typeof studentToken2 === 'string');
 
+  // Claims a university the identity provider never vouched for. The whole
+  // premise of the platform is verified peers, so a profile must not be able
+  // to advertise an institution its owner simply typed in — the field used to
+  // be a dropdown, corroborated only by the .ac.uk address beside it, and
+  // that address is now a personal one that says nothing about anybody.
   const applied = await call('POST', '/mentors/apply', {
     token: studentToken2,
-    body: { name: 'E2E Mentor', university: 'University of Leeds', major: 'Physics' }
+    body: { name: 'E2E Mentor', university: 'University of Oxford', major: 'Physics' }
   });
   ok('mentor profile created from a verified session', applied.json.success === true, JSON.stringify(applied.json).slice(0, 160));
+  ok('the claimed university is ignored in favour of the verified one',
+    applied.json.mentor?.university === 'University of Leeds',
+    'stored as: ' + applied.json.mentor?.university);
 
   // Applying promotes the session: the token from before the profile existed
   // still carries mentorId null, so the one apply hands back is the mentor one.

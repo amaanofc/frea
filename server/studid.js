@@ -149,6 +149,48 @@ export async function completeVerification(state) {
     affiliations,
     // The pairwise id is scoped as `opaque@institution.ac.uk`; the scope is a
     // readable institution name and corroborates entityId.
-    scope: authIdentifier.includes('@') ? authIdentifier.split('@').pop() : null
+    scope: authIdentifier.includes('@') ? authIdentifier.split('@').pop() : null,
+    institutionName: await resolveInstitutionName(entityId)
   };
+}
+
+/**
+ * The institution's own name for itself, from the federation's metadata.
+ *
+ * This is what makes "verified" mean anything on a mentor profile. The
+ * university used to be typed into the signup form and taken on trust, which
+ * was survivable only while the .ac.uk address in the same form corroborated
+ * it. Now that the address is a personal one, nothing in the form relates to
+ * the institution at all — a Manchester student could pick Oxford from the
+ * dropdown and carry a "university verified" badge saying so.
+ *
+ * So it is read from the identity provider that actually vouched for them,
+ * and the form no longer asks.
+ *
+ * Deliberately non-fatal. This is cosmetic next to the entityId, which is the
+ * real claim and is already in hand; a directory lookup failing should not
+ * cost somebody their registration. The caller falls back to the scope, which
+ * is accurate if less pretty, and it is resolved once and stored rather than
+ * on every sign-in.
+ */
+async function resolveInstitutionName(entityId) {
+  try {
+    // Searching the host rather than the whole URL: the metadata is indexed on
+    // names and hostnames, and a full entityId with its scheme and path scores
+    // poorly.
+    const host = new URL(entityId).hostname;
+    const res = await fetch(`https://api.studid.io/v2/search?q=${encodeURIComponent(host)}`, {
+      signal: AbortSignal.timeout(8_000)
+    });
+    if (!res.ok) return null;
+
+    const body = await res.json().catch(() => ({}));
+    // Match on entityId, never on the search ranking — the first hit for
+    // "manchester" is not necessarily the tenant that just vouched for them.
+    const hit = (body.hits || []).find(h => h.entityId === entityId);
+    return hit?.displayName ? String(hit.displayName).slice(0, 100) : null;
+  } catch (err) {
+    console.warn('[studid] could not resolve institution name:', err.message);
+    return null;
+  }
 }

@@ -533,6 +533,8 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
       authIdentifier: result.authIdentifier,
       entityId: result.entityId,
       affiliations: result.affiliations,
+      institutionName: result.institutionName,
+      scope: result.scope,
       contactEmail: known.contactEmail
     });
     // By pseudonym, not address: the contact address is theirs to change.
@@ -545,7 +547,7 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
       sessionToken: session.token,
       isMentor: Boolean(mentor),
       isAdmin: session.isAdmin,
-      institution: result.scope
+      institution: result.institutionName || result.scope
     });
   }
 
@@ -557,13 +559,15 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
     secretToken: JSON.stringify({
       authIdentifier: result.authIdentifier,
       entityId: result.entityId,
-      affiliations: result.affiliations
+      affiliations: result.affiliations,
+      institutionName: result.institutionName,
+      scope: result.scope
     }),
     expiresAt: Date.now() + 30 * 60 * 1000
   });
 
   console.log(`[studid] new student from ${result.scope || result.entityId}`);
-  reply({ ok: true, needsEmail: true, ticket, institution: result.scope });
+  reply({ ok: true, needsEmail: true, ticket, institution: result.institutionName || result.scope });
 }));
 
 /**
@@ -626,6 +630,8 @@ app.post('/api/auth/studid/complete', rateLimit({ max: 100, windowMs: 10 * 60_00
     authIdentifier: proof.authIdentifier,
     entityId: proof.entityId,
     affiliations: proof.affiliations,
+    institutionName: proof.institutionName,
+    scope: proof.scope,
     contactEmail: clean
   });
   markEmailVerified(clean);
@@ -638,7 +644,8 @@ app.post('/api/auth/studid/complete', rateLimit({ max: 100, windowMs: 10 * 60_00
     email: clean,
     sessionToken: session.token,
     isMentor: Boolean(mentor),
-    isAdmin: session.isAdmin
+    isAdmin: session.isAdmin,
+    institution: proof.institutionName || proof.scope || null
   });
 }));
 
@@ -705,13 +712,19 @@ app.get('/api/auth/me', (req, res) => {
   if (!req.session) return res.json({ success: true, session: null });
 
   const mentor = req.session.mentorId ? getMentorById(req.session.mentorId) : null;
+  const identity = req.session.authIdentifier
+    ? findStudentIdentity(req.session.authIdentifier)
+    : null;
   res.json({
     success: true,
     session: {
       email: req.session.email,
       isMentor: Boolean(mentor),
       isAdmin: req.session.isAdmin,
-      mentorId: mentor?.id || null
+      mentorId: mentor?.id || null,
+      // What the identity provider said, so the client can show it rather
+      // than asking the student to tell us something we already know.
+      institution: identity?.institutionName || identity?.scope || null
     },
     mentor: mentor ? publicMentor(mentor) : null,
     entitlements: getEntitlementsForEmail(req.session.email)

@@ -126,6 +126,7 @@ export async function fetchMe() {
       isMentor: json.session.isMentor,
       isAdmin: json.session.isAdmin,
       mentorId: json.session.mentorId,
+      institution: json.session.institution || current.institution || null,
       name: json.mentor?.name || current.name || null,
       university: json.mentor?.university || current.university || null
     });
@@ -484,6 +485,7 @@ export function verifyWithUniversity() {
           sessionToken: event.data.sessionToken,
           isMentor: event.data.isMentor,
           isAdmin: event.data.isAdmin,
+          institution: event.data.institution || null,
           mentorId: null, name: null, university: null
         });
       }
@@ -506,6 +508,7 @@ export async function completeUniversitySignIn(ticket, email) {
     sessionToken: json.sessionToken,
     isMentor: json.isMentor,
     isAdmin: json.isAdmin,
+    institution: json.institution || null,
     mentorId: null, name: null, university: null
   });
   return json;
