@@ -5,8 +5,8 @@
 // One session table covers all three actors. A session is created only after a
 // real one-time code has been proven against the email it was sent to.
 //
-//   student  email verified, no mentor record      -> can book, buy, download
-//   mentor   email matches a mentor record         -> can also edit own profile
+//   student  university identity, no mentor record -> can book, buy, download
+//   mentor   university identity + mentor record   -> can also edit own profile
 //   admin    email listed in ADMIN_EMAILS          -> can also review applications
 
 import crypto from 'crypto';
@@ -94,13 +94,21 @@ export function attachSession(req, res, next) {
   next();
 }
 
-/** Any verified .ac.uk visitor (student, mentor or admin). */
+/** A session backed by the university's stable Studid identity. */
 export function requireVerified(req, res, next) {
   if (!req.session) {
     return res.status(401).json({
       success: false,
-      error: 'Please verify your university email to continue.',
+      error: 'Please verify with your university to continue.',
       needsVerification: true
+    });
+  }
+  if (!req.session.authIdentifier) {
+    return res.status(403).json({
+      success: false,
+      error: 'Please verify with your university before using this feature.',
+      needsVerification: true,
+      needsIdentity: true
     });
   }
   next();

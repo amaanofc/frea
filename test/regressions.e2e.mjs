@@ -59,8 +59,16 @@ group('DEFECT 1 — resources had no files, so every download 404\'d');
 
   const db = readDb();
   const all = [...db.resources];
-  ok('every resource has a file attached',
-    all.every(r => r.fileName), `${all.filter(r => !r.fileName).length} missing`);
+  const versions = db.resourceVersions || [];
+  const currentFile = resource => versions.some(v =>
+    v.resourceId === resource.id
+    && v.id === resource.currentVersionId
+    && Boolean(v.fileName)
+  );
+  ok('every resource has a canonical current-version file',
+    all.every(currentFile), `${all.filter(r => !currentFile(r)).length} missing`);
+  ok('product rows do not duplicate file handles',
+    all.every(r => !r.fileName), `${all.filter(r => r.fileName).length} duplicated`);
 
   // Signatures prove we streamed the real format, not an error page.
   const SIGNATURES = {

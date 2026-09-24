@@ -184,7 +184,8 @@ group('SEO & SHARING');
   const robotsText = await robots.text();
   ok('robots.txt served', robots.status === 200);
   ok('robots.txt names the sitemap', robotsText.includes('Sitemap:'));
-  ok('private routes disallowed', robotsText.includes('Disallow: /mentor-dashboard'));
+  ok('private routes disallowed',
+    robotsText.includes('Disallow: /mentor-dashboard') && robotsText.includes('Disallow: /my-space'));
 
   const sitemap = await get('/sitemap.xml');
   const sitemapText = await sitemap.text();

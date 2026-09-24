@@ -66,9 +66,14 @@ export function metaForRoute(path, context = {}) {
         'Sign in through your university and your profile goes live immediately. No interview. '
         + 'Set your own availability, publish resources, keep 95% of anything you sell.'
     },
+    '/my-space': {
+      title: 'My space · frea',
+      description: 'Your mentoring sessions and obtained freabies and playbooks.',
+      noindex: true
+    },
     '/my-sessions': {
-      title: 'My sessions · frea',
-      description: 'Your booked mentoring calls, join links and calendar invites.',
+      title: 'My space · frea',
+      description: 'Your mentoring sessions and obtained freabies and playbooks.',
       noindex: true
     },
     '/mentor-dashboard': {
@@ -77,6 +82,7 @@ export function metaForRoute(path, context = {}) {
       noindex: true
     },
     '/admin': { title: 'Admin · frea', description: '', noindex: true },
+    '/sign-in': { title: 'Sign in · frea', description: '', noindex: true },
     '/verify': { title: 'Verify your email · frea', description: '', noindex: true },
     '/cancel': { title: 'Cancel session · frea', description: '', noindex: true },
     '/checkout-complete': { title: 'Order complete · frea', description: '', noindex: true }

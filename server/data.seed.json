@@ -39,7 +39,6 @@
         ]
       },
       "color": "green",
-      "docs": [],
       "links": [
         {
           "label": "LinkedIn",
@@ -97,7 +96,6 @@
       "email": "aanya@imperial.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -141,7 +139,6 @@
       "email": "callum@lse.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -185,7 +182,6 @@
       "email": "priya@ucl.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -228,7 +224,6 @@
       "email": "noah@bristol.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -271,7 +266,6 @@
       "email": "oliver@ox.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -314,7 +308,6 @@
       "email": "fatima@bath.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -354,7 +347,6 @@
       "email": "tariq@cam.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -394,7 +386,6 @@
       "email": "layla@kcl.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -433,7 +424,6 @@
       "email": "lucas@warwick.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -473,7 +463,6 @@
       "email": "sophia@ed.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -512,7 +501,6 @@
       "email": "liam@manchester.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     },
     {
@@ -551,7 +539,6 @@
       "email": "chloe@durham.ac.uk",
       "status": "active",
       "interviewRequired": false,
-      "docs": [],
       "links": []
     }
   ],
@@ -565,6 +552,7 @@
   "verifiedEmails": [],
   "verificationTokens": [],
   "resources": [],
+  "resourceVersions": [],
   "orders": [],
   "entitlements": [],
   "sessions": [],

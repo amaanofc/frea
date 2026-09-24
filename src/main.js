@@ -11,7 +11,7 @@ import {
   fetchMentor,
   fetchMonthlySlots,
   submitBooking,
-  fetchMyBookings,
+  fetchMySpace,
   fetchMentorBookings,
   cancelBooking,
   downloadBookingIcs,
@@ -27,6 +27,7 @@ import {
   updateMentorSchedule,
   fetchResources,
   createResource,
+  createResourceVersion,
   updateResource,
   deleteResource,
   claimResource,
@@ -720,8 +721,9 @@ window.isDocUnlocked = isDocUnlocked;
 
 // ─── Render Doc Card Component (Notebook Style) ─────
 
-function renderDocCard(doc, mentor = null, showAuthor = false) {
-  const isUnlocked = isDocUnlocked(doc.id);
+function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
+  const mySpaceProduct = options.mySpaceProduct || null;
+  const isUnlocked = mySpaceProduct ? true : isDocUnlocked(doc.id);
   const isPaid = doc.type === 'paid';
 
   let typeBadgeHtml = '';
@@ -740,7 +742,19 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
   const tapeRotation = ((parseInt(String(doc.id).replace(/\D/g, '')) || 1) % 5) - 2;
 
   let actionBtnHtml = '';
-  if (isUnlocked) {
+  if (mySpaceProduct) {
+    actionBtnHtml = (mySpaceProduct.versions || []).map(version => `
+      <button type="button" class="doc-btn doc-btn--unlocked"
+        data-action="download-resource-version"
+        data-resource-id="${escapeHtml(mySpaceProduct.resourceId)}"
+        data-version-id="${escapeHtml(version.id)}"
+        data-title="${escapeHtml(mySpaceProduct.title)}"
+        title="Download version ${version.versionNumber}">
+        ${ICONS.download}
+        <span>download v${version.versionNumber}</span>
+      </button>
+    `).join('');
+  } else if (isUnlocked) {
     actionBtnHtml = `
       <button type="button" class="doc-btn doc-btn--unlocked" onclick="window.downloadDoc('${doc.id}')" title="Download to device" aria-label="Download guide">
         ${ICONS.download}
@@ -805,13 +819,15 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
         <div class="doc-card__stats">
           <span class="doc-card__rating">${ICONS.star} ${doc.rating.toFixed(1)}</span>
           <span class="doc-card__downloads">(${doc.downloads} downloads)</span>
-          <span class="doc-card__pages">· ${escapeHtml(doc.pages)}</span>
+          <span class="doc-card__pages">· ${escapeHtml(doc.pages)}${mySpaceProduct?.currentVersion ? ` · current v${mySpaceProduct.currentVersion.versionNumber}` : ''}</span>
         </div>
         <div class="doc-card__actions">
-          <button type="button" class="doc-btn doc-btn--preview" onclick="window.openDocPreviewModal('${doc.id}')" aria-label="Preview document ${escapeHtml(doc.title)}">
-            ${ICONS.eye}
-            <span>preview</span>
-          </button>
+          ${mySpaceProduct ? '' : `
+            <button type="button" class="doc-btn doc-btn--preview" onclick="window.openDocPreviewModal('${doc.id}')" aria-label="Preview document ${escapeHtml(doc.title)}">
+              ${ICONS.eye}
+              <span>preview</span>
+            </button>
+          `}
           ${actionBtnHtml}
         </div>
       </div>
@@ -819,6 +835,34 @@ function renderDocCard(doc, mentor = null, showAuthor = false) {
   `;
 }
 window.renderDocCard = renderDocCard;
+
+function renderMySpaceProductCard(product) {
+  return renderDocCard({
+    ...product,
+    id: product.resourceId,
+    rating: Number(product.rating || 0),
+    downloads: Number(product.downloads || 0),
+    pages: product.pages || 'Self-contained document'
+  }, null, false, { mySpaceProduct: product });
+}
+
+function initMySpaceVault() {
+  const root = document.getElementById('my-space-vault-grid');
+  if (!root || root.dataset.versionActionsWired === 'true') return;
+  root.dataset.versionActionsWired = 'true';
+  root.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-action="download-resource-version"]');
+    if (!button) return;
+    downloadDocVersion(
+      button.dataset.resourceId,
+      button.dataset.versionId,
+      button.dataset.title || 'frea-resource'
+    );
+  });
+}
+
+window.renderMySpaceProductCard = renderMySpaceProductCard;
+window.initMySpaceVault = initMySpaceVault;
 
 // ─── PAGE: Mentor Profile (With Interactive Week Calendar) ─────
 
@@ -1024,6 +1068,24 @@ function renderBecomeMentor() {
         </div>
       </div>
 
+      ${!hasUniversityIdentity() ? `
+        <div class="mentor-form-card mentor-form-card--locked">
+          <span class="mentor-gate__badge">${ICONS.shieldTick} step 1 of 2</span>
+          <h2 class="mentor-gate__title">first, your university confirms you're a student</h2>
+          <p class="mentor-gate__lead">
+            You'll sign in on your own university's login page — your password
+            never reaches frea, and we never ask for your university email.
+            It takes about ten seconds, and it's the only check there is.
+          </p>
+          <p class="mentor-gate__lead">
+            Then you'll build your profile, with your university already filled
+            in and verified. No interview, no waiting: it goes live immediately.
+          </p>
+          <button type="button" id="mentor-gate-start" class="pill-btn pill-btn--dark pill-btn--animated">
+            verify with your university
+          </button>
+        </div>
+      ` : `
       <div class="mentor-form-card">
         <form id="become-mentor-form" onsubmit="handleBecomeMentorSubmit(event)">
           <div class="mentor-form-row">
@@ -1292,6 +1354,7 @@ function renderBecomeMentor() {
           </div>
         </form>
       </div>
+      `}
     </div>
 
     ${renderFooter()}
@@ -2501,13 +2564,20 @@ function renderAuthFlow({ host, actionName = 'continue', email: startEmail = '',
     input.focus();
   };
 
-  // ── Step 2b: we don't know you — the university vouches, then you
-  // nominate an inbox for next time.
-  const renderRegisterStep = (email) => {
+  // ── Step 2b: the university vouches, then you nominate an inbox for
+  // next time.
+  //
+  // Reachable two ways: straight from the choice step, which is the normal
+  // first-time path, or from the email step when the address turned out to be
+  // one we do not know. Hence the optional address — when we have one it is
+  // offered as the contact address rather than asked for twice.
+  const renderRegisterStep = (email = '') => {
     host.innerHTML = `
-      <div class="auth-flow__sent">
+      ${email ? `<div class="auth-flow__sent">
         We don't recognise <strong>${escapeHtml(email)}</strong> yet — let's get you set up.
-      </div>
+      </div>` : `<div class="auth-flow__sent">
+        First, your university confirms you're a student. That's the whole check.
+      </div>`}
       <button type="button" id="auth-studid" class="uni-signin-btn">
         <span>${ICONS.shieldTick}</span>
         <span>verify with your university</span>
@@ -2517,32 +2587,79 @@ function renderAuthFlow({ host, actionName = 'continue', email: startEmail = '',
       </div>
       <div id="auth-flow-error" class="auth-flow__error"></div>
       <div class="auth-flow__hint">
-        <button type="button" class="auth-flow__link" id="auth-back">use a different email</button>
+        <button type="button" class="auth-flow__link" id="auth-back">back</button>
       </div>
     `;
 
     const btn = host.querySelector('#auth-studid');
-    host.querySelector('#auth-back').addEventListener('click', renderEmailStep);
+    // Back goes wherever they came from: the email step if an unknown address
+    // sent them here, otherwise the two doors.
+    host.querySelector('#auth-back')
+      .addEventListener('click', email ? renderEmailStep : renderChoiceStep);
 
-    btn.addEventListener('click', () => {
-      startUniversityVerification({
-        trigger: btn,
-        errorElId: 'auth-flow-error',
-        onVerified: finish,
-        renderEmailStep: (result) => {
-          // Verified, but they have not told us where mail should go. Offer
-          // the address they already typed rather than asking twice.
-          host.innerHTML = contactEmailStepHtml({ institution: result.institution });
-          const field = host.querySelector('#contact-email');
-          if (field) field.value = email;
-          // Nominating an address does not sign you in; proving it does.
-          wireContactEmailStep({ ticket: result.ticket, onCodeSent: renderCodeStep });
-        }
-      });
+    btn.addEventListener('click', () => beginUniversity(btn, email));
+  };
+
+  /**
+   * Hands off to the institution, and picks up whatever comes back.
+   *
+   * Shared so the two entry points behave identically: the primary button on
+   * the choice step, which is most people, and the fallback shown when an
+   * address we were given turns out to be unregistered.
+   */
+  const beginUniversity = (trigger, email = '') => {
+    startUniversityVerification({
+      trigger,
+      errorElId: 'auth-flow-error',
+      onVerified: finish,
+      renderEmailStep: (result) => {
+        // Verified, but they have not told us where mail should go. Offer any
+        // address they already typed rather than asking twice.
+        host.innerHTML = contactEmailStepHtml({ institution: result.institution });
+        const field = host.querySelector('#contact-email');
+        if (field && email) field.value = email;
+        // Nominating an address does not sign you in; proving it does.
+        wireContactEmailStep({ ticket: result.ticket, onCodeSent: renderCodeStep });
+      }
     });
   };
 
-  renderEmailStep();
+  // ── Step 0: which door?
+  //
+  // This used to ask for an email first and infer from it whether somebody
+  // was new, which made the common case — a student who has never been here —
+  // the one that got bounced around: type an address, be told we don't know
+  // it, go to the university, then nominate an address again. The two cases
+  // are genuinely different, so they are now two doors and neither has to
+  // guess at the other.
+  //
+  // The university sits first and largest because it is the only way to
+  // register. Email sign-in cannot create anything; it is for people who
+  // already went through it.
+  const renderChoiceStep = () => {
+    host.innerHTML = `
+      <button type="button" id="auth-studid-primary" class="uni-signin-btn">
+        <span>${ICONS.shieldTick}</span>
+        <span>verify with your university</span>
+      </button>
+      <div class="uni-signin-note">
+        You'll sign in on your own university's login page — your password
+        never reaches frea. Takes about ten seconds.
+      </div>
+      <div id="auth-flow-error" class="auth-flow__error"></div>
+      <div class="auth-flow__alt">
+        Already on frea?
+        <button type="button" class="auth-flow__link" id="auth-use-email">sign in with your email</button>
+      </div>
+    `;
+
+    const uniBtn = host.querySelector('#auth-studid-primary');
+    host.querySelector('#auth-use-email')
+      .addEventListener('click', () => renderEmailStep());
+    uniBtn.addEventListener('click', () => beginUniversity(uniBtn));
+  };
+
+  renderChoiceStep();
 }
 
 // ─── University verification ────────────────────────────
@@ -2722,6 +2839,11 @@ function isVerified() {
 }
 window.isVerified = isVerified;
 
+function hasUniversityIdentity() {
+  return Boolean(getSessionToken() && getSession()?.universityVerified === true);
+}
+window.hasUniversityIdentity = hasUniversityIdentity;
+
 /**
  * Ensures there is a live verified session, prompting for a code if not, then
  * runs `onVerified`. Every gated action funnels through here.
@@ -2735,7 +2857,7 @@ async function requireVerifiedSession({ email, universityName, actionName, onVer
   // someone signed in as one address and filling the form with another would
   // have had the profile created against the wrong one — or, for an admin on a
   // non-.ac.uk address, rejected with an error naming a rule they had followed.
-  if (isVerified() && (!wanted || wanted === current)) {
+  if (hasUniversityIdentity() && (!wanted || wanted === current)) {
     if (typeof onVerified === 'function') onVerified();
     return;
   }
@@ -2812,7 +2934,7 @@ function renderVerificationEmailStep(actionName, email = '') {
 
 /** Pulls the server's view of what this student owns into the render cache. */
 async function refreshEntitlements() {
-  if (!isVerified()) {
+  if (!hasUniversityIdentity()) {
     setUnlockedDocIds([]);
     return;
   }
@@ -2948,7 +3070,7 @@ async function handleBecomeMentorSubmit(e) {
 
       // Creating the mentor also opens their mentor session, which is what
       // authorises the resource publish immediately afterwards.
-      await submitMentorApplication(applicationData);
+      const applicationResult = await submitMentorApplication(applicationData);
 
       if (docTitle && docFileName) {
         try {
@@ -2976,7 +3098,7 @@ async function handleBecomeMentorSubmit(e) {
       });
 
       // Auto-login newly registered mentor and sync
-      const registeredMentor = (result && (result.mentor || result.data)) || {
+      const registeredMentor = applicationResult || {
         id: Date.now(),
         name,
         email,
@@ -3113,6 +3235,8 @@ function filterProfileDocs(filterType, mentorId) {
   trackEvent('profile_docs_filtered', { mentorId, filterType, count: filtered.length });
 }
 window.filterProfileDocs = filterProfileDocs;
+
+window.renderBecomeMentor = renderBecomeMentor;
 
 // ─── PAGE: Resources & Freabies Hub ─────
 
@@ -4086,18 +4210,23 @@ function renderCheckoutComplete(route) {
 }
 
 /**
- * Downloads a resource through the authorised endpoint. Freabies are granted
- * on request to any verified student; playbooks require a completed purchase.
+ * Downloads a resource through the authorised endpoint. A free claim is part
+ * of the same action: the server records the entitlement and the browser
+ * immediately downloads the current version.
  */
-async function downloadDoc(docId) {
+async function downloadDoc(docId, versionId = null) {
   const doc = getDocById(docId);
   const title = doc ? doc.title : 'frea-resource';
 
   const proceedDownload = async () => {
     try {
-      await downloadResource(docId, title);
+      if (doc?.type !== 'paid' && !isDocUnlocked(docId)) {
+        await claimResource(docId);
+        markDocUnlocked(docId);
+      }
+      await downloadResource(docId, title, versionId);
       markDocUnlocked(docId);
-      trackEvent('doc_downloaded', { docId, title, type: doc?.type });
+      trackEvent('doc_downloaded', { docId, title, type: doc?.type, versionId });
       showToast(`Downloading "${title}".`);
       refreshDocCardsUI();
     } catch (err) {
@@ -4110,7 +4239,7 @@ async function downloadDoc(docId) {
         openVerificationModal({
           email: null,
           actionName: `download "${title}"`,
-          onVerified: () => downloadDoc(docId)
+          onVerified: () => downloadDoc(docId, versionId)
         });
         return;
       }
@@ -4127,23 +4256,20 @@ async function downloadDoc(docId) {
 }
 window.downloadDoc = downloadDoc;
 
-/** Claims a freabie without downloading, so it shows as unlocked. */
+async function downloadDocVersion(resourceId, versionId, title = 'frea-resource') {
+  try {
+    await downloadResource(resourceId, title, versionId);
+    trackEvent('doc_downloaded', { docId: resourceId, title, versionId });
+    showToast(`Downloading "${title}" v${versionId ? 'selected version' : 'current version'}.`);
+  } catch (err) {
+    showToast(err.message || 'Could not download that version.');
+  }
+}
+window.downloadDocVersion = downloadDocVersion;
+
+/** Kept as a compatibility entry point; claiming now downloads immediately. */
 async function claimFreabie(docId) {
-  const doc = getDocById(docId);
-  requireVerifiedSession({
-    email: verifiedEmail(),
-    actionName: `unlock "${doc?.title || 'this freabie'}"`,
-    onVerified: async () => {
-      try {
-        await claimResource(docId);
-        markDocUnlocked(docId);
-        refreshDocCardsUI();
-        showToast('Added to your freabies.');
-      } catch (err) {
-        showToast(err.message || 'Could not unlock this resource.');
-      }
-    }
-  });
+  return downloadDoc(docId);
 }
 window.claimFreabie = claimFreabie;
 
@@ -4195,7 +4321,7 @@ function renderFooter() {
           <a class="footer__link" href="/resources">freabies &amp; docs</a>
           <a class="footer__link" href="/become-a-mentor">become a mentor</a>
           <a class="footer__link" href="/mentor-dashboard" rel="nofollow">mentor portal</a>
-          <a class="footer__link" href="/my-sessions" rel="nofollow">my sessions</a>
+          <a class="footer__link" href="/my-space" rel="nofollow">my space</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
         </div>
       </div>
@@ -4511,6 +4637,21 @@ function openBookingModal(mentorId) {
     }
   }
 
+  // The one gate, called the one way. Carry the selected slot through sign-in
+  // so a student does not have to find it again on a calendar that may have
+  // changed while the identity provider was open.
+  if (!requireAuth({
+    intent: `book a chat with ${mentor.name}`,
+    next: `/mentor/${mentor.id}`,
+    resume: {
+      mentorId: mentor.id,
+      selectedDay,
+      selectedSlot,
+      selectedDate: calendarState.selectedDate,
+      selectedDisplayDate: calendarState.selectedDisplayDate || selectedDay
+    }
+  })) return;
+
   trackEvent('booking_modal_opened', { mentorId: mentor.id, mentorName: mentor.name, day: selectedDay, slot: selectedSlot });
 
   renderBookingModal({ mentor, selectedDay, selectedSlot });
@@ -4519,6 +4660,22 @@ function openBookingModal(mentorId) {
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
+
+function resumeBookingModal(resume) {
+  const mentor = MENTORS.find(m => m.id === parseInt(resume.mentorId));
+  if (!mentor) return;
+  calendarState.mentorId = mentor.id;
+  calendarState.selectedDate = resume.selectedDate || null;
+  calendarState.selectedDisplayDate = resume.selectedDisplayDate || resume.selectedDay;
+  calendarState.selectedSlot = resume.selectedSlot;
+  window.__selectedDay = calendarState.selectedDisplayDate;
+  window.__selectedSlot = calendarState.selectedSlot;
+  renderBookingModal({ mentor, selectedDay: resume.selectedDay, selectedSlot: resume.selectedSlot });
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window.resumeBookingModal = resumeBookingModal;
 
 /**
  * Paints the gate for the slot already chosen.
@@ -4529,9 +4686,9 @@ function openBookingModal(mentorId) {
  * every paint, from the live session — which is what makes the repaint enough
  * to move the student from "booking as ..." back to an empty email field.
  */
-function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = false }) {
-  // A student who has already verified skips straight to confirming.
-  const alreadyVerified = isVerified();
+function renderBookingModal({ mentor, selectedDay, selectedSlot }) {
+  // Always signed in by the time this paints - openBookingModal goes through
+  // requireAuth first, so the modal no longer carries a gate of its own.
   const sessionEmail = verifiedEmail() || '';
 
   const modal = document.getElementById('modal-content');
@@ -4555,45 +4712,27 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
     </ul>
 
     <div id="booking-gate" style="margin-top: 20px;">
-      ${alreadyVerified ? `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;">
-          <div style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #15803d; flex-wrap: wrap;">
-            <span>${ICONS.shieldTick}</span>
-            <span>Booking as <strong>${escapeHtml(sessionEmail)}</strong></span>
-            <!-- Sessions last thirty days, so the signed-in address is often
-                 not the one the person in front of the screen expects --
-                 someone else's on a shared machine, or an old account of
-                 their own. Say whose it is, and offer a way out of it. -->
-            <button type="button" id="booking-not-you"
-                    style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;">not you?</button>
-          </div>
-          <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #15803d; flex-wrap: wrap;">
+          <span>${ICONS.shieldTick}</span>
+          <span>Booking as <strong>${escapeHtml(sessionEmail)}</strong></span>
+          <!-- Sessions last thirty days, so the signed-in address is often
+               not the one the person in front of the screen expects --
+               someone else's on a shared machine, or an old account of
+               their own. Say whose it is, and offer a way out of it. -->
+          <button type="button" id="booking-not-you"
+                  style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;">not you?</button>
         </div>
-        <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
-      ` : `
-        <div id="booking-auth-flow"></div>
-      `}
+        <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
+      </div>
+      <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
     </div>
   `;
 
   // Wired here rather than inline: every new on*= handler is another reason
   // the CSP still carries script-src 'unsafe-inline'.
-  renderAuthFlow({
-    host: document.getElementById('booking-auth-flow'),
-    actionName: 'book this chat',
-    // Repaint in place so the slot they picked survives signing in.
-    onSignedIn: () => renderBookingModal({ mentor, selectedDay, selectedSlot })
-  });
-
-  const notYouBtn = document.getElementById('booking-not-you');
-  if (notYouBtn) {
-    notYouBtn.addEventListener('click', () => {
-      forgetBookingAccount({ mentor, selectedDay, selectedSlot, trigger: notYouBtn });
-    });
-  }
-
-  // `focusEmail` is a leftover from when this gate held an email field of its
-  // own; the sign-in flow owns that focus now and manages it per step.
+  document.getElementById('booking-not-you')
+    ?.addEventListener('click', (e) => forgetBookingAccount({ trigger: e.currentTarget }));
 }
 
 /**
@@ -4609,7 +4748,7 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail = fa
  *
  * The chosen slot survives: they are changing who is booking, not what.
  */
-async function forgetBookingAccount({ mentor, selectedDay, selectedSlot, trigger }) {
+async function forgetBookingAccount({ trigger }) {
   if (trigger) {
     trigger.disabled = true;
     trigger.textContent = 'signing out...';
@@ -4624,23 +4763,25 @@ async function forgetBookingAccount({ mentor, selectedDay, selectedSlot, trigger
   // signOut clears it too, but only on the path where its request resolved.
   setSession(null);
 
-  trackEvent('booking_account_switched', { mentorId: mentor.id, day: selectedDay, slot: selectedSlot });
+  trackEvent('booking_account_switched', {});
 
   updateNavbarMentorStatus();
-  renderBookingModal({ mentor, selectedDay, selectedSlot, focusEmail: true });
-  showToast('Signed out. Enter your university email to carry on.');
+  // The modal cannot stand without a session behind it, so close it and send
+  // them through the one front door. The slot is not preserved: they are
+  // becoming a different person, and that person may not be able to book it.
+  closeModal();
+  showToast('Signed out.');
+  requireAuth({ intent: 'book a chat', next: getRoute() });
 }
 
 async function confirmBooking(mentorId) {
-  const emailInput = document.getElementById('booking-email');
   const errorEl = document.getElementById('booking-error-msg');
   const confirmBtn = document.getElementById('confirm-booking-btn');
 
-  // A verified session already tells us who this is; the field is only for
-  // students who have not verified yet.
-  const email = isVerified()
-    ? verifiedEmail()
-    : (emailInput ? emailInput.value.trim().toLowerCase() : '');
+  // The session is the only source for this now. The modal used to carry an
+  // address field for unverified students; there are no unverified students
+  // in here any more.
+  const email = verifiedEmail();
 
   if (!email || !email.includes('@')) {
     if (errorEl) {
@@ -4756,7 +4897,7 @@ async function confirmBooking(mentorId) {
 
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
             <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">browse more seniors</button>
-            <button class="pill-btn pill-btn--subtle" onclick="closeModal(); window.navigateTo('/my-sessions')">my sessions</button>
+            <button class="pill-btn pill-btn--subtle" onclick="closeModal(); window.navigateTo('/my-space')">my space</button>
           </div>
         </div>
       `;
@@ -5292,10 +5433,10 @@ async function syncLiveMentors() {
 }
 window.syncLiveMentors = syncLiveMentors;
 
-/** Shows "my sessions" in the navbar once a student has verified. */
+/** Shows "my space" in the navbar once a student has verified. */
 function updateNavbarSessionLink() {
-  const btn = document.getElementById('nav-my-sessions');
-  if (btn) btn.hidden = !isVerified();
+  const btn = document.getElementById('nav-my-space');
+  if (btn) btn.hidden = !hasUniversityIdentity();
 }
 window.updateNavbarSessionLink = updateNavbarSessionLink;
 
@@ -5438,38 +5579,38 @@ window.mentorSignOut = mentorSignOut;
  * The university's pseudonym owns the profile, so signing in restores it
  * whatever address they have since chosen for their mail.
  */
-function renderMentorLogin() {
+/**
+ * Signed in, but no mentor profile yet.
+ *
+ * This page used to be a second sign-in card, from when the dashboard was the
+ * only thing that knew it needed a session. The router owns that now, so by
+ * the time anyone gets here they are definitely signed in - the only reason
+ * to be stopped is not having applied, and that is a different sentence.
+ */
+function renderNoMentorProfile() {
   return `
-    <div class="mentor-login-page" style="min-height: 75vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px;">
-      <div style="background: #fff; border: 2px solid var(--color-charcoal); border-radius: 20px; box-shadow: var(--shadow-brutal-lg); max-width: 480px; width: 100%; padding: 36px 28px; text-align: center;">
-        <div style="width: 58px; height: 58px; border-radius: 14px; background: #fff7ed; border: 2px solid var(--color-marker-orange); color: var(--color-marker-orange); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; font-size: 26px;">
-          🔑
-        </div>
-        <h1 style="font-size: 28px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin: 6px 0 10px 0;">
-          mentor sign in
-        </h1>
-        <p style="font-size: 14px; opacity: 0.8; line-height: 1.5; margin-bottom: 24px;">
-          Sign in to reach your availability, bookings and earnings.
+    <div class="page-view page-container sign-in-page">
+      <div class="sign-in-card" style="text-align: center;">
+        <h1 class="sign-in-card__title">you don't have a mentor profile yet</h1>
+        <p class="sign-in-card__lead">
+          You're signed in as <strong>${escapeHtml(verifiedEmail() || '')}</strong>,
+          and your university is already confirmed - so setting one up is just
+          the form. It goes live the moment you submit it.
         </p>
-        <div id="mentor-auth-flow" style="text-align: left;"></div>
-        <p style="font-size: 12.5px; opacity: 0.6; margin-top: 20px; line-height: 1.5;">
-          No mentor profile yet? <a href="/become-a-mentor" onclick="event.preventDefault(); window.navigateTo('/become-a-mentor')" style="color: var(--color-marker-orange); font-weight: 700;">become a mentor</a> — it takes a couple of minutes.
-        </p>
+        <button type="button" id="no-profile-apply" class="pill-btn pill-btn--dark pill-btn--animated" style="margin-top: 8px;">
+          become a mentor
+        </button>
       </div>
+      ${renderFooter()}
     </div>
-    ${renderFooter()}
   `;
 }
 
-/** Hands the sign-in card to the shared auth flow once it is in the DOM. */
-function initMentorLoginPage() {
-  renderAuthFlow({
-    host: document.getElementById('mentor-auth-flow'),
-    actionName: 'reach your mentor dashboard',
-    onSignedIn: () => { navigateTo('/mentor-dashboard'); }
-  });
+/** Wires the one button on the no-profile page. */
+function initNoMentorProfile() {
+  document.getElementById('no-profile-apply')
+    ?.addEventListener('click', () => navigateTo('/become-a-mentor'));
 }
-window.initMentorLoginPage = initMentorLoginPage;
 
 
 let activeDashboardTab = 'schedule';
@@ -5478,7 +5619,7 @@ let mentorScheduleData = null;
 function renderMentorDashboard() {
   const session = getMentorSession();
   if (!session) {
-    return renderMentorLogin();
+    return renderNoMentorProfile();
   }
 
   const currentMentor = MENTORS.find(m => m.id === parseInt(session.mentorId)) || {
@@ -6120,17 +6261,18 @@ function renderMentorResourceList(currentMentor) {
         </span>
         <div>
           <div style="font-weight: 700; font-size: 14px; color: var(--color-charcoal);">${escapeHtml(doc.title)}</div>
-          <div style="font-size: 12px; opacity: 0.6;">${escapeHtml(doc.format || 'Document')} · ${doc.downloads || 0} download${doc.downloads === 1 ? '' : 's'}</div>
+          <div style="font-size: 12px; opacity: 0.6;">${escapeHtml(doc.format || 'Document')} · v${doc.versionNumber || 1} · ${doc.downloads || 0} download${doc.downloads === 1 ? '' : 's'}${doc.status === 'archived' ? ' · archived' : ''}</div>
         </div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         ${doc.type === 'paid' ? `
           <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" onclick="window.editResourcePrice('${escapeHtml(doc.id)}')">
             edit price
-          </button>` : `
-          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" onclick="window.editResourcePrice('${escapeHtml(doc.id)}')">
-            set a price
-          </button>`}
+          </button>` : ''}
+        <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;"
+          data-action="publish-resource-version" data-resource-id="${escapeHtml(doc.id)}">
+          new version
+        </button>
         <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" onclick="window.downloadDoc('${escapeHtml(doc.id)}')">
           ${ICONS.download}
         </button>
@@ -6140,37 +6282,79 @@ function renderMentorResourceList(currentMentor) {
       </div>
     </div>
   `).join('');
+
+  initMentorResourceVersionControls();
 }
 
-/** Switch a resource between freabie and priced playbook, in place. */
+function initMentorResourceVersionControls() {
+  const container = document.getElementById('portal-resources-list');
+  if (!container || container.dataset.versionActionsWired === 'true') return;
+  container.dataset.versionActionsWired = 'true';
+  container.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-action="publish-resource-version"]');
+    if (!button) return;
+    publishNewResourceVersion(button.dataset.resourceId);
+  });
+}
+
+async function publishNewResourceVersion(resourceId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.md,.tex,.pptx';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const uploaded = await uploadDocument(file);
+      const result = await createResourceVersion(resourceId, {
+        fileName: uploaded.fileName,
+        format: uploaded.format
+      });
+      const mentor = resolveSessionMentor();
+      const doc = mentor?.docs?.find(item => item.id === resourceId);
+      if (doc && result?.resource) {
+        Object.assign(doc, result.resource);
+        doc.versionNumber = result.version.versionNumber;
+      }
+      renderMentorResourceList(mentor);
+      showToast(`Published version ${result.version.versionNumber}.`);
+    } catch (err) {
+      showToast(err.message || 'Could not publish that version.');
+    }
+  };
+  input.click();
+}
+window.publishNewResourceVersion = publishNewResourceVersion;
+
+/** Edit a paid product's current price. Product type is immutable. */
 async function editResourcePrice(docId) {
   const session = getMentorSession();
   const mentor = MENTORS.find(m => m.id === parseInt(session?.mentorId));
   const doc = (mentor?.docs || []).find(d => d.id === docId);
   if (!doc) return;
 
+  if (doc.type !== 'paid') {
+    showToast('Freabies stay free. Publish a new paid product if you want to charge for one.');
+    return;
+  }
+
   const raw = prompt(
-    `Price for "${escapeHtml(doc.title)}" in pounds.\n\nEnter 0 to make it a free freabie, or £1.00–£100.00 to sell it.`,
-    doc.type === 'paid' ? String(doc.price) : '0'
+    `Current price for "${escapeHtml(doc.title)}" in pounds.\n\nExisting owners keep access to future versions.`,
+    String(doc.price)
   );
   if (raw === null) return;
 
   const value = parseFloat(raw);
-  if (Number.isNaN(value) || value < 0) {
-    showToast('Enter a number, for example 4.99.');
+  if (!Number.isFinite(value) || value < 1 || value > 100) {
+    showToast('Enter a price between £1.00 and £100.00.');
     return;
   }
 
   try {
-    const updated = await updateResource(docId, value === 0
-      ? { type: 'free' }
-      : { type: 'paid', price: value });
-
-    Object.assign(doc, { type: updated.type, price: updated.price });
+    const updated = await updateResource(docId, { price: value });
+    Object.assign(doc, { price: updated.price });
     renderMentorResourceList(mentor);
-    showToast(value === 0
-      ? `"${escapeHtml(doc.title)}" is now a free freabie.`
-      : `"${escapeHtml(doc.title)}" is now £${Number(updated.price).toFixed(2)}.`);
+    showToast(`"${escapeHtml(doc.title)}" is now £${Number(updated.price).toFixed(2)}.`);
   } catch (err) {
     showToast(err.message || 'Could not update the price.');
   }
@@ -6443,7 +6627,7 @@ async function publishDashboardResource(e) {
 window.publishDashboardResource = publishDashboardResource;
 
 async function deleteMentorResource(docId) {
-  if (!confirm('Delete this resource? Students who already own it keep their copy.')) return;
+  if (!confirm('Remove this resource from public listings? Existing owners keep every version in My Space.')) return;
 
   const currentMentor = resolveSessionMentor();
   if (!currentMentor) return;
@@ -6599,76 +6783,97 @@ function renderCancelBooking(route) {
 }
 window.renderCancelBooking = renderCancelBooking;
 
-// ─── My sessions (#/my-sessions) ─────
+// ─── My Space ─────
 
-function renderMySessions() {
-  if (!isVerified()) {
+function renderMySpace() {
+  if (!hasUniversityIdentity()) {
     setTimeout(() => openVerificationModal({
       email: null,
-      actionName: 'see your booked sessions'
+      actionName: 'open your my space'
     }), 200);
   } else {
-    setTimeout(loadMySessions, 30);
+    setTimeout(loadMySpace, 30);
   }
 
   return `
     <div class="page-container" style="padding: 48px 20px 60px;">
-      <span class="section__caption">your 1-on-1s</span>
-      <h1 class="section__title" style="font-size: clamp(30px, 4vw, 44px); margin-bottom: 8px;">my sessions</h1>
+      <span class="section__caption">your frea space</span>
+      <h1 class="section__title" style="font-size: clamp(30px, 4vw, 44px); margin-bottom: 8px;">my space</h1>
       <p style="font-size: 15px; opacity: 0.75; margin-bottom: 28px;">
-        Everything you've booked, with the video link and calendar invite for each one.
+        Your mentoring sessions and every freabie or playbook you have obtained, ready to download again.
       </p>
-      <div id="my-sessions-list">
-        ${isVerified()
-      ? '<div style="opacity: 0.6; padding: 30px 0;">loading your sessions…</div>'
+      <div id="my-space-sessions">
+        ${hasUniversityIdentity()
+      ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
       : `<div style="padding: 30px 0;">
-           <p style="opacity: 0.7; margin-bottom: 16px;">Verify your student email to see your sessions.</p>
-           <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'see your sessions' })">
-             <span class="pill-btn__inner"><span>verify my email</span><span class="pill-btn__arrow">&rarr;</span></span>
+           <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
+           <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
+             <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
            </button>
          </div>`}
+      </div>
+      <div style="margin-top: 36px;">
+        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">your freabies &amp; playbooks</h2>
+        <div id="my-space-vault-grid" class="docs-grid">
+          ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
+        </div>
       </div>
     </div>
     ${renderFooter()}
   `;
 }
-window.renderMySessions = renderMySessions;
+window.renderMySpace = renderMySpace;
+window.renderMySessions = renderMySpace;
 
-async function loadMySessions() {
-  const root = document.getElementById('my-sessions-list');
-  if (!root) return;
+async function loadMySpace() {
+  const sessionsRoot = document.getElementById('my-space-sessions');
+  const vaultRoot = document.getElementById('my-space-vault-grid');
+  if (!sessionsRoot || !vaultRoot) return;
 
-  const data = await fetchMyBookings();
-  const { upcoming = [], past = [] } = data;
+  try {
+    const data = await fetchMySpace();
+    const { upcoming = [], past = [], products = [] } = data || {};
 
-  if (!upcoming.length && !past.length) {
-    root.innerHTML = `
-      <div style="text-align: center; padding: 48px 20px; background: #fff; border-radius: 16px; border: 1.5px dashed rgba(23, 23, 23, 0.2);">
+    sessionsRoot.innerHTML = upcoming.length || past.length ? `
+      ${upcoming.length ? `
+        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">upcoming sessions</h2>
+        <div style="display: grid; gap: 12px; margin-bottom: 32px;">
+          ${upcoming.map(b => sessionCard(b, true)).join('')}
+        </div>` : ''}
+      ${past.length ? `
+        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">past sessions</h2>
+        <div style="display: grid; gap: 12px;">
+          ${past.map(b => sessionCard(b, false)).join('')}
+        </div>` : ''}
+    ` : `
+      <div style="text-align: center; padding: 32px 20px; background: #fff; border-radius: 16px; border: 1.5px dashed rgba(23, 23, 23, 0.2);">
         <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">no sessions yet</h3>
-        <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto 18px;">
-          Find a senior who's walked the path you want and book a free 20 minutes with them.
-        </p>
+        <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto 18px;">Find a senior who has walked the path you want and book a free 20 minutes with them.</p>
         <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
           <span class="pill-btn__inner"><span>find a mentor</span><span class="pill-btn__arrow">→</span></span>
         </button>
       </div>
     `;
-    return;
-  }
 
-  root.innerHTML = `
-    ${upcoming.length ? `
-      <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">upcoming</h2>
-      <div style="display: grid; gap: 12px; margin-bottom: 32px;">
-        ${upcoming.map(b => sessionCard(b, true)).join('')}
-      </div>` : ''}
-    ${past.length ? `
-      <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">past</h2>
-      <div style="display: grid; gap: 12px;">
-        ${past.map(b => sessionCard(b, false)).join('')}
-      </div>` : ''}
-  `;
+    vaultRoot.innerHTML = products.length
+      ? products.map(renderMySpaceProductCard).join('')
+      : `<div style="grid-column: 1 / -1; text-align: center; padding: 32px 20px; background: #fff; border-radius: 16px; border: 1.5px dashed rgba(23, 23, 23, 0.2);">
+          <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">your vault is empty</h3>
+          <p style="font-size: 14px; opacity: 0.7; margin: 0;">Free freabies and purchased playbooks will stay here so you can download them again whenever you need.</p>
+        </div>`;
+    initMySpaceVault();
+  } catch (err) {
+    if (err.needsVerification || err.status === 401) {
+      clearSession();
+      pendingAuth = { intent: 'open your my space', next: '/my-space' };
+      navigateTo('/sign-in');
+      return;
+    }
+    sessionsRoot.innerHTML = `<div style="padding: 24px 0; color: #b91c1c;">Could not load your space. ${escapeHtml(err.message || 'Please try again.')}</div>`;
+    vaultRoot.innerHTML = '';
+  }
 }
+window.loadMySpace = loadMySpace;
 
 function sessionCard(b, isUpcoming) {
   const meetingUrl = b.meetingUrl || b.googleMeetUrl || '';
@@ -6699,7 +6904,7 @@ async function cancelMySession(bookingId) {
   try {
     await cancelBooking(bookingId);
     showToast('Session cancelled.');
-    loadMySessions();
+    loadMySpace();
   } catch (err) {
     showToast(err.message || 'Could not cancel that session.');
   }
@@ -6726,6 +6931,143 @@ function getRoute() {
   return (window.location.pathname || '/') + (window.location.search || '');
 }
 
+// ─── Access control ─────
+//
+// One rule, three tiers, declared here and nowhere else.
+//
+// The old model gated *actions* — book, star, download, apply — so every page
+// carried its own little gate. They drifted, and the mentor application ended
+// up with none at all: it rendered the entire form to a stranger, printed
+// "confirmed at sign-in" where the university should be, and failed only once
+// they pressed submit. Someone could fill in the whole thing before finding
+// out they were never eligible to.
+//
+// So the gate moved to the front door:
+//
+//   PUBLIC   the landing page, plus the two routes people arrive on from an
+//            email link or from Stripe's redirect. Both carry their own
+//            tokens and are regularly opened on a different device from the
+//            one that holds the session.
+//
+//   LISTED   mentor profiles, the directory, the resource shelf. Crawlable
+//            and indexed — a profile nobody can find is worth nothing to the
+//            mentor — but redacted to what belongs on a business card: name,
+//            university, year, subject, headline. No availability, no contact
+//            address, no external links, no downloads. Every control on these
+//            pages goes through requireAuth().
+//
+//   PRIVATE  anything that is someone's own — applying, sessions, the mentor
+//            dashboard, admin. The router will not render these without a
+//            session; it shows the sign-in page instead.
+//
+// LinkedIn's arrangement, for LinkedIn's reason: findable in full to a search
+// engine, harvestable in full by nobody.
+
+const PUBLIC_ROUTES = new Set(['/', '/cancel', '/checkout-complete', '/sign-in']);
+// '/become-a-mentor' is listed rather than private on purpose: the page is
+// the recruitment pitch and the best-indexed thing frea has for finding
+// mentors at all. What is gated is the form, not the argument for filling it
+// in — so a crawler and a curious student both see why they'd want to, and
+// neither can start a profile without their university first.
+const LISTED_ROUTES = new Set([
+  '/browse', '/resources', '/docs', '/freabies', '/become-a-mentor'
+]);
+
+function accessTier(path) {
+  if (PUBLIC_ROUTES.has(path) || path.startsWith('/verify')) return 'public';
+  if (LISTED_ROUTES.has(path) || path.startsWith('/mentor/')) return 'listed';
+  return 'private';
+}
+
+function canRenderPrivateRoute(path) {
+  if (path === '/my-space') return hasUniversityIdentity();
+  return isVerified();
+}
+
+/**
+ * Where to go once signed in, and what we told them they were signing in for.
+ *
+ * Held here rather than in the URL so a half-finished sign-in cannot be aimed
+ * at an arbitrary route by handing someone a link.
+ */
+let pendingAuth = { intent: 'continue', next: '/' };
+let pendingAuthResume = null;
+
+/**
+ * The only entry to authentication, from anywhere.
+ *
+ * The router calls it for a private route; a button on a listed page calls it
+ * before acting. Same page, same flow, same copy — so there is nothing to
+ * keep in sync, which is exactly what went wrong last time.
+ *
+ * Returns true when the caller may proceed. When it returns false it has
+ * already navigated, so the caller should simply stop.
+ */
+function requireAuth({ intent = 'continue', next = null, resume = null } = {}) {
+  if (hasUniversityIdentity()) {
+    pendingAuthResume = null;
+    return true;
+  }
+  pendingAuth = { intent, next: next || getRoute() };
+  pendingAuthResume = resume;
+  navigateTo('/sign-in');
+  return false;
+}
+window.requireAuth = requireAuth;
+
+/**
+ * What to tell someone they are signing in for.
+ *
+ * "Sign in to continue" tells a person nothing about why they were stopped,
+ * and the reason is different enough per route to be worth naming.
+ */
+function intentForRoute(path) {
+  if (path === '/become-a-mentor') return 'become a mentor';
+  if (path === '/my-space' || path === '/my-sessions') return 'open your my space';
+  if (path === '/mentor-dashboard') return 'reach your mentor dashboard';
+  if (path === '/admin') return 'open the admin dashboard';
+  return 'continue';
+}
+
+/** The sign-in page. Renders the shell; initSignInPage wires the flow. */
+function renderSignInPage() {
+  trackEvent('sign_in_page_view', { intent: pendingAuth.intent });
+
+  return `
+    <div class="page-view page-container sign-in-page">
+      <div class="sign-in-card">
+        <h1 class="sign-in-card__title">sign in to frea</h1>
+        <p class="sign-in-card__lead">
+          frea is free, and only for UK university students — so your
+          university confirms that once, and you're in for good.
+        </p>
+        <p class="sign-in-card__intent">
+          You'll be taken back to ${escapeHtml(pendingAuth.intent)} straight after.
+        </p>
+        <div id="sign-in-flow"></div>
+      </div>
+    </div>
+    ${renderFooter()}
+  `;
+}
+
+function initSignInPage() {
+  const next = pendingAuth.next;
+  const resume = pendingAuthResume;
+  pendingAuthResume = null;
+  renderAuthFlow({
+    host: document.getElementById('sign-in-flow'),
+    actionName: pendingAuth.intent,
+    onSignedIn: () => {
+      // Never bounce back to the gate itself, and never to a route they
+      // still cannot see.
+      const target = (!next || next === '/sign-in') ? '/' : next;
+      navigateTo(target);
+      if (resume) setTimeout(() => resumeBookingModal(resume), 120);
+    }
+  });
+}
+
 function renderPage() {
   const route = getRoute();
   const app = document.getElementById('app');
@@ -6750,6 +7092,34 @@ function renderPage() {
   // Strip any query string before matching, so '/resources?unlocked=x' still
   // resolves to the resources hub.
   const path = route.split('?')[0];
+  if (path === '/my-sessions') {
+    navigateTo('/my-space', { replace: true });
+    return;
+  }
+
+  // The front door. A private route renders the sign-in page instead of
+  // itself, so no page below has to remember to check — which is the failure
+  // this replaces.
+  if (accessTier(path) === 'private' && !canRenderPrivateRoute(path)) {
+    pendingAuth = { intent: intentForRoute(path), next: path };
+    app.innerHTML = renderSignInPage();
+    initSignInPage();
+    setupRevealObserver();
+    setupNavLinks();
+    applyRouteMeta('/sign-in', {});
+    return;
+  }
+
+  if (path === '/sign-in') {
+    // Already signed in? Nothing to do here.
+    if (isVerified()) { navigateTo(pendingAuth.next === '/sign-in' ? '/' : pendingAuth.next, { replace: true }); return; }
+    app.innerHTML = renderSignInPage();
+    initSignInPage();
+    setupRevealObserver();
+    setupNavLinks();
+    applyRouteMeta('/sign-in', {});
+    return;
+  }
 
   if (path === '/' || path === '') {
     app.innerHTML = renderLanding();
@@ -6760,10 +7130,19 @@ function renderPage() {
     hydrateResources();
   } else if (path === '/become-a-mentor') {
     app.innerHTML = renderBecomeMentor();
-    renderSignupLinks();
-    renderPitchVideoControl('signup-pitch-container', '');
-  } else if (path === '/my-sessions') {
-    app.innerHTML = renderMySessions();
+    // The pitch renders for everyone; the form only exists once a university
+    // has vouched for them, so its controls are wired only then.
+    const gateBtn = document.getElementById('mentor-gate-start');
+    if (gateBtn) {
+      gateBtn.addEventListener('click', () => {
+        requireAuth({ intent: 'become a mentor', next: '/become-a-mentor' });
+      });
+    } else {
+      renderSignupLinks();
+      renderPitchVideoControl('signup-pitch-container', '');
+    }
+  } else if (path === '/my-space') {
+    app.innerHTML = renderMySpace();
   } else if (path === '/checkout-complete') {
     app.innerHTML = renderCheckoutComplete(route);
   } else if (path === '/cancel') {
@@ -6773,9 +7152,9 @@ function renderPage() {
     initAdminDashboard();
   } else if (path === '/mentor-dashboard') {
     app.innerHTML = renderMentorDashboard();
-    // renderMentorDashboard falls back to the sign-in page when there is no
-    // mentor session, so wire whichever of the two actually rendered.
-    if (document.getElementById('mentor-auth-flow')) initMentorLoginPage();
+    // Signed in for certain by now — the router saw to that. The only fork
+    // left is whether they have a mentor profile at all.
+    if (document.getElementById('no-profile-apply')) initNoMentorProfile();
     else initMentorDashboard();
   } else if (path.startsWith('/verify')) {
     app.innerHTML = renderEmailVerificationResult(route);
@@ -7129,7 +7508,7 @@ async function init() {
   // only if the visitor is still on the page they started on — re-rendering
   // blindly would wipe anything they had already begun interacting with.
   const settled = getRoute().split('?')[0];
-  if (settled === '/mentor-dashboard' || settled === '/admin' || settled.startsWith('/mentor/')) {
+  if (settled === '/mentor-dashboard' || settled === '/admin' || settled === '/my-space' || settled === '/become-a-mentor' || settled.startsWith('/mentor/')) {
     renderPage();
   } else if (settled === '/resources' || settled === '/docs' || settled === '/freabies') {
     hydrateResources();

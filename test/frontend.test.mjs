@@ -141,37 +141,30 @@ test('no hidden control can block a form from submitting', async () => {
   }
 });
 
-test('the mentor form submits once its visible fields are filled', async () => {
-  await goto('#/become-a-mentor');
+test('the mentor recruitment pitch is public while the application action is gated', async () => {
+  const text = await goto('#/become-a-mentor');
   const { document } = dom.window;
-  const form = document.getElementById('become-mentor-form');
+  assert.match(text, /become a senior mentor/i);
+  assert.ok(document.getElementById('mentor-gate-start'), 'the university gate should be visible');
+  assert.equal(document.getElementById('become-mentor-form'), null,
+    'the application form must not be exposed before university verification');
+});
 
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  set('bm-name', 'Test Mentor');
-  set('bm-major', 'Computer Science');
-  set('bm-email', 'test@ed.ac.uk');
-  set('bm-achieve-1', 'first-class-honours');
-  set('bm-toptip', 'Start applications in September.');
-  for (const id of ['bm-uni', 'bm-year']) {
-    const sel = document.getElementById(id);
-    if (sel && sel.options.length > 1) sel.selectedIndex = 1;
-  }
-
-  const invalid = [...form.querySelectorAll('input, select, textarea')]
-    .filter(el => el.willValidate && !el.checkValidity())
-    .map(el => el.id || el.tagName);
-  assert.deepEqual(invalid, [], 'a filled form should be submittable');
-
-  // And the paid path, where the price field becomes live.
-  dom.window.toggleDocPriceField('paid', 'bm-doc-price-wrap');
-  const price = document.getElementById('bm-doc-price');
-  assert.equal(price.disabled, false, 'price should be enabled when paid is chosen');
-  assert.ok(price.checkValidity(), `default price ${price.value} should be valid`);
-
-  // Bounds match the server, which accepts £1.00 to £100.00 at 2dp.
-  price.value = '0.50'; assert.ok(!price.checkValidity(), 'below £1 should be rejected');
-  price.value = '101';  assert.ok(!price.checkValidity(), 'above £100 should be rejected');
-  price.value = '4.99'; assert.ok(price.checkValidity(), '2dp prices must be allowed');
+test('a university-backed session exposes the application form', () => {
+  const { window } = dom;
+  window.localStorage.setItem('frea_session', JSON.stringify({
+    email: 'verified.student@example.com',
+    sessionToken: 'frontend-test-token',
+    universityVerified: true,
+    isMentor: false,
+    isAdmin: false,
+    institution: 'University of Leeds'
+  }));
+  const container = window.document.createElement('div');
+  container.innerHTML = window.renderBecomeMentor();
+  assert.ok(container.querySelector('#become-mentor-form'), 'verified users should see the application form');
+  assert.ok(container.querySelector('#bm-email'), 'the form should collect a contact email');
+  window.localStorage.removeItem('frea_session');
 });
 
 test('the footer is never nested inside a narrow content column', async () => {
@@ -180,7 +173,7 @@ test('the footer is never nested inside a narrow content column', async () => {
   // both edges and reads as a floating panel rather than the page footer.
   // jsdom has no layout, so this checks the structure that causes it.
   const routes = ['/', '/browse', '/resources', '/become-a-mentor', '/mentor/1',
-    '/my-sessions', '/mentor-dashboard', '/admin', '/faq'];
+    '/my-space', '/mentor-dashboard', '/admin', '/faq'];
 
   for (const route of routes) {
     await goto(`#${route}`);
@@ -207,12 +200,13 @@ test('resources hub renders', async () => {
   assert.ok(text.length > 200, 'resources hub should render content');
 });
 
-test('become-a-mentor form renders with the links editor', async () => {
+test('become-a-mentor keeps its recruitment pitch public before the application gate', async () => {
   await goto('#/become-a-mentor');
   const { document } = dom.window;
-  assert.ok(document.getElementById('bm-email'), 'email field should exist');
-  assert.ok(document.getElementById('bm-links-container'), 'links editor should exist');
-  assert.ok(document.getElementById('bm-doc-uploaded-file'), 'upload handle field should exist');
+  assert.ok(document.getElementById('mentor-gate-start'), 'the university gate should be visible');
+  assert.match(document.getElementById('app').textContent, /first, your university confirms/i);
+  assert.equal(document.getElementById('bm-email'), null,
+    'the application form must remain private until the student verifies');
 });
 
 test('mentor profile renders and loads a live calendar', async () => {
@@ -256,9 +250,10 @@ test('mentor portal shows the sign-in screen when signed out', async () => {
   assert.match(text, /sign in|mentor/i);
 });
 
-test('my-sessions route renders', async () => {
-  const text = await goto('#/my-sessions');
-  assert.match(text, /sessions/i);
+test('my space is private and shows the sign-in gate when signed out', async () => {
+  const text = await goto('#/my-space');
+  assert.match(text, /sign in to frea|open your my space/i);
+  assert.doesNotMatch(text, /download v\d+/i, 'private product actions must not render before sign-in');
 });
 
 test('verify route reports failure honestly for a bad token', async () => {

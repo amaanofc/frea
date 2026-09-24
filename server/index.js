@@ -18,6 +18,7 @@ import {
   loadDb,
   getAllMentors,
   getMentorById,
+  getMentorViewById,
   findMentorByEmail,
   findMentorByAuthIdentifier,
   findIdentityByContactEmail,
@@ -29,6 +30,7 @@ import {
   getBookingById,
   getBookingsForMentor,
   getBookingsForStudent,
+  getMySpace,
   createMentorApplication,
   getStats,
   saveVerificationToken,
@@ -40,12 +42,15 @@ import {
   updateMentorSchedule,
   getAllResources,
   getResourceById,
+  getResourceVersions,
+  getReferencedUploadNames,
   createResource,
+  createResourceVersion,
   updateResource,
   deleteResource,
   grantEntitlement,
   hasEntitlement,
-  getEntitlementsForEmail,
+  getEntitlementsForOwner,
   recordDownload,
   createPendingOrder,
   attachStripeSession,
@@ -566,6 +571,7 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
       sessionToken: session.token,
       isMentor: Boolean(mentor),
       isAdmin: session.isAdmin,
+      universityVerified: Boolean(session.authIdentifier),
       institution: result.institutionName || result.scope
     });
   }
@@ -747,6 +753,7 @@ app.post('/api/auth/verify-code', rateLimit({ max: 10, windowMs: 60_000, key: by
     sessionToken: session.token,
     isMentor: Boolean(mentor),
     isAdmin: session.isAdmin,
+    universityVerified: Boolean(session.authIdentifier),
     mentor: mentor ? publicMentor(mentor) : null
   });
 }));
@@ -759,10 +766,19 @@ app.get('/api/auth/verify', wrap(async (req, res) => {
   }
 
   const result = verifyEmailToken(token);
-  const mentor = findMentorByEmail(result.email);
+  const identity = findIdentityByContactEmail(result.email);
+  const mentor = identity
+    ? findMentorByAuthIdentifier(identity.authIdentifier)
+    : findMentorByEmail(result.email);
   // Holding a token that was only ever mailed to this address proves the
-  // inbox, exactly as a code does.
-  const session = createSession({ email: result.email, mentorId: mentor?.id || null, emailProven: true });
+  // inbox, exactly as a code does. If the address is already bound to a
+  // Studid identity, carry that canonical key onto the session too.
+  const session = createSession({
+    email: result.email,
+    mentorId: mentor?.id || null,
+    authIdentifier: identity?.authIdentifier || null,
+    emailProven: true
+  });
 
   res.json({
     success: true,
@@ -771,15 +787,19 @@ app.get('/api/auth/verify', wrap(async (req, res) => {
     sessionToken: session.token,
     isMentor: Boolean(mentor),
     isAdmin: session.isAdmin,
+    universityVerified: Boolean(session.authIdentifier),
     mentor: mentor ? publicMentor(mentor) : null
   });
 }));
 
 /** Who am I? Lets the SPA restore state on load without trusting localStorage. */
 app.get('/api/auth/me', (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   if (!req.session) return res.json({ success: true, session: null });
 
-  const mentor = req.session.mentorId ? getMentorById(req.session.mentorId) : null;
+  const mentor = req.session.mentorId
+    ? getMentorViewById(req.session.mentorId, { includeArchived: true })
+    : null;
   const identity = req.session.authIdentifier
     ? findStudentIdentity(req.session.authIdentifier)
     : null;
@@ -790,12 +810,17 @@ app.get('/api/auth/me', (req, res) => {
       isMentor: Boolean(mentor),
       isAdmin: req.session.isAdmin,
       mentorId: mentor?.id || null,
+      universityVerified: Boolean(req.session.authIdentifier),
+      needsIdentity: Boolean(!req.session.authIdentifier && !mentor && !req.session.isAdmin),
       // What the identity provider said, so the client can show it rather
       // than asking the student to tell us something we already know.
       institution: identity?.institutionName || identity?.scope || null
     },
     mentor: mentor ? publicMentor(mentor) : null,
-    entitlements: getEntitlementsForEmail(req.session.email)
+    entitlements: getEntitlementsForOwner({
+      email: req.session.email,
+      authIdentifier: req.session.authIdentifier
+    })
   });
 });
 
@@ -813,35 +838,64 @@ app.get('/api/auth/status', (req, res) => {
 /** Mentor sign-in step 1. Same OTP machinery, but checks a mentor exists. */
 // ─── Mentors ────────────────────────────────────────────
 
+function setIdentityVary(req, res) {
+  res.vary('Authorization');
+  if (req.session) res.set('Cache-Control', 'private, no-store');
+}
+
 /** Strips fields that should never reach other people's browsers. */
-/**
- * `rating` is a seeded constant that nothing ever writes to, so it is not sent
- * to the client any more — a mentor with no sessions was being shown as 5.0.
- * `stars` replaces it: a real count of verified students who vouched for them,
- * starting at zero for everyone.
- */
-function withStars(mentor, counts, viewerEmail) {
-  const { rating, ...rest } = mentor;
+function safeMentorPayload(mentor, { includeEmail = false } = {}) {
+  const source = mentor || {};
+  const safe = {
+    id: source.id,
+    name: source.name,
+    year: source.year,
+    major: source.major,
+    university: source.university,
+    bio: source.bio,
+    topTip: source.topTip,
+    topTipColor: source.topTipColor,
+    achievements: Array.isArray(source.achievements) ? source.achievements : [],
+    helpsWith: Array.isArray(source.helpsWith) ? source.helpsWith : [],
+    callsCompleted: Number(source.callsCompleted) || 0,
+    linkedin: source.linkedin || '',
+    links: Array.isArray(source.links) ? source.links : [],
+    pitchVideoUrl: source.pitchVideoUrl || '',
+    photoUrl: source.photoUrl || '',
+    avatarId: source.avatarId || 1,
+    interviewRequired: Boolean(source.interviewRequired),
+    status: source.status || 'active',
+    weeklySchedule: source.weeklySchedule || {},
+    color: source.color || 'blue',
+    docs: Array.isArray(source.docs) ? source.docs.map(listedResource) : []
+  };
+  if (includeEmail) {
+    safe.email = source.email || '';
+    safe.hasEmail = Boolean(source.email);
+  }
+  return safe;
+}
+
+function withStars(mentor, counts, viewerEmail, includeEmail = false, viewerAuthIdentifier = null) {
+  const safe = safeMentorPayload(mentor, { includeEmail });
   return {
-    ...rest,
+    ...safe,
     stars: counts[mentor.id] || 0,
-    youStarred: viewerEmail ? hasStarred(mentor.id, viewerEmail) : false
+    youStarred: hasStarred(mentor.id, viewerEmail, viewerAuthIdentifier)
   };
 }
 
-function publicMentor(mentor, viewerEmail) {
-  const counts = getStarCounts();
-  const { email, ...rest } = withStars(mentor, counts, viewerEmail);
-  return { ...rest, email, hasEmail: Boolean(email) };
+function publicMentor(mentor, viewerEmail = null, viewerAuthIdentifier = null) {
+  const view = mentor?.id ? getMentorViewById(mentor.id, { includeArchived: true }) : mentor;
+  return withStars(view, getStarCounts(), viewerEmail, true, viewerAuthIdentifier);
 }
 
-function listedMentor(mentor, counts, viewerEmail) {
-  // Public listings omit the mentor's email address entirely.
-  const { email, ...rest } = withStars(mentor, counts || getStarCounts(), viewerEmail);
-  return rest;
+function listedMentor(mentor, counts, viewerEmail = null, viewerAuthIdentifier = null) {
+  return withStars(mentor, counts || getStarCounts(), viewerEmail, false, viewerAuthIdentifier);
 }
 
 app.get('/api/mentors', (req, res) => {
+  setIdentityVary(req, res);
   const mentors = getAllMentors({
     search: req.query.search,
     university: req.query.university,
@@ -850,27 +904,29 @@ app.get('/api/mentors', (req, res) => {
   // Counts are read once for the whole listing rather than per mentor.
   const counts = getStarCounts();
   const viewer = req.session?.email || null;
+  const viewerAuthIdentifier = req.session?.authIdentifier || null;
   res.json({
     success: true,
     count: mentors.length,
-    data: mentors.map(m => listedMentor(m, counts, viewer))
+    data: mentors.map(m => listedMentor(m, counts, viewer, viewerAuthIdentifier))
   });
 });
 
 app.get('/api/mentors/:id', (req, res) => {
-  const mentor = getMentorById(req.params.id);
+  setIdentityVary(req, res);
+  const mentor = getMentorViewById(req.params.id);
   if (!mentor) return res.status(404).json({ success: false, error: 'Mentor not found' });
-  res.json({ success: true, data: listedMentor(mentor, null, req.session?.email || null) });
+  res.json({ success: true, data: listedMentor(mentor, null, req.session?.email || null, req.session?.authIdentifier || null) });
 });
 
 app.put('/api/mentors/:id', requireSelfOrAdmin, (req, res) => {
   const updated = updateMentorProfile(req.params.id, req.body);
-  res.json({ success: true, data: publicMentor(updated) });
+  res.json({ success: true, data: publicMentor(getMentorViewById(updated.id, { includeArchived: true })) });
 });
 
 app.put('/api/mentors/:id/schedule', requireSelfOrAdmin, (req, res) => {
   const updated = updateMentorSchedule(req.params.id, req.body.weeklySchedule);
-  res.json({ success: true, data: publicMentor(updated) });
+  res.json({ success: true, data: publicMentor(getMentorViewById(updated.id, { includeArchived: true })) });
 });
 
 app.get('/api/mentors/:id/slots', (req, res) => {
@@ -913,7 +969,11 @@ app.get('/api/mentors/:id/orders', requireSelfOrAdmin, (req, res) => {
  */
 app.post('/api/mentors/:id/star', requireVerified, (req, res) => {
   try {
-    const result = toggleStar({ mentorId: req.params.id, email: req.session.email });
+    const result = toggleStar({
+      mentorId: req.params.id,
+      email: req.session.email,
+      authIdentifier: req.session.authIdentifier
+    });
     res.json({ success: true, data: result });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -934,7 +994,13 @@ app.post('/api/bookings', requireVerified, rateLimit({ max: 10, windowMs: 60_000
     });
   }
 
-  const booking = createBooking({ mentorId, studentEmail, date, time });
+  const booking = createBooking({
+    mentorId,
+    studentEmail,
+    studentAuthIdentifier: req.session.authIdentifier,
+    date,
+    time
+  });
   const mentor = getMentorById(mentorId);
 
   let icsContent = '';
@@ -959,7 +1025,21 @@ app.post('/api/bookings', requireVerified, rateLimit({ max: 10, windowMs: 60_000
 }));
 
 app.get('/api/bookings/mine', requireVerified, (req, res) => {
-  res.json({ success: true, data: getBookingsForStudent(req.session.email) });
+  res.json({ success: true, data: getBookingsForStudent({
+    email: req.session.email,
+    authIdentifier: req.session.authIdentifier
+  }) });
+});
+
+app.get('/api/my-space', requireVerified, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.json({
+    success: true,
+    data: getMySpace({
+      email: req.session.email,
+      authIdentifier: req.session.authIdentifier
+    })
+  });
 });
 
 app.get('/api/bookings/:id/ics', (req, res) => {
@@ -968,12 +1048,17 @@ app.get('/api/bookings/:id/ics', (req, res) => {
 
   // A booking id alone is not enough; you must hold the session or the token.
   const token = req.query.token;
+  const ownsStudent = req.session && (
+    booking.studentAuthIdentifier && req.session.authIdentifier
+      ? booking.studentAuthIdentifier === req.session.authIdentifier
+      : !booking.studentAuthIdentifier && req.session.email === booking.studentEmail
+  );
   const owns = req.session && (
-    req.session.email === booking.studentEmail ||
+    ownsStudent ||
     req.session.mentorId === booking.mentorId ||
     req.session.isAdmin
   );
-  if (!owns && token !== booking.cancelToken) {
+  if (!owns && (!token || token !== booking.cancelToken)) {
     return res.status(403).send('Not authorised to download this invite.');
   }
 
@@ -994,6 +1079,8 @@ app.post('/api/bookings/:id/cancel', wrap(async (req, res) => {
   const cancelled = cancelBooking({
     bookingId: req.params.id,
     email: req.session?.email,
+    authIdentifier: req.session?.authIdentifier,
+    mentorId: req.session?.mentorId,
     cancelToken: req.body.cancelToken || req.query.token,
     isAdmin: Boolean(req.session?.isAdmin)
   });
@@ -1031,10 +1118,10 @@ app.post('/api/mentors/apply', requireVerified, wrap(async (req, res) => {
     });
   }
 
-  if (!appData.name || !appData.university) {
+  if (!appData.name) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required application fields: name, university'
+      error: 'Missing required application field: name'
     });
   }
 
@@ -1212,8 +1299,11 @@ function listedResource(r) {
 }
 
 app.get('/api/resources', (req, res) => {
+  setIdentityVary(req, res);
   const resources = getAllResources();
-  const owned = req.session ? getEntitlementsForEmail(req.session.email) : [];
+  const owned = req.session
+    ? getEntitlementsForOwner({ email: req.session.email, authIdentifier: req.session.authIdentifier })
+    : [];
   res.json({
     success: true,
     count: resources.length,
@@ -1238,20 +1328,57 @@ app.post('/api/resources', requireMentor, (req, res) => {
   res.status(201).json({ success: true, data: listedResource(resource) });
 });
 
+app.post('/api/resources/:id/versions', requireMentor, (req, res) => {
+  const resource = getResourceById(req.params.id);
+  if (!resource) return res.status(404).json({ success: false, error: 'Resource not found.' });
+  if (resource.mentorId !== req.session.mentorId && !req.session.isAdmin) {
+    return res.status(403).json({ success: false, error: 'You can only add versions to your own resources.' });
+  }
+
+  try {
+    const version = createResourceVersion({
+      resourceId: resource.id,
+      fileName: req.body.fileName,
+      format: req.body.format,
+      pages: req.body.pages
+    });
+    res.status(201).json({
+      success: true,
+      data: {
+        resource: {
+          ...listedResource(getResourceById(resource.id)),
+          versionNumber: version.versionNumber
+        },
+        version: {
+          id: version.id,
+          versionNumber: version.versionNumber,
+          createdAt: version.createdAt
+        }
+      }
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.put('/api/resources/:id', requireMentor, (req, res) => {
   const resource = getResourceById(req.params.id);
   if (!resource) return res.status(404).json({ success: false, error: 'Resource not found.' });
   if (resource.mentorId !== req.session.mentorId && !req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'You can only edit your own resources.' });
   }
-  if (req.body.type === 'paid' && !canMentorSell(req.session.mentorId)) {
+  if (resource.type === 'paid' && req.body.type === 'paid' && !canMentorSell(req.session.mentorId)) {
     return res.status(409).json({
       success: false,
       error: 'Set up payouts before pricing a playbook — otherwise we have nowhere to send your earnings.',
       payoutsRequired: true
     });
   }
-  res.json({ success: true, data: listedResource(updateResource(req.params.id, req.body)) });
+  try {
+    res.json({ success: true, data: listedResource(updateResource(req.params.id, req.body)) });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 app.delete('/api/resources/:id', requireMentor, (req, res) => {
@@ -1261,48 +1388,61 @@ app.delete('/api/resources/:id', requireMentor, (req, res) => {
     return res.status(403).json({ success: false, error: 'You can only delete your own resources.' });
   }
 
-  // Drop the record first, then the bytes: if the unlink fails the resource is
-  // still gone, and the sweep below reclaims the file later.
-  const result = deleteResource(req.params.id);
-
-  if (resource.fileName) {
-    const filePath = path.join(UPLOADS_DIR, path.basename(resource.fileName));
-    if (filePath.startsWith(UPLOADS_DIR)) {
-      try {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch (e) {
-        console.warn('[resources] could not delete file:', e.message);
-      }
-    }
-  }
-
-  res.json({ success: true, data: result });
+  // Archiving hides the product from new discovery but keeps every version that
+  // an existing owner may still need to re-download.
+  res.json({ success: true, data: deleteResource(req.params.id) });
 });
 
 /** Claim a freabie. Verified students only, so downloads stay attributable. */
 app.post('/api/resources/:id/claim', requireVerified, (req, res) => {
   const resource = getResourceById(req.params.id);
-  if (!resource) return res.status(404).json({ success: false, error: 'Resource not found.' });
+  if (!resource || resource.status === 'archived') {
+    return res.status(404).json({ success: false, error: 'Resource not found.' });
+  }
   if (resource.type === 'paid') {
     return res.status(402).json({ success: false, error: 'This playbook needs to be purchased first.' });
   }
 
-  grantEntitlement({ email: req.session.email, resourceId: resource.id, reason: 'free' });
-  res.json({ success: true, data: { resourceId: resource.id, unlocked: true } });
+  const entitlement = grantEntitlement({
+    email: req.session.email,
+    authIdentifier: req.session.authIdentifier,
+    resourceId: resource.id,
+    versionId: resource.currentVersionId,
+    reason: 'free'
+  });
+  res.json({
+    success: true,
+    data: {
+      resourceId: resource.id,
+      versionId: entitlement.versionId,
+      unlocked: true,
+      downloadUrl: `/api/resources/${encodeURIComponent(resource.id)}/download?versionId=${encodeURIComponent(entitlement.versionId)}`
+    }
+  });
 });
 
 /**
  * The only way to get a resource file. Streams from disk after checking that
- * this verified email actually holds an entitlement.
+ * the verified identity holds an entitlement to the product.
  */
 app.get('/api/resources/:id/download', requireVerified, (req, res) => {
   const resource = getResourceById(req.params.id);
   if (!resource) return res.status(404).json({ success: false, error: 'Resource not found.' });
 
+  const versionId = String(req.query.versionId || resource.currentVersionId || '');
+  const version = getResourceVersions(resource.id).find(v => v.id === versionId);
+  if (!version) return res.status(404).json({ success: false, error: 'Product version not found.' });
+
   const isOwner = req.session.mentorId === resource.mentorId;
-  const entitled = isOwner || req.session.isAdmin || hasEntitlement(req.session.email, resource.id);
+  const entitled = isOwner || req.session.isAdmin || hasEntitlement({
+    email: req.session.email,
+    authIdentifier: req.session.authIdentifier
+  }, resource.id);
 
   if (!entitled) {
+    if (resource.status === 'archived') {
+      return res.status(404).json({ success: false, error: 'Resource not found.' });
+    }
     if (resource.type === 'paid') {
       return res.status(402).json({
         success: false,
@@ -1311,15 +1451,21 @@ app.get('/api/resources/:id/download', requireVerified, (req, res) => {
       });
     }
     // Free resource the student has not claimed yet — grant on the spot.
-    grantEntitlement({ email: req.session.email, resourceId: resource.id, reason: 'free' });
+    grantEntitlement({
+      email: req.session.email,
+      authIdentifier: req.session.authIdentifier,
+      resourceId: resource.id,
+      versionId: version.id,
+      reason: 'free'
+    });
   }
 
-  if (!resource.fileName) {
+  if (!version.fileName) {
     return res.status(404).json({ success: false, error: 'This resource has no file attached.' });
   }
 
   // basename() defends against any traversal that reached the record.
-  const filePath = path.join(UPLOADS_DIR, path.basename(resource.fileName));
+  const filePath = path.join(UPLOADS_DIR, path.basename(version.fileName));
   if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) {
     return res.status(404).json({ success: false, error: 'The file for this resource is missing.' });
   }
@@ -1329,7 +1475,7 @@ app.get('/api/resources/:id/download', requireVerified, (req, res) => {
   const ext = path.extname(filePath).toLowerCase();
   const safeTitle = resource.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   res.setHeader('Content-Type', MIME_BY_EXT[ext] || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeTitle || 'frea-resource'}${ext}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeTitle || 'frea-resource'}-v${version.versionNumber}${ext}"`);
   fs.createReadStream(filePath).pipe(res);
 });
 
@@ -1429,7 +1575,11 @@ app.post('/api/checkout', requireVerified, wrap(async (req, res) => {
     });
   }
 
-  const order = createPendingOrder({ resourceId, buyerEmail: req.session.email });
+  const order = createPendingOrder({
+    resourceId,
+    buyerEmail: req.session.email,
+    buyerAuthIdentifier: req.session.authIdentifier
+  });
   const session = await createCheckoutSession({
     order, resource, baseUrl: baseUrl(), destinationAccount: mentor.stripeAccountId
   });
@@ -1454,7 +1604,10 @@ app.post('/api/checkout', requireVerified, wrap(async (req, res) => {
 app.get('/api/checkout/:orderId/status', requireVerified, wrap(async (req, res) => {
   const order = getOrderById(req.params.orderId);
   if (!order) return res.status(404).json({ success: false, error: 'Order not found.' });
-  if (order.buyerEmail !== req.session.email && !req.session.isAdmin) {
+  const ownsOrder = order.buyerAuthIdentifier && req.session.authIdentifier
+    ? order.buyerAuthIdentifier === req.session.authIdentifier
+    : !order.buyerAuthIdentifier && order.buyerEmail === req.session.email;
+  if (!ownsOrder && !req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'This is not your order.' });
   }
 
@@ -1484,9 +1637,13 @@ app.get('/api/checkout/:orderId/status', requireVerified, wrap(async (req, res) 
 /** Marks paid, grants access and sends both emails. Safe to call twice. */
 async function finalisePaidOrder(orderId, paymentIntentId = null) {
   const before = getOrderById(orderId);
-  if (!before || before.status === 'paid') return before;
+  if (!before) return null;
 
+  // Reconcile access even when the order was already marked paid. This closes
+  // the crash window between those two writes and makes webhook retries safe.
   const order = markOrderPaid(orderId, { stripePaymentIntentId: paymentIntentId });
+  if (before.status === 'paid') return order;
+
   const resource = getResourceById(order.resourceId);
   const mentor = getMentorById(order.mentorId);
 
@@ -1671,6 +1828,7 @@ app.get('/robots.txt', (req, res) => {
     'Allow: /',
     '',
     '# Personal, transactional or admin-only — nothing here belongs in an index',
+    'Disallow: /my-space',
     'Disallow: /my-sessions',
     'Disallow: /mentor-dashboard',
     'Disallow: /admin',
@@ -1811,9 +1969,7 @@ const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000;
 
 function sweepOrphanedUploads() {
   try {
-    const referenced = new Set(
-      getAllResources().map(r => r.fileName).filter(Boolean).map(f => path.basename(f))
-    );
+    const referenced = new Set(getReferencedUploadNames());
     const now = Date.now();
     let removed = 0;
 

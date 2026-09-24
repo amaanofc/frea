@@ -70,6 +70,10 @@ group('A SCANNER FETCHING THE LINK FIRST');
     `status ${student.status} — ${student.json?.error || ''}`);
   ok('and it opens a real session', Boolean(student.json?.sessionToken));
   ok('for the right address', student.json?.email === email.toLowerCase());
+  const sessionDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  const storedSession = sessionDb.sessions.find(s => s.token === student.json.sessionToken);
+  ok('the link session carries the canonical Studid identity', Boolean(storedSession?.authIdentifier),
+    JSON.stringify(storedSession));
 }
 
 group('THE SESSION IS USABLE')

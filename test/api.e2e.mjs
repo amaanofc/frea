@@ -81,6 +81,8 @@ console.log('\n─── 1. Verification & sessions ───');
 
   const me = await call('GET', '/auth/me', { token: good.json.sessionToken });
   ok('/auth/me resolves the session', me.json.session?.email === email);
+  ok('/auth/me exposes the university-backed identity state', me.json.session?.universityVerified === true,
+    JSON.stringify(me.json.session));
 }
 
 console.log('\n─── 2. Booking: validation ───');
@@ -179,12 +181,28 @@ console.log('\n─── 5. Mentor auth & the schedule round-trip ───');
   // that address is now a personal one that says nothing about anybody.
   const applied = await call('POST', '/mentors/apply', {
     token: studentToken2,
+    body: { name: 'E2E Mentor', major: 'Physics' }
+  });
+  ok('browser mentor payload can omit the university field', applied.json.success === true, JSON.stringify(applied.json).slice(0, 160));
+  const attachedBypass = await call('POST', '/mentors/apply', {
+    token: studentToken2,
+    body: {
+      name: 'E2E Mentor',
+      university: 'University of Oxford',
+      major: 'Physics',
+      attachedDoc: { title: 'stolen', fileName: 'doc-1-other.pdf' }
+    }
+  });
+  ok('mentor application cannot publish an unowned attached file',
+    attachedBypass.status === 400 && /dashboard|publish/i.test(attachedBypass.json.error || ''),
+    JSON.stringify(attachedBypass.json));
+  const spoofed = await call('POST', '/mentors/apply', {
+    token: studentToken2,
     body: { name: 'E2E Mentor', university: 'University of Oxford', major: 'Physics' }
   });
-  ok('mentor profile created from a verified session', applied.json.success === true, JSON.stringify(applied.json).slice(0, 160));
   ok('the claimed university is ignored in favour of the verified one',
-    applied.json.mentor?.university === 'University of Leeds',
-    'stored as: ' + applied.json.mentor?.university);
+    applied.json.mentor?.university === 'University of Leeds' && spoofed.json.mentor?.university === 'University of Leeds',
+    `stored as: ${applied.json.mentor?.university} / ${spoofed.json.mentor?.university}`);
 
   // Applying promotes the session: the token from before the profile existed
   // still carries mentorId null, so the one apply hands back is the mentor one.
@@ -327,6 +345,49 @@ console.log('\n─── 6. Resources, entitlement & downloads ───');
   });
   const paidJson = await paidDl.json();
   ok('paid download blocked without purchase', paidDl.status === 402 && paidJson.requiresPurchase === true, JSON.stringify(paidJson));
+
+  // Versioning and My Space: publishing a new file does not replace the old
+  // one, and an owner can keep downloading every version they obtained.
+  const v2Form = new FormData();
+  v2Form.append('document', new Blob(['Real file contents, version two.'], { type: 'text/markdown' }), 'e2e-v2.md');
+  const v2Upload = await (await fetch(`${API}/upload/document`, {
+    method: 'POST', headers: { Authorization: `Bearer ${globalThis.__mentorToken}` }, body: v2Form
+  })).json();
+  const v2 = await call('POST', `/resources/${freeId}/versions`, {
+    token: globalThis.__mentorToken, body: { fileName: v2Upload.fileName, format: v2Upload.format }
+  });
+  ok('mentor can append a product version', v2.status === 201 && v2.json.data.version.versionNumber === 2,
+    JSON.stringify(v2.json).slice(0, 180));
+
+  const space = await call('GET', '/my-space', { token: buyerToken });
+  const spaceItem = space.json.data?.products?.find(p => p.resourceId === freeId);
+  ok('My Space joins the owner entitlement to canonical versions',
+    space.status === 200 && spaceItem?.versions?.length === 2 && spaceItem?.currentVersion?.id === v2.json.data.version.id,
+    JSON.stringify(space.json).slice(0, 240));
+
+  const oldVersionDownload = await fetch(`${API}/resources/${freeId}/download?versionId=${encodeURIComponent(free.json.data.currentVersionId)}`, {
+    headers: { Authorization: `Bearer ${buyerToken}` }
+  });
+  const newVersionDownload = await fetch(`${API}/resources/${freeId}/download?versionId=${encodeURIComponent(v2.json.data.version.id)}`, {
+    headers: { Authorization: `Bearer ${buyerToken}` }
+  });
+  ok('owners can download both retained versions',
+    oldVersionDownload.status === 200 && newVersionDownload.status === 200,
+    `${oldVersionDownload.status}/${newVersionDownload.status}`);
+
+  const archived = await call('DELETE', `/resources/${freeId}`, { token: globalThis.__mentorToken });
+  ok('mentor deletion archives rather than destroys the product', archived.status === 200 && archived.json.data.status === 'archived',
+    JSON.stringify(archived.json));
+  const archivedSpace = await call('GET', '/my-space', { token: buyerToken });
+  const archivedItem = archivedSpace.json.data?.products?.find(p => p.resourceId === freeId);
+  ok('archived products remain available in existing owners My Space',
+    archivedItem?.status === 'archived' && archivedItem?.versions?.length === 2,
+    JSON.stringify(archivedItem));
+  const archivedDownload = await fetch(`${API}/resources/${freeId}/download?versionId=${encodeURIComponent(free.json.data.currentVersionId)}`, {
+    headers: { Authorization: `Bearer ${buyerToken}` }
+  });
+  ok('archived product files remain downloadable by their owner', archivedDownload.status === 200,
+    String(archivedDownload.status));
 
   // No public static path to the file any more.
   const hotlink = await fetch(`http://localhost:3001/uploads/digital_products/${upJson.fileName}`);

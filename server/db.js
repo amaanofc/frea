@@ -277,13 +277,32 @@ const INITIAL_MENTORS = [
  * Runs on every read, so a legacy data.json heals itself in place rather than
  * silently producing mismatched dates and empty calendars.
  */
+const RESOURCE_SCHEMA_VERSION = 4;
+
+function resourceVersionId(resourceId, versionNumber) {
+  return `${resourceId}-v${versionNumber}`;
+}
+
+function makeResourceVersion(resource, versionNumber = 1, fileName = resource.fileName || '') {
+  return {
+    id: resourceVersionId(resource.id, versionNumber),
+    resourceId: resource.id,
+    versionNumber,
+    fileName,
+    format: resource.format || 'PDF',
+    pages: resource.pages || 'Self-contained document',
+    createdAt: resource.createdAt || new Date().toISOString()
+  };
+}
+
 function migrate(db) {
   db.mentors = db.mentors || INITIAL_MENTORS;
   db.bookings = db.bookings || [];
   db.mentorApplications = db.mentorApplications || [];
   db.verifiedEmails = db.verifiedEmails || [];
   db.verificationTokens = db.verificationTokens || [];
-  db.resources = db.resources || [];
+  db.resources = Array.isArray(db.resources) ? db.resources : [];
+  db.resourceVersions = Array.isArray(db.resourceVersions) ? db.resourceVersions : [];
   db.orders = db.orders || [];
   db.entitlements = db.entitlements || [];
   db.sessions = db.sessions || [];
@@ -299,33 +318,172 @@ function migrate(db) {
   if (typeof db.stats.averageRating !== 'number') db.stats.averageRating = 4.9;
 
   db.mentors.forEach(m => {
-    // Schedules were once keyed by day name and/or held 12-hour times.
     m.weeklySchedule = normaliseSchedule(m.weeklySchedule);
-    delete m.schedule; // a stale duplicate the old portal wrote
+    delete m.schedule;
 
-    // Mentors may now attach any number of links; fold the old single fields in.
     if (!Array.isArray(m.links)) {
       const links = [];
       if (m.linkedin) links.push({ label: 'LinkedIn', url: m.linkedin });
       if (m.website) links.push({ label: 'Website', url: m.website });
       m.links = links;
     }
-    if (!Array.isArray(m.docs)) m.docs = [];
     if (typeof m.callsCompleted !== 'number') m.callsCompleted = 0;
     if (typeof m.payoutsEnabled !== 'boolean') m.payoutsEnabled = false;
   });
 
-  // Bookings were once stored with display dates ("Wed 2 Sep") and 12-hour
-  // times, which never matched the ISO dates the slot engine compares against.
-  db.bookings.forEach(b => {
-    const year = b.createdAt ? new Date(b.createdAt).getUTCFullYear() : new Date().getFullYear();
-    const canonicalDate = toCanonicalDate(b.date, year);
-    if (canonicalDate) b.date = canonicalDate;
-    const canonicalTime = toCanonicalTime(b.time);
-    if (canonicalTime) b.time = canonicalTime;
-    if (!b.status) b.status = 'confirmed';
+  // Older builds stored every resource twice: once in resources and once in
+  // mentor.docs. Promote the legacy copy into the canonical collection once,
+  // then remove the mirror. Reads derive mentor.docs again as a view.
+  const legacyDocs = [];
+  db.mentors.forEach(m => {
+    if (Array.isArray(m.docs)) m.docs.forEach(doc => legacyDocs.push({ mentor: m, doc }));
+    delete m.docs;
   });
 
+  for (const { mentor, doc } of legacyDocs) {
+    if (!doc || !doc.id) continue;
+    let resource = db.resources.find(r => r.id === doc.id);
+    if (!resource) {
+      resource = {
+        ...doc,
+        mentorId: mentor.id,
+        mentorName: mentor.name,
+        mentorUniversity: mentor.university,
+        mentorMajor: mentor.major
+      };
+      db.resources.push(resource);
+    } else {
+      if (resource.mentorId == null) resource.mentorId = mentor.id;
+      for (const key of ['mentorName', 'mentorUniversity', 'mentorMajor', 'title', 'subtitle', 'type', 'price', 'format', 'fileName', 'pages', 'category', 'previewBullets']) {
+        if ((resource[key] == null || resource[key] === '') && doc[key] != null) resource[key] = doc[key];
+      }
+    }
+  }
+
+  // Every existing product becomes immutable version one. New products use the
+  // same shape, so public listings and My Space share one storage model.
+  db.resources.forEach(resource => {
+    resource.status = resource.status || 'published';
+    resource.type = resource.type === 'paid' ? 'paid' : 'free';
+    if (resource.type === 'free') resource.price = 0;
+
+    if (!resource.currentVersionId) resource.currentVersionId = resourceVersionId(resource.id, 1);
+    let current = db.resourceVersions.find(v => v.id === resource.currentVersionId);
+    if (!current) {
+      current = makeResourceVersion(resource, 1);
+      db.resourceVersions.push(current);
+    } else {
+      if (!current.resourceId) current.resourceId = resource.id;
+      if (!current.versionNumber) current.versionNumber = 1;
+      if (!current.fileName && resource.fileName) current.fileName = resource.fileName;
+      if (!current.format && resource.format) current.format = resource.format;
+      if (!current.pages && resource.pages) current.pages = resource.pages;
+    }
+    resource.currentVersionId = current.id;
+    // The version row is the sole owner of the file handle. Keep legacy data
+    // readable during migration, then remove the denormalized copy.
+    delete resource.fileName;
+  });
+
+  // Backfill the canonical identity onto old records where the contact email
+  // can be resolved. Unmatched legacy rows are intentionally left intact for
+  // the compatibility lookup rather than being discarded.
+  const identityForEmail = (email) => {
+    const clean = String(email || '').trim().toLowerCase();
+    return db.studentIdentities.find(i => i.contactEmail === clean) || null;
+  };
+  db.mentors.forEach(mentor => {
+    if (!mentor.authIdentifier) {
+      const identity = identityForEmail(mentor.email);
+      if (identity) mentor.authIdentifier = identity.authIdentifier;
+    }
+  });
+  db.bookings.forEach(booking => {
+    if (!booking.studentAuthIdentifier) {
+      const identity = identityForEmail(booking.studentEmail);
+      if (identity) booking.studentAuthIdentifier = identity.authIdentifier;
+    }
+  });
+  db.orders.forEach(order => {
+    if (!order.buyerAuthIdentifier) {
+      const identity = identityForEmail(order.buyerEmail);
+      if (identity) order.buyerAuthIdentifier = identity.authIdentifier;
+    }
+    if (!order.purchasedVersionId) {
+      const resource = db.resources.find(r => r.id === order.resourceId);
+      if (resource) order.purchasedVersionId = resource.currentVersionId;
+    }
+  });
+  db.entitlements.forEach(entitlement => {
+    if (!entitlement.authIdentifier) {
+      const identity = identityForEmail(entitlement.email);
+      if (identity) entitlement.authIdentifier = identity.authIdentifier;
+    }
+    if (!entitlement.versionId) {
+      const resource = db.resources.find(r => r.id === entitlement.resourceId);
+      if (resource) entitlement.versionId = resource.currentVersionId;
+    }
+  });
+  const uniqueEntitlements = new Map();
+  db.entitlements.forEach(entitlement => {
+    const identityKey = entitlement.authIdentifier
+      ? `id:${entitlement.authIdentifier}`
+      : `email:${entitlement.email || ''}`;
+    const key = `${entitlement.resourceId}|${identityKey}`;
+    const existing = uniqueEntitlements.get(key);
+    if (!existing) {
+      uniqueEntitlements.set(key, entitlement);
+      return;
+    }
+    if (!existing.versionId && entitlement.versionId) existing.versionId = entitlement.versionId;
+    if (!existing.authIdentifier && entitlement.authIdentifier) existing.authIdentifier = entitlement.authIdentifier;
+    if (!existing.email && entitlement.email) existing.email = entitlement.email;
+  });
+  db.entitlements = [...uniqueEntitlements.values()];
+  db.orders.forEach(order => {
+    if (order.status !== 'paid') return;
+    const resource = db.resources.find(r => r.id === order.resourceId);
+    if (!resource) return;
+    const alreadyOwned = db.entitlements.some(entitlement => {
+      if (entitlement.resourceId !== order.resourceId) return false;
+      if (order.buyerAuthIdentifier && entitlement.authIdentifier) {
+        return entitlement.authIdentifier === order.buyerAuthIdentifier;
+      }
+      return Boolean(order.buyerEmail && entitlement.email === order.buyerEmail);
+    });
+    if (alreadyOwned) return;
+    db.entitlements.push({
+      id: `ent-migrated-${order.id}`,
+      authIdentifier: order.buyerAuthIdentifier || null,
+      email: order.buyerEmail || null,
+      resourceId: order.resourceId,
+      versionId: order.purchasedVersionId || resource.currentVersionId,
+      orderId: order.id,
+      reason: 'purchase',
+      grantedAt: order.paidAt || order.createdAt || new Date().toISOString()
+    });
+  });
+  db.sessions.forEach(session => {
+    if (!session.authIdentifier) {
+      const identity = identityForEmail(session.email);
+      if (identity) session.authIdentifier = identity.authIdentifier;
+    }
+  });
+  // A non-mentor email-only session cannot be trusted for student actions after
+  // the identity-key migration. Remove it so the client is sent back through
+  // university sign-in instead of carrying a token that only yields 403s.
+  db.sessions = db.sessions.filter(session =>
+    session.authIdentifier || session.mentorId || session.isAdmin === true
+  );
+  db.stars = Array.isArray(db.stars) ? db.stars : [];
+  db.stars.forEach(star => {
+    if (!star.authIdentifier) {
+      const identity = identityForEmail(star.email);
+      if (identity) star.authIdentifier = identity.authIdentifier;
+    }
+  });
+
+  db.resourceSchemaVersion = RESOURCE_SCHEMA_VERSION;
   return db;
 }
 
@@ -335,7 +493,11 @@ export function loadDb() {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf8');
-      return migrate(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      const needsMigration = parsed.resourceSchemaVersion !== RESOURCE_SCHEMA_VERSION;
+      const migrated = migrate(parsed);
+      if (needsMigration) saveDb(migrated);
+      return migrated;
     }
   } catch (err) {
     console.warn('[db] Failed reading data.json, initializing fresh db', err);
@@ -432,7 +594,7 @@ export function getAllMentors(filters = {}) {
     list = list.filter(m => m.major.toLowerCase().includes(filters.subject.toLowerCase()));
   }
 
-  return list;
+  return list.map(mentor => withMentorResources(mentor, db));
 }
 
 
@@ -461,6 +623,12 @@ export function findMentorByAuthIdentifier(authIdentifier) {
 export function getMentorById(id) {
   const db = loadDb();
   return db.mentors.find(m => m.id === parseInt(id)) || null;
+}
+
+export function getMentorViewById(id, { includeArchived = false } = {}) {
+  const db = loadDb();
+  const mentor = db.mentors.find(m => m.id === parseInt(id));
+  return mentor ? withMentorResources(mentor, db, { includeArchived }) : null;
 }
 
 // ─── Dynamic Monthly Calendar Slot Calculation ─────
@@ -576,15 +744,10 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
 
 // ─── Create Booking ─────────────────────────
 
-export function createBooking({ mentorId, studentEmail, date, time }) {
+export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, date, time }) {
   const email = (studentEmail || '').trim().toLowerCase();
-  // The address no longer carries the proof, so it is no longer what gets
-  // checked. Students verify through their university's own identity
-  // provider and then tell us where to send invites — usually a personal
-  // mailbox, precisely because university mail was being filtered into
-  // oblivion. What matters is that this address belongs to someone who has
-  // verified, which is what the verified list records for both routes.
-  if (!email || !isEmailVerified(email)) {
+  const authIdentifier = (studentAuthIdentifier || '').trim();
+  if (!authIdentifier || !email || !isEmailVerified(email)) {
     throw new Error('Verification failed: please verify with your university before booking.');
   }
 
@@ -639,7 +802,7 @@ export function createBooking({ mentorId, studentEmail, date, time }) {
   // One student cannot hold two live bookings with the same mentor.
   const duplicate = db.bookings.some(b =>
     b.mentorId === mentor.id &&
-    b.studentEmail === email &&
+    (b.studentAuthIdentifier === authIdentifier || (!b.studentAuthIdentifier && b.studentEmail === email)) &&
     b.status !== 'cancelled' &&
     !isPastDate(b.date)
   );
@@ -655,6 +818,7 @@ export function createBooking({ mentorId, studentEmail, date, time }) {
     mentorName: mentor.name,
     mentorEmail: mentor.email || '',
     studentEmail: email,
+    studentAuthIdentifier: authIdentifier,
     date: canonicalDate,
     time: canonicalTime,
     displayDate: toDisplayDate(canonicalDate),
@@ -688,15 +852,21 @@ function meetingUrlFor(bookingId) {
 }
 
 /** Cancel a booking. Either party may cancel; the token proves it's theirs. */
-export function cancelBooking({ bookingId, email, cancelToken, isAdmin = false }) {
+export function cancelBooking({ bookingId, email, authIdentifier = null, mentorId = null, cancelToken, isAdmin = false }) {
   const db = loadDb();
   const booking = db.bookings.find(b => b.id === bookingId);
   if (!booking) throw new Error('Booking not found.');
 
   const clean = (email || '').trim().toLowerCase();
+  const cleanAuthIdentifier = (authIdentifier || '').trim();
+  const isStudent = booking.studentAuthIdentifier && cleanAuthIdentifier
+    ? booking.studentAuthIdentifier === cleanAuthIdentifier
+    : !booking.studentAuthIdentifier && Boolean(clean && booking.studentEmail === clean);
+  const isMentor = mentorId != null && parseInt(mentorId, 10) === parseInt(booking.mentorId, 10);
   const allowed = isAdmin
     || (cancelToken && cancelToken === booking.cancelToken)
-    || (clean && (clean === booking.studentEmail || clean === booking.mentorEmail));
+    || isStudent
+    || isMentor;
 
   if (!allowed) {
     throw new Error('You do not have permission to cancel this booking.');
@@ -705,7 +875,7 @@ export function cancelBooking({ bookingId, email, cancelToken, isAdmin = false }
 
   booking.status = 'cancelled';
   booking.cancelledAt = new Date().toISOString();
-  booking.cancelledBy = isAdmin ? 'admin' : (clean === booking.mentorEmail ? 'mentor' : 'student');
+  booking.cancelledBy = isAdmin ? 'admin' : (isMentor ? 'mentor' : 'student');
 
   const mentor = db.mentors.find(m => m.id === booking.mentorId);
   if (mentor && mentor.callsCompleted > 0) mentor.callsCompleted -= 1;
@@ -737,12 +907,18 @@ export function getBookingsForMentor(mentorId) {
   };
 }
 
-/** Bookings for one student, by verified email. */
-export function getBookingsForStudent(email) {
+/** Bookings for one student, by canonical identity with legacy email fallback. */
+export function getBookingsForStudent(owner) {
   const db = loadDb();
-  const clean = (email || '').trim().toLowerCase();
+  const key = ownerKey(owner);
   const all = db.bookings
-    .filter(b => b.studentEmail === clean && b.status !== 'cancelled')
+    .filter(b => b.status !== 'cancelled')
+    .filter(b => {
+      if (b.studentAuthIdentifier) {
+        return Boolean(key.authIdentifier && b.studentAuthIdentifier === key.authIdentifier);
+      }
+      return Boolean(key.email && b.studentEmail === key.email);
+    })
     .map(b => ({
       ...b,
       displayDate: b.displayDate || toDisplayDate(b.date),
@@ -763,14 +939,6 @@ export function getBookingById(bookingId) {
 
 // ─── Create Mentor Application ──────────────
 
-/** Bounds a submitted price the same way createResource does, so a bad value
- * cannot reach the UI and render as "£NaN". */
-function clampPrice(value) {
-  const parsed = Math.round(parseFloat(value) * 100) / 100;
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.min(Math.max(parsed, 1), 100);
-}
-
 export function createMentorApplication(appData) {
   const email = (appData.email || '').trim().toLowerCase();
   const authIdentifier = (appData.authIdentifier || '').trim();
@@ -785,6 +953,9 @@ export function createMentorApplication(appData) {
   }
   if (!authIdentifier) {
     throw new Error('Your university sign-in could not be read. Please verify again.');
+  }
+  if (appData.attachedDoc) {
+    throw new Error('Publish products from the mentor dashboard after your profile is created.');
   }
 
   /**
@@ -866,39 +1037,10 @@ export function createMentorApplication(appData) {
       weeklySchedule: normaliseSchedule(
         appData.weeklySchedule || { 1: ['10:00', '14:00'], 3: ['11:00', '15:30'], 5: ['13:00', '16:30'] }
       ),
-      color: colorMap[postitColor] || 'blue',
-      docs: []
+      color: colorMap[postitColor] || 'blue'
     };
 
     db.mentors.unshift(mentor);
-  }
-
-  // Handle optional first attached resource
-  if (appData.attachedDoc && appData.attachedDoc.title) {
-    const doc = appData.attachedDoc;
-    const resource = {
-      id: 'doc-' + mentor.id + '-' + Date.now(),
-      mentorId: mentor.id,
-      mentorName: mentor.name,
-      mentorUniversity: mentor.university,
-      mentorMajor: mentor.major,
-      title: doc.title,
-      subtitle: doc.description || ('Shared by ' + mentor.name),
-      type: doc.type === 'paid' ? 'paid' : 'free',
-      price: doc.type === 'paid' ? clampPrice(doc.price) : 0,
-      format: doc.format || (doc.fileUrl && doc.fileUrl.endsWith('.pdf') ? 'PDF' : (doc.fileUrl && doc.fileUrl.endsWith('.pptx') ? 'PowerPoint' : 'Markdown')),
-      fileUrl: doc.fileUrl || '',
-      fileName: doc.fileName || (doc.fileUrl ? doc.fileUrl.split('/').pop() : ''),
-      pages: 'Self-contained study guide',
-      category: doc.category || 'General',
-      downloads: 0,
-      rating: 5.0,
-      createdAt: new Date().toISOString()
-    };
-    mentor.docs = mentor.docs || [];
-    mentor.docs.push(resource);
-    if (!db.resources) db.resources = [];
-    db.resources.unshift(resource);
   }
 
   // Application record for audit
@@ -1298,38 +1440,83 @@ export function updateMentorSchedule(id, weeklySchedule) {
 
 // ─── Resources / Freabies CRUD ─────────────────────
 
-export function getAllResources() {
-  const db = loadDb();
-  // Combine resources table with all mentor docs
-  const list = [...(db.resources || [])];
-  db.mentors.forEach(m => {
-    if (m.docs && Array.isArray(m.docs)) {
-      m.docs.forEach(d => {
-        if (!list.some(r => r.id === d.id)) {
-          list.push({
-            ...d,
-            mentorId: m.id,
-            mentorName: m.name,
-            mentorUniversity: m.university,
-            mentorMajor: m.major
-          });
-        }
-      });
-    }
-  });
-  return list;
+function currentVersionFor(resource, db) {
+  return (db.resourceVersions || []).find(v => v.id === resource.currentVersionId) || null;
 }
 
-/** Look one resource up wherever it lives (top-level table or a mentor's docs). */
+function resourceView(resource, db) {
+  const current = currentVersionFor(resource, db);
+  const { fileName, fileUrl, ...rest } = resource;
+  return {
+    ...rest,
+    currentVersionId: current?.id || resource.currentVersionId || null,
+    versionNumber: current?.versionNumber || 1
+  };
+}
+
+function resourcesForMentor(db, mentorId, { includeArchived = false } = {}) {
+  return (db.resources || [])
+    .filter(r => r.mentorId === parseInt(mentorId, 10))
+    .filter(r => includeArchived || r.status !== 'archived')
+    .map(r => resourceView(r, db));
+}
+
+function withMentorResources(mentor, db, options = {}) {
+  if (!mentor) return null;
+  return {
+    ...mentor,
+    docs: resourcesForMentor(db, mentor.id, options)
+  };
+}
+
+export function getAllResources({ includeArchived = false } = {}) {
+  const db = loadDb();
+  return (db.resources || [])
+    .filter(r => includeArchived || r.status !== 'archived')
+    .map(r => resourceView(r, db));
+}
+
+/** Look one canonical product up. Archived products remain resolvable for owners. */
 export function getResourceById(id) {
   const db = loadDb();
   const direct = (db.resources || []).find(r => r.id === id);
   if (direct) return direct;
+  // Defensive fallback for an un-migrated in-memory record.
   for (const m of db.mentors) {
     const d = (m.docs || []).find(doc => doc.id === id);
     if (d) return { ...d, mentorId: m.id, mentorName: m.name, mentorUniversity: m.university };
   }
   return null;
+}
+
+export function getResourceVersions(resourceId) {
+  const db = loadDb();
+  return (db.resourceVersions || [])
+    .filter(v => v.resourceId === resourceId)
+    .sort((a, b) => a.versionNumber - b.versionNumber);
+}
+
+/** Every on-disk product file referenced by a version, including archived rows. */
+export function getReferencedUploadNames() {
+  const db = loadDb();
+  const values = [
+    ...(db.resourceVersions || []).map(version => version.fileName),
+    ...(db.resources || []).map(resource => resource.fileName),
+    ...db.mentors.flatMap(mentor => (mentor.docs || [])
+      .flatMap(doc => [doc.fileName, doc.fileUrl]))
+  ];
+  return [...new Set(values
+    .filter(Boolean)
+    .map(value => path.basename(String(value).replace(/\\/g, '/')))
+    .filter(Boolean))];
+}
+
+function assertOwnedUpload(mentorId, fileName) {
+  const handle = String(fileName || '');
+  if (!handle || handle !== path.basename(handle) || !handle.startsWith(`doc-${mentorId}-`)) {
+    throw new Error('That file was not uploaded by this account.');
+  }
+  return handle;
 }
 
 export function createResource(resourceData, mentorId) {
@@ -1349,20 +1536,8 @@ export function createResource(resourceData, mentorId) {
     }
   }
 
-  // fileName is the on-disk handle returned by the upload endpoint. There is no
-  // public URL by design — downloads are streamed through an authorised route.
-  if (!resourceData.fileName) {
-    throw new Error('Upload a document file before publishing.');
-  }
-
-  // ...but the client sends it back, so it is untrusted. Uploads are named
-  // doc-<mentorId>-..., and a mentor may only publish their own: otherwise
-  // pointing a resource at someone else's upload would read it out through
-  // the owner's own entitlement on the download route.
-  const handle = String(resourceData.fileName);
-  if (handle !== path.basename(handle) || !handle.startsWith(`doc-${mentor.id}-`)) {
-    throw new Error('That file was not uploaded by this account.');
-  }
+  if (!resourceData.fileName) throw new Error('Upload a document file before publishing.');
+  const fileName = assertOwnedUpload(mentor.id, resourceData.fileName);
 
   const resource = {
     id: `doc-${mentor.id}-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`,
@@ -1375,9 +1550,6 @@ export function createResource(resourceData, mentorId) {
     type: isPaid ? 'paid' : 'free',
     price,
     format: resourceData.format || 'PDF',
-    // fileName is the on-disk name; downloads are streamed through an
-    // authenticated route, never linked to directly.
-    fileName: resourceData.fileName,
     pages: resourceData.pages || 'Self-contained document',
     category: resourceData.category || 'General',
     previewBullets: Array.isArray(resourceData.previewBullets)
@@ -1385,57 +1557,94 @@ export function createResource(resourceData, mentorId) {
       : [],
     downloads: 0,
     rating: 5.0,
+    status: 'published',
+    currentVersionId: null,
     createdAt: new Date().toISOString()
   };
 
+  const version = makeResourceVersion(resource, 1, fileName);
+  resource.currentVersionId = version.id;
+  db.resourceVersions.push(version);
   db.resources.unshift(resource);
-  mentor.docs = mentor.docs || [];
-  mentor.docs.unshift(resource);
+  saveDb(db);
+  return resource;
+}
+
+export function createResourceVersion({ resourceId, fileName, format, pages }) {
+  const db = loadDb();
+  const resource = db.resources.find(r => r.id === resourceId);
+  if (!resource) throw new Error('Resource not found.');
+
+  const mentor = db.mentors.find(m => m.id === resource.mentorId);
+  if (!mentor) throw new Error('Mentor not found.');
+  const handle = assertOwnedUpload(mentor.id, fileName);
+  let versionNumber = Math.max(
+    0,
+    ...(db.resourceVersions || [])
+      .filter(v => v.resourceId === resource.id)
+      .map(v => Number(v.versionNumber) || 0)
+  ) + 1;
+  while ((db.resourceVersions || []).some(v => v.id === resourceVersionId(resource.id, versionNumber))) {
+    versionNumber += 1;
+  }
+
+  const version = {
+    id: resourceVersionId(resource.id, versionNumber),
+    resourceId: resource.id,
+    versionNumber,
+    fileName: handle,
+    format: format || resource.format || 'PDF',
+    pages: pages || resource.pages || 'Self-contained document',
+    createdAt: new Date().toISOString()
+  };
+
+  db.resourceVersions.push(version);
+  resource.currentVersionId = version.id;
+  resource.format = version.format;
+  resource.pages = version.pages;
+  resource.updatedAt = version.createdAt;
+  saveDb(db);
+  return version;
+}
+
+/** Update listing metadata. A product's free/paid type is immutable. */
+export function updateResource(id, updates) {
+  const db = loadDb();
+  const resource = db.resources.find(r => r.id === id);
+  if (!resource) throw new Error('Resource not found.');
+
+  if (updates.type != null && updates.type !== resource.type) {
+    throw new Error('A product cannot change between free and paid. Create a new product instead.');
+  }
+  if (updates.fileName != null || updates.fileUrl != null) {
+    throw new Error('Publish a new version instead of replacing the existing file.');
+  }
+  if (updates.title != null && cleanText(updates.title, 120)) resource.title = cleanText(updates.title, 120);
+  if (updates.subtitle != null) resource.subtitle = cleanText(updates.subtitle, 300);
+  if (updates.category != null) resource.category = cleanText(updates.category, 80);
+  if (resource.type === 'free') {
+    resource.price = 0;
+  } else if (updates.price != null) {
+    const price = Math.round(parseFloat(updates.price || 0) * 100) / 100;
+    if (!(price >= 1) || price > 100) {
+      throw new Error('Playbooks must be priced between £1.00 and £100.00.');
+    }
+    resource.price = price;
+  }
 
   saveDb(db);
   return resource;
 }
 
-/** Update a resource's listing fields. Price/type editable; the file is not. */
-export function updateResource(id, updates) {
-  const db = loadDb();
-  const apply = (r) => {
-    if (updates.title != null && cleanText(updates.title, 120)) r.title = cleanText(updates.title, 120);
-    if (updates.subtitle != null) r.subtitle = cleanText(updates.subtitle, 300);
-    if (updates.category != null) r.category = updates.category;
-    if (updates.type === 'free') {
-      r.type = 'free';
-      r.price = 0;
-    } else if (updates.type === 'paid') {
-      const price = Math.round(parseFloat(updates.price || r.price || 0) * 100) / 100;
-      if (!(price >= 1) || price > 100) {
-        throw new Error('Playbooks must be priced between £1.00 and £100.00.');
-      }
-      r.type = 'paid';
-      r.price = price;
-    }
-    return r;
-  };
-
-  let found = null;
-  db.resources.forEach(r => { if (r.id === id) found = apply(r); });
-  db.mentors.forEach(m => (m.docs || []).forEach(d => { if (d.id === id) apply(d); }));
-
-  if (!found) throw new Error('Resource not found.');
-  saveDb(db);
-  return found;
-}
-
 export function deleteResource(id) {
   const db = loadDb();
-  db.resources = db.resources.filter(r => r.id !== id);
-  db.mentors.forEach(m => {
-    if (m.docs) {
-      m.docs = m.docs.filter(d => d.id !== id);
-    }
-  });
+  const resource = db.resources.find(r => r.id === id);
+  if (!resource) throw new Error('Resource not found.');
+
+  resource.status = 'archived';
+  resource.archivedAt = new Date().toISOString();
   saveDb(db);
-  return { success: true, id };
+  return { success: true, id, status: resource.status };
 }
 
 // ─── Stars: a count of students who vouched for a mentor ───
@@ -1445,32 +1654,43 @@ export function deleteResource(id) {
 // only goes up as real people arrive, so a new mentor looks new rather than
 // looking like a five-star one.
 //
-// Keyed by verified email so it is one per student per mentor, and pressing
-// again takes it back.
+// Keyed by the canonical Studid identity when available, with email retained
+// for legacy rows and older sessions.
 
-export function toggleStar({ mentorId, email }) {
+export function toggleStar({ mentorId, email, authIdentifier = null }) {
   const id = parseInt(mentorId, 10);
   const clean = (email || '').trim().toLowerCase();
-  if (!clean) throw new Error('Verify your student email before starring a mentor.');
+  const cleanAuthIdentifier = (authIdentifier || '').trim();
+  if (!clean && !cleanAuthIdentifier) throw new Error('Verify your student identity before starring a mentor.');
 
   const db = loadDb();
   const mentor = db.mentors.find(m => m.id === id);
   if (!mentor) throw new Error('Mentor not found.');
 
   // Starring yourself would make the count meaningless.
-  if ((mentor.email || '').toLowerCase() === clean) {
-    throw new Error('You cannot star your own profile.');
-  }
+  const sameIdentity = mentor.authIdentifier && cleanAuthIdentifier
+    ? mentor.authIdentifier === cleanAuthIdentifier
+    : (mentor.email || '').toLowerCase() === clean;
+  if (sameIdentity) throw new Error('You cannot star your own profile.');
 
   db.stars = db.stars || [];
-  const idx = db.stars.findIndex(s => s.mentorId === id && s.email === clean);
+  const idx = db.stars.findIndex(s => {
+    if (s.mentorId !== id) return false;
+    if (s.authIdentifier && cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
+    return Boolean(clean && s.email === clean);
+  });
 
   let starred;
   if (idx >= 0) {
     db.stars.splice(idx, 1);
     starred = false;
   } else {
-    db.stars.push({ mentorId: id, email: clean, at: new Date().toISOString() });
+    db.stars.push({
+      mentorId: id,
+      authIdentifier: cleanAuthIdentifier || null,
+      email: clean,
+      at: new Date().toISOString()
+    });
     starred = true;
   }
 
@@ -1494,30 +1714,64 @@ export function getStarCounts() {
 }
 
 /** Whether this student has already starred this mentor. */
-export function hasStarred(mentorId, email) {
+export function hasStarred(mentorId, email, authIdentifier = null) {
   const id = parseInt(mentorId, 10);
   const clean = (email || '').trim().toLowerCase();
-  if (!clean) return false;
+  const cleanAuthIdentifier = (authIdentifier || '').trim();
+  if (!clean && !cleanAuthIdentifier) return false;
   const db = loadDb();
-  return (db.stars || []).some(s => s.mentorId === id && s.email === clean);
+  return (db.stars || []).some(s => {
+    if (s.mentorId !== id) return false;
+    if (s.authIdentifier && cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
+    return Boolean(clean && s.email === clean);
+  });
 }
 
 // ─── Entitlements: who may download what ───────────────
 //
-// Access lives on the server, keyed to a verified email. Clearing browser
-// storage no longer grants or revokes anything.
+// New ownership is keyed to the Studid authIdentifier. Email is retained as a
+// contact/compatibility field, not as the primary authorization key.
 
-export function grantEntitlement({ email, resourceId, orderId = null, reason = 'purchase' }) {
+function ownerKey(owner) {
+  const value = typeof owner === 'string' ? { email: owner } : (owner || {});
+  return {
+    authIdentifier: String(value.authIdentifier || '').trim() || null,
+    email: String(value.email || '').trim().toLowerCase() || null
+  };
+}
+
+function entitlementBelongsTo(entitlement, owner) {
+  const key = ownerKey(owner);
+  if (entitlement.authIdentifier) {
+    return Boolean(key.authIdentifier && entitlement.authIdentifier === key.authIdentifier);
+  }
+  return Boolean(key.email && entitlement.email === key.email);
+}
+
+export function grantEntitlement({ email, authIdentifier = null, resourceId, versionId = null, orderId = null, reason = 'purchase' }) {
   const db = loadDb();
-  const clean = (email || '').trim().toLowerCase();
+  const key = ownerKey({ email, authIdentifier });
+  if (!key.authIdentifier && !key.email) throw new Error('A verified identity is required.');
 
-  const existing = db.entitlements.find(e => e.email === clean && e.resourceId === resourceId);
-  if (existing) return existing;
+  const resource = db.resources.find(r => r.id === resourceId);
+  const resolvedVersionId = versionId || resource?.currentVersionId || null;
+  const existing = db.entitlements.find(e => e.resourceId === resourceId && entitlementBelongsTo(e, key));
+  if (existing) {
+    if (key.authIdentifier && !existing.authIdentifier) existing.authIdentifier = key.authIdentifier;
+    if (key.email && !existing.email) existing.email = key.email;
+    if (!existing.versionId && resolvedVersionId) existing.versionId = resolvedVersionId;
+    // Persist even when the row itself was already complete: a prior paid
+    // order may have been backfilled in memory by the migration pass.
+    saveDb(db);
+    return existing;
+  }
 
   const entitlement = {
     id: `ent-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-    email: clean,
+    authIdentifier: key.authIdentifier,
+    email: key.email,
     resourceId,
+    versionId: resolvedVersionId,
     orderId,
     reason,
     grantedAt: new Date().toISOString()
@@ -1527,24 +1781,87 @@ export function grantEntitlement({ email, resourceId, orderId = null, reason = '
   return entitlement;
 }
 
-export function hasEntitlement(email, resourceId) {
+export function hasEntitlement(owner, resourceId) {
   const db = loadDb();
-  const clean = (email || '').trim().toLowerCase();
-  return db.entitlements.some(e => e.email === clean && e.resourceId === resourceId);
+  return db.entitlements.some(e => e.resourceId === resourceId && entitlementBelongsTo(e, owner));
 }
 
-/** Every resource id this email may download. Drives the UI's unlocked state. */
-export function getEntitlementsForEmail(email) {
+/** Every resource id this identity may download. Drives the UI's unlocked state. */
+export function getEntitlementsForEmail(email, authIdentifier = null) {
   const db = loadDb();
-  const clean = (email || '').trim().toLowerCase();
-  return db.entitlements.filter(e => e.email === clean).map(e => e.resourceId);
+  return db.entitlements
+    .filter(e => entitlementBelongsTo(e, { email, authIdentifier }))
+    .map(e => e.resourceId);
+}
+
+export function getEntitlementsForOwner(owner) {
+  const key = ownerKey(owner);
+  return getEntitlementsForEmail(key.email, key.authIdentifier);
+}
+
+export function getMySpace(owner) {
+  const db = loadDb();
+  const key = ownerKey(owner);
+  const bookings = db.bookings
+    .filter(b => entitlementBelongsTo({
+      authIdentifier: b.studentAuthIdentifier,
+      email: b.studentEmail
+    }, key) && b.status !== 'cancelled')
+    .map(b => ({
+      ...b,
+      displayDate: b.displayDate || toDisplayDate(b.date),
+      displayTime: b.displayTime || toDisplayTime(b.time)
+    }))
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+  const sessions = {
+    upcoming: bookings.filter(b => !isPastDate(b.date)),
+    past: bookings.filter(b => isPastDate(b.date)).reverse()
+  };
+
+  const products = db.entitlements
+    .filter(e => entitlementBelongsTo(e, key))
+    .map(entitlement => {
+      const resource = db.resources.find(r => r.id === entitlement.resourceId);
+      if (!resource) return null;
+      const versions = (db.resourceVersions || [])
+        .filter(v => v.resourceId === resource.id)
+        .sort((a, b) => a.versionNumber - b.versionNumber);
+      const current = versions.find(v => v.id === resource.currentVersionId) || versions[versions.length - 1] || null;
+      const acquired = versions.find(v => v.id === entitlement.versionId) || current;
+      const publicResource = resourceView(resource, db);
+      return {
+        resourceId: resource.id,
+        title: resource.title,
+        subtitle: resource.subtitle || '',
+        type: resource.type,
+        price: resource.price,
+        status: resource.status || 'published',
+        mentorId: resource.mentorId,
+        mentorName: resource.mentorName,
+        mentorUniversity: resource.mentorUniversity,
+        format: resource.format,
+        pages: resource.pages,
+        downloads: resource.downloads || 0,
+        rating: resource.rating || 0,
+        acquiredAt: entitlement.grantedAt,
+        acquiredVersion: acquired ? { id: acquired.id, versionNumber: acquired.versionNumber } : null,
+        currentVersion: current ? { id: current.id, versionNumber: current.versionNumber } : null,
+        versions: versions.map(v => ({ id: v.id, versionNumber: v.versionNumber, createdAt: v.createdAt })),
+        // Keep the public projection available for compatibility with the
+        // existing client card renderer without exposing a storage handle.
+        ...publicResource
+      };
+    })
+    .filter(Boolean);
+
+  return { sessions, products };
 }
 
 export function recordDownload(resourceId) {
   const db = loadDb();
-  const bump = r => { if (r.id === resourceId) r.downloads = (r.downloads || 0) + 1; };
-  db.resources.forEach(bump);
-  db.mentors.forEach(m => (m.docs || []).forEach(bump));
+  const resource = db.resources.find(r => r.id === resourceId);
+  if (resource) resource.downloads = (resource.downloads || 0) + 1;
   saveDb(db);
 }
 
@@ -1576,21 +1893,20 @@ export function splitPrice(price) {
   return { total, freaFee, mentorPayout };
 }
 
-export function createPendingOrder({ resourceId, buyerEmail }) {
+export function createPendingOrder({ resourceId, buyerEmail, buyerAuthIdentifier }) {
   const cleanEmail = (buyerEmail || '').trim().toLowerCase();
-  // Verified, not university-shaped — see createBooking. The receipt has to
-  // reach an inbox the buyer actually reads, and for a paid download that
-  // matters more here than anywhere else.
-  if (!cleanEmail || !isEmailVerified(cleanEmail)) {
+  const cleanAuthIdentifier = (buyerAuthIdentifier || '').trim();
+  if (!cleanAuthIdentifier || !cleanEmail || !isEmailVerified(cleanEmail)) {
     throw new Error('Please verify with your university before purchasing.');
   }
 
   const resource = getResourceById(resourceId);
   if (!resource) throw new Error('Digital product not found.');
+  if (resource.status === 'archived') throw new Error('This product is no longer available.');
   if (resource.type !== 'paid' || !(resource.price > 0)) {
     throw new Error('This resource is free — no payment is needed.');
   }
-  if (hasEntitlement(cleanEmail, resourceId)) {
+  if (hasEntitlement({ email: cleanEmail, authIdentifier: cleanAuthIdentifier }, resourceId)) {
     throw new Error('You already own this playbook.');
   }
 
@@ -1602,12 +1918,14 @@ export function createPendingOrder({ resourceId, buyerEmail }) {
     resourceId: resource.id,
     resourceTitle: resource.title,
     resourceFormat: resource.format || 'PDF',
+    purchasedVersionId: resource.currentVersionId,
     mentorId: resource.mentorId,
     mentorName: resource.mentorName,
     buyerEmail: cleanEmail,
-    totalAmount: total,      // what the student pays
-    freaFee,                 // frea's cut, deducted from the mentor
-    mentorPayout,            // what the mentor actually receives
+    buyerAuthIdentifier: cleanAuthIdentifier,
+    totalAmount: total,
+    freaFee,
+    mentorPayout,
     feeRate: feeRate(),
     currency: 'gbp',
     status: 'pending',
@@ -1638,7 +1956,19 @@ export function markOrderPaid(orderId, { stripePaymentIntentId = null } = {}) {
   const order = db.orders.find(o => o.id === orderId);
   if (!order) throw new Error('Order not found.');
 
-  if (order.status === 'paid') return order;
+  if (order.status === 'paid') {
+    // A retry may arrive after the order write succeeded but before the
+    // entitlement write. Reconcile the access row on every paid retry.
+    grantEntitlement({
+      email: order.buyerEmail,
+      authIdentifier: order.buyerAuthIdentifier,
+      resourceId: order.resourceId,
+      versionId: order.purchasedVersionId || null,
+      orderId: order.id,
+      reason: 'purchase'
+    });
+    return order;
+  }
 
   order.status = 'paid';
   order.paidAt = new Date().toISOString();
@@ -1652,7 +1982,9 @@ export function markOrderPaid(orderId, { stripePaymentIntentId = null } = {}) {
 
   grantEntitlement({
     email: order.buyerEmail,
+    authIdentifier: order.buyerAuthIdentifier,
     resourceId: order.resourceId,
+    versionId: order.purchasedVersionId || null,
     orderId: order.id,
     reason: 'purchase'
   });
@@ -2070,6 +2402,39 @@ export function upsertStudentIdentity({ authIdentifier, entityId, affiliations =
       lastSeenAt: new Date().toISOString()
     });
   }
+
+  // Bind any legacy rows that were waiting for this identity to appear.
+  db.mentors.forEach(mentor => {
+    if (!mentor.authIdentifier && clean && mentor.email === clean) {
+      mentor.authIdentifier = authIdentifier;
+    }
+  });
+  db.bookings.forEach(booking => {
+    if (!booking.studentAuthIdentifier && clean && booking.studentEmail === clean) {
+      booking.studentAuthIdentifier = authIdentifier;
+    }
+  });
+  db.orders.forEach(order => {
+    if (!order.buyerAuthIdentifier && clean && order.buyerEmail === clean) {
+      order.buyerAuthIdentifier = authIdentifier;
+    }
+  });
+  db.entitlements.forEach(entitlement => {
+    if (!entitlement.authIdentifier && clean && entitlement.email === clean) {
+      entitlement.authIdentifier = authIdentifier;
+    }
+  });
+  db.stars = Array.isArray(db.stars) ? db.stars : [];
+  db.stars.forEach(star => {
+    if (!star.authIdentifier && clean && star.email === clean) {
+      star.authIdentifier = authIdentifier;
+    }
+  });
+  db.sessions.forEach(session => {
+    if (!session.authIdentifier && clean && session.email === clean) {
+      session.authIdentifier = authIdentifier;
+    }
+  });
 
   saveDb(db);
   return findStudentIdentity(authIdentifier);

@@ -521,7 +521,7 @@ export async function sendBookingConfirmationEmail({ booking, mentor, icsContent
         <strong>Make it count:</strong> bring two or three specific questions. Twenty minutes goes quickly.
       </p>
       <p style="font-size: 13.5px; color: #475569; line-height: 1.6;">
-        All your bookings live at <a href="${baseUrl()}/my-sessions" style="color: #ff6f1e; font-weight: 700;">my sessions</a> —
+        All your bookings live at <a href="${baseUrl()}/my-space" style="color: #ff6f1e; font-weight: 700;">my space</a> —
         the join link and invite are always there.
       </p>
       <p style="font-size: 12.5px; color: #94a3b8; margin-top: 18px;">

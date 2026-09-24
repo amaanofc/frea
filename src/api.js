@@ -68,8 +68,8 @@ async function request(path, { method = 'GET', body, raw = false, formData } = {
     if (json.needsVerification) err.needsVerification = true;
     if (json.requiresPurchase) err.requiresPurchase = true;
     if (json.notRegistered) err.notRegistered = true;
-    // A dead session should not leave the UI looking signed in.
-    if (res.status === 401 && token) clearSession();
+    // A dead or identity-less session should not leave the UI looking signed in.
+    if ((res.status === 401 || json.needsIdentity) && token) clearSession();
     throw err;
   }
 
@@ -89,6 +89,7 @@ export async function verifyEmailCode(email, code) {
     sessionToken: json.sessionToken,
     isMentor: json.isMentor,
     isAdmin: json.isAdmin,
+    universityVerified: Boolean(json.universityVerified),
     mentorId: json.mentor?.id || null,
     name: json.mentor?.name || null,
     university: json.mentor?.university || null
@@ -103,6 +104,7 @@ export async function verifyEmailToken(token) {
     sessionToken: json.sessionToken,
     isMentor: json.isMentor,
     isAdmin: json.isAdmin,
+    universityVerified: Boolean(json.universityVerified),
     mentorId: json.mentor?.id || null,
     name: json.mentor?.name || null,
     university: json.mentor?.university || null
@@ -115,7 +117,7 @@ export async function fetchMe() {
   if (!getSessionToken()) return null;
   try {
     const json = await request('/auth/me');
-    if (!json.session) {
+    if (!json.session || json.session.needsIdentity) {
       clearSession();
       return null;
     }
@@ -125,6 +127,7 @@ export async function fetchMe() {
       email: json.session.email,
       isMentor: json.session.isMentor,
       isAdmin: json.session.isAdmin,
+      universityVerified: Boolean(json.session.universityVerified),
       mentorId: json.session.mentorId,
       institution: json.session.institution || current.institution || null,
       name: json.mentor?.name || current.name || null,
@@ -188,6 +191,7 @@ export async function submitMentorApplication(appData) {
       sessionToken: json.sessionToken,
       isMentor: true,
       isAdmin: false,
+      universityVerified: true,
       mentorId: json.mentor.id,
       name: json.mentor.name,
       university: json.mentor.university
@@ -215,6 +219,11 @@ export async function fetchMyBookings() {
   } catch (e) {
     return { upcoming: [], past: [] };
   }
+}
+
+export async function fetchMySpace() {
+  const json = await request('/my-space');
+  return json.data;
 }
 
 export async function fetchMentorBookings(mentorId) {
@@ -260,6 +269,11 @@ export async function createResource(resourceData) {
   return json.data;
 }
 
+export async function createResourceVersion(resourceId, versionData) {
+  const json = await request(`/resources/${resourceId}/versions`, { method: 'POST', body: versionData });
+  return json.data;
+}
+
 export async function updateResource(id, updates) {
   const json = await request(`/resources/${id}`, { method: 'PUT', body: updates });
   return json.data;
@@ -279,8 +293,9 @@ export async function claimResource(id) {
  * Streams a resource file through the authorised endpoint and saves it.
  * Throws with `requiresPurchase` if the student does not own a paid playbook.
  */
-export async function downloadResource(id, title = 'frea-resource') {
-  const res = await request(`/resources/${id}/download`, { raw: true });
+export async function downloadResource(id, title = 'frea-resource', versionId = null) {
+  const versionQuery = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
+  const res = await request(`/resources/${id}/download${versionQuery}`, { raw: true });
 
   if (!res.ok) {
     let json = {};
@@ -288,7 +303,7 @@ export async function downloadResource(id, title = 'frea-resource') {
     const err = new Error(json.error || 'Could not download this resource.');
     err.status = res.status;
     if (json.requiresPurchase) err.requiresPurchase = true;
-    if (res.status === 401) {
+    if (res.status === 401 || json.needsIdentity) {
       err.needsVerification = true;
       clearSession();
     }
@@ -485,6 +500,7 @@ export function verifyWithUniversity() {
           sessionToken: event.data.sessionToken,
           isMentor: event.data.isMentor,
           isAdmin: event.data.isAdmin,
+          universityVerified: Boolean(event.data.universityVerified),
           institution: event.data.institution || null,
           mentorId: null, name: null, university: null
         });

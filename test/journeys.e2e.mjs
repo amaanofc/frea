@@ -108,7 +108,7 @@ step('JOURNEY 1 — mentee finds a mentor and books a chat');
   ok('a stranger cannot fetch the invite', anonIcs.status === 403, String(anonIcs.status));
 
   const mine = await call('GET', '/bookings/mine', { token });
-  ok('mentee sees the session in "my sessions"',
+  ok('mentee sees the session in "my space"',
     mine.json.data.upcoming.some(x => x.id === b.id));
 
   const emailsSent = readDb().bookings.find(x => x.id === b.id);
@@ -304,15 +304,48 @@ step('JOURNEY 4 — mentor signs in, builds profile, sets availability, publishe
   ok('mentor publishes a priced playbook', playbook.status === 201, JSON.stringify(playbook.json).slice(0, 120));
   ok('price stored correctly', playbook.json.data.price === 8.99, String(playbook.json.data.price));
 
-  // Re-pricing, both directions.
-  const repriced = await call('PUT', `/resources/${freabie.json.data.id}`, {
+  // A product's type is immutable: free freabies stay free, and paid playbooks
+  // stay paid. Price changes affect future buyers only.
+  const cannotMakeFreePaid = await call('PUT', `/resources/${freabie.json.data.id}`, {
     token, body: { type: 'paid', price: 3.5 }
   });
-  ok('a freabie can be given a price', repriced.json.data.type === 'paid' && repriced.json.data.price === 3.5,
+  ok('a freabie cannot change product type', cannotMakeFreePaid.status === 400,
+    JSON.stringify(cannotMakeFreePaid.json));
+
+  const repriced = await call('PUT', `/resources/${playbook.json.data.id}`, {
+    token, body: { price: 10.5 }
+  });
+  ok('a paid playbook price can be changed for future buyers',
+    repriced.status === 200 && repriced.json.data.type === 'paid' && repriced.json.data.price === 10.5,
     JSON.stringify(repriced.json.data));
 
-  const freed = await call('PUT', `/resources/${repriced.json.data.id}`, { token, body: { type: 'free' } });
-  ok('a playbook can be made free again', freed.json.data.type === 'free' && freed.json.data.price === 0);
+  const cannotFreePlaybook = await call('PUT', `/resources/${playbook.json.data.id}`, {
+    token, body: { type: 'free' }
+  });
+  ok('a paid playbook cannot be made free', cannotFreePlaybook.status === 400,
+    JSON.stringify(cannotFreePlaybook.json));
+
+  // Publishing a new file appends an immutable version; the old file remains
+  // available to owners who already obtained the product.
+  const versionForm = new FormData();
+  versionForm.append('document', new Blob(['# Journey guide v2\\n\\nUpdated content.'], { type: 'text/markdown' }), 'journey-v2.md');
+  const versionUpload = await (await fetch(`${API}/upload/document`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: versionForm
+  })).json();
+  const versioned = await call('POST', `/resources/${freabie.json.data.id}/versions`, {
+    token, body: { fileName: versionUpload.fileName, format: versionUpload.format }
+  });
+  ok('mentor can publish an immutable product version',
+    versioned.status === 201 && versioned.json.data.version.versionNumber === 2,
+    JSON.stringify(versioned.json).slice(0, 180));
+  const versionDb = readDb();
+  ok('versions are stored in the canonical version table',
+    versionDb.resourceVersions.filter(v => v.resourceId === freabie.json.data.id).length === 2 &&
+    versionDb.mentors.find(m => m.id === mentorId).docs === undefined,
+    JSON.stringify({
+      versions: versionDb.resourceVersions.filter(v => v.resourceId === freabie.json.data.id).length,
+      mentorHasDocs: versionDb.mentors.find(m => m.id === mentorId).docs !== undefined
+    }));
 
   // Earnings view.
   const orders = await call('GET', `/mentors/${mentorId}/orders`, { token });

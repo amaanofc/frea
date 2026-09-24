@@ -7,11 +7,14 @@
 // A star is a count of verified students who vouched for a mentor. Not a
 // rating: no score, no average, no denominator. Everyone starts at zero.
 
+import fs from 'node:fs';
+
 const API = (process.argv[2] || 'http://localhost:3001') + '/api';
 
 import { localOnly } from './_local-only.mjs';
 import { seedIdentity } from './_identity.mjs';
 localOnly(API, { suite: 'stars.e2e.mjs' });
+const { DB_FILE } = await import('../server/paths.js');
 
 let pass = 0, fail = 0;
 const ok = (label, cond, detail = '') => {
@@ -41,9 +44,6 @@ async function sessionFor(email) {
   const dbRes = await fetch(`${API}/health`);        // keep the server warm
   await dbRes.text();
 
-  const fs = await import('node:fs');
-  const path = await import('node:path');
-  const { DB_FILE } = await import('../server/paths.js');
   const db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   const rec = (db.verificationTokens || []).find(t => t.email === email.toLowerCase());
   if (!rec) throw new Error(`no verification code issued for ${email}`);
@@ -98,6 +98,10 @@ const bob = await sessionFor('star.bob@ed.ac.uk');
 
   const asBob = (await call('GET', `/mentors/${target.id}`, { token: bob })).json.data;
   ok('a viewer sees their own star', asBob.youStarred === true);
+  const starDb = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  const canonicalStar = starDb.stars.find(s => s.email === 'star.bob@ed.ac.uk');
+  ok('new stars store the canonical Studid identity', Boolean(canonicalStar?.authIdentifier),
+    JSON.stringify(canonicalStar));
 }
 
 group('SELF-STARRING');
