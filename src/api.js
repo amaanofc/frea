@@ -117,7 +117,7 @@ export async function fetchMe() {
   if (!getSessionToken()) return null;
   try {
     const json = await request('/auth/me');
-    if (!json.session || json.session.needsIdentity) {
+    if (!json.session || (json.session.needsIdentity && !json.legacyClaimRequired)) {
       clearSession();
       return null;
     }
@@ -128,6 +128,8 @@ export async function fetchMe() {
       isMentor: json.session.isMentor,
       isAdmin: json.session.isAdmin,
       universityVerified: Boolean(json.session.universityVerified),
+      legacyClaim: json.legacyClaim || null,
+      legacyClaimRequired: Boolean(json.legacyClaimRequired),
       mentorId: json.session.mentorId,
       institution: json.session.institution || current.institution || null,
       name: json.mentor?.name || current.name || null,
@@ -137,6 +139,28 @@ export async function fetchMe() {
   } catch (e) {
     return null;
   }
+}
+
+export async function fetchLegacyClaimSummary() {
+  const json = await request('/auth/legacy-claim');
+  return json.data;
+}
+
+export async function requestLegacyClaim(email) {
+  const json = await request('/auth/legacy-claim/request', { method: 'POST', body: { email } });
+  return json.data;
+}
+
+export async function verifyLegacyClaim(email, code) {
+  const json = await request('/auth/legacy-claim/verify', { method: 'POST', body: { email, code } });
+  if (json.sessionToken) {
+    setSession({
+      ...(getSession() || {}),
+      sessionToken: json.sessionToken,
+      mentorId: json.data?.mentorId || null
+    });
+  }
+  return json.data;
 }
 
 export async function signOut() {

@@ -13,18 +13,36 @@ const {
   getAllResources,
   getReferencedUploadNames,
   getBookingsForStudent,
+  getBookingsForMentor,
   updateResource,
   deleteResource,
   grantEntitlement,
   getMySpace,
   getResourceById,
   createPendingOrder,
-  markOrderPaid
+  markOrderPaid,
+  upsertStudentIdentity,
+  issueLegacyClaim,
+  claimLegacyOwnership,
+  getLegacyClaimSummary,
+  createMentorApplication
 } = await import('../server/db.js?space-test');
 
+const { UPLOADS_DIR } = await import('../server/paths.js?space-uploads');
 const DB = path.join(root, 'data.json');
+const TEST_UPLOADS = [
+  'doc-1-systems-v1.md', 'doc-1-playbook-v1.pdf', 'doc-1-playbook-v2.pdf',
+  'doc-1-free-v1.pdf', 'doc-1-legacy-owned-v1.pdf', 'doc-1-career-v1.pdf',
+  'doc-1-career-v2.pdf', 'doc-1-paid-v1.pdf', 'doc-1-retained-v1.pdf',
+  'doc-1-retained-v2.pdf', 'doc-1-archive-v1.pdf', 'doc-1-archive-v2.pdf'
+];
 
 function writeDb(overrides = {}) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  for (const fileName of TEST_UPLOADS) {
+    const fullPath = path.join(UPLOADS_DIR, fileName);
+    if (!fs.existsSync(fullPath)) fs.writeFileSync(fullPath, 'test upload');
+  }
   fs.writeFileSync(DB, JSON.stringify({
     mentors: [{
       id: 1,
@@ -57,7 +75,43 @@ function readDb() {
   return JSON.parse(fs.readFileSync(DB, 'utf8'));
 }
 
-test('migration binds a legacy mentor profile to its resolved Studid identity', () => {
+test('signup never binds a legacy mentor by contact email; an explicit claim does', () => {
+  writeDb({
+    studentIdentities: [],
+    verifiedEmails: ['legacy-contact@example.com'],
+    mentors: [{
+      id: 1,
+      name: 'Legacy Mentor',
+      email: 'legacy-contact@example.com',
+      university: 'University of Leeds',
+      major: 'Computer Science'
+    }]
+  });
+
+  upsertStudentIdentity({
+    authIdentifier: 'student@test.ac.uk',
+    entityId: 'https://idp.test.ac.uk',
+    affiliations: ['student'],
+    contactEmail: 'legacy-contact@example.com',
+    institutionName: 'University of Leeds'
+  });
+  assert.equal(readDb().mentors[0].authIdentifier, undefined);
+
+  const request = issueLegacyClaim({
+    email: 'legacy-contact@example.com',
+    authIdentifier: 'student@test.ac.uk'
+  });
+  const claimed = claimLegacyOwnership({
+    email: 'legacy-contact@example.com',
+    authIdentifier: 'student@test.ac.uk',
+    code: request.code
+  });
+  assert.equal(claimed.mentorId, 1);
+  assert.equal(readDb().mentors[0].authIdentifier, 'student@test.ac.uk');
+  assert.equal(getLegacyClaimSummary('legacy-contact@example.com').total, 0);
+});
+
+test('a canonical signup cannot create a duplicate beside an unbound legacy mentor', () => {
   writeDb({
     mentors: [{
       id: 1,
@@ -68,8 +122,11 @@ test('migration binds a legacy mentor profile to its resolved Studid identity', 
     }]
   });
 
-  getAllResources();
-  assert.equal(readDb().mentors[0].authIdentifier, 'student@test.ac.uk');
+  assert.throws(() => createMentorApplication({
+    email: 'student@example.com',
+    authIdentifier: 'student@test.ac.uk',
+    name: 'New Name'
+  }), /claim|older mentor/i);
 });
 
 test('migration promotes legacy mentor docs into canonical products once', () => {
@@ -102,6 +159,25 @@ test('migration promotes legacy mentor docs into canonical products once', () =>
   assert.equal(migrated.mentors[0].docs, undefined);
 });
 
+test('migration normalizes legacy booking dates and times before slot comparisons', () => {
+  writeDb({
+    bookings: [{
+      id: 'legacy-display-booking',
+      mentorId: 1,
+      studentEmail: 'student@example.com',
+      date: 'Wed 2 Sep',
+      time: '2:00 PM',
+      createdAt: '2027-01-01T00:00:00.000Z'
+    }]
+  });
+
+  const result = getBookingsForMentor(1);
+  const booking = result.upcoming[0];
+  assert.equal(booking.date, '2027-09-02');
+  assert.equal(booking.time, '14:00');
+  assert.equal(booking.status, 'confirmed');
+});
+
 test('migration collapses duplicate email-keyed entitlements without losing version ownership', () => {
   writeDb({
     resources: [{
@@ -116,8 +192,8 @@ test('migration collapses duplicate email-keyed entitlements without losing vers
       format: 'PDF'
     }],
     entitlements: [
-      { id: 'old-1', email: 'student@example.com', resourceId: 'product-1', grantedAt: '2024-01-01' },
-      { id: 'old-2', email: 'student@example.com', resourceId: 'product-1', grantedAt: '2024-02-01' }
+      { id: 'old-1', authIdentifier: 'student@test.ac.uk', email: 'student@example.com', resourceId: 'product-1', grantedAt: '2024-01-01' },
+      { id: 'old-2', authIdentifier: 'student@test.ac.uk', email: 'student@example.com', resourceId: 'product-1', grantedAt: '2024-02-01' }
     ]
   });
 
@@ -171,8 +247,7 @@ test('migration backfills or retires legacy email-only sessions', () => {
 
   getAllResources();
   const migrated = readDb();
-  const known = migrated.sessions.find(s => s.token === 'legacy-known');
-  assert.equal(known?.authIdentifier, 'student@test.ac.uk');
+  assert.equal(migrated.sessions.some(s => s.token === 'legacy-known'), false);
   assert.equal(migrated.sessions.some(s => s.token === 'legacy-unknown'), false);
   assert.equal(migrated.sessions.some(s => s.token === 'admin'), true);
 });
@@ -193,6 +268,16 @@ test('creating a product creates an immutable version one record', () => {
   assert.equal(version.versionNumber, 1);
   assert.equal(version.fileName, 'doc-1-systems-v1.md');
   assert.equal(db.mentors[0].docs, undefined, 'product metadata is not mirrored onto mentors');
+});
+
+test('resource publication rejects a fabricated or missing upload handle', () => {
+  writeDb();
+  assert.throws(() => createResource({
+    title: 'Missing file',
+    type: 'free',
+    fileName: 'doc-1-does-not-exist.pdf',
+    format: 'PDF'
+  }, 1), /upload|missing|uploaded/i);
 });
 
 test('a product type cannot be changed and a new version is appended', () => {
@@ -255,7 +340,7 @@ test('an entitlement is keyed by authIdentifier and is idempotent', () => {
   assert.equal(entitlements[0].versionId, product.currentVersionId);
 });
 
-test('canonical identity can read an email-keyed legacy booking', () => {
+test('canonical identity reads an email-keyed legacy booking only after an explicit claim', () => {
   writeDb({
     bookings: [{
       id: 'legacy-booking',
@@ -271,7 +356,75 @@ test('canonical identity can read an email-keyed legacy booking', () => {
     authIdentifier: 'student@test.ac.uk',
     email: 'student@example.com'
   });
-  assert.equal(sessions.upcoming[0].id, 'legacy-booking');
+  assert.equal(sessions.upcoming.length, 0, 'canonical sessions must not inherit an unbound legacy row');
+
+  const claim = issueLegacyClaim({ email: 'student@example.com', authIdentifier: 'student@test.ac.uk' });
+  claimLegacyOwnership({
+    email: 'student@example.com',
+    authIdentifier: 'student@test.ac.uk',
+    code: claim.code
+  });
+  const claimedSessions = getBookingsForStudent({
+    authIdentifier: 'student@test.ac.uk',
+    email: 'student@example.com'
+  });
+  assert.equal(claimedSessions.upcoming[0].id, 'legacy-booking');
+});
+
+test('unbound legacy entitlements fail closed until explicitly claimed', () => {
+  writeDb();
+  const product = createResource({
+    title: 'Legacy-owned guide',
+    type: 'free',
+    fileName: 'doc-1-legacy-owned-v1.pdf',
+    format: 'PDF'
+  }, 1);
+  const db = readDb();
+  db.entitlements.push({
+    id: 'legacy-unbound',
+    email: 'student@example.com',
+    resourceId: product.id,
+    versionId: product.currentVersionId
+  });
+  fs.writeFileSync(DB, JSON.stringify(db, null, 2));
+
+  const before = getMySpace({ authIdentifier: 'student@test.ac.uk', email: 'student@example.com' });
+  assert.equal(before.products.length, 0);
+  assert.throws(() => grantEntitlement({
+    authIdentifier: 'student@test.ac.uk',
+    email: 'student@example.com',
+    resourceId: product.id,
+    reason: 'free'
+  }), /claim/i);
+
+  const claim = issueLegacyClaim({ email: 'student@example.com', authIdentifier: 'student@test.ac.uk' });
+  claimLegacyOwnership({
+    email: 'student@example.com',
+    authIdentifier: 'student@test.ac.uk',
+    code: claim.code
+  });
+  const after = getMySpace({ authIdentifier: 'student@test.ac.uk', email: 'student@example.com' });
+  assert.equal(after.products[0].resourceId, product.id);
+});
+
+test('mentor booking views omit internal identity and cancellation secrets', () => {
+  writeDb({
+    bookings: [{
+      id: 'mentor-view-booking',
+      mentorId: 1,
+      studentEmail: 'student@example.com',
+      studentAuthIdentifier: 'student@test.ac.uk',
+      cancelToken: 'private-cancel-token',
+      date: '2099-01-02',
+      time: '10:00',
+      status: 'confirmed'
+    }]
+  });
+
+  const booking = getBookingsForMentor(1).upcoming[0];
+  assert.equal(booking.id, 'mentor-view-booking');
+  assert.equal(booking.studentAuthIdentifier, undefined);
+  assert.equal(booking.cancelToken, undefined);
 });
 
 test('My Space joins sessions and canonical product versions without copying product data', () => {

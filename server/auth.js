@@ -114,13 +114,38 @@ export function requireVerified(req, res, next) {
   next();
 }
 
-/** A signed-in mentor. */
+function canonicalMentorForSession(session) {
+  if (!session?.mentorId || !session.authIdentifier) return null;
+  const db = loadDb();
+  return db.mentors.find(mentor =>
+    parseInt(mentor.id, 10) === parseInt(session.mentorId, 10)
+    && mentor.authIdentifier === session.authIdentifier
+  ) || null;
+}
+
+/** A signed-in mentor whose profile is owned by the same Studid identity. */
 export function requireMentor(req, res, next) {
   if (!req.session) {
     return res.status(401).json({ success: false, error: 'Please sign in to your mentor account.' });
   }
-  if (!req.session.mentorId) {
-    return res.status(403).json({ success: false, error: 'This action requires a mentor account.' });
+  if (!req.session.authIdentifier) {
+    const hasUnboundMentor = Boolean(req.session.mentorId);
+    return res.status(403).json({
+      success: false,
+      error: hasUnboundMentor
+        ? 'Please claim your legacy mentor account with your university identity first.'
+        : 'This action requires a mentor account.',
+      needsIdentity: hasUnboundMentor,
+      legacyClaimRequired: hasUnboundMentor
+    });
+  }
+  if (!canonicalMentorForSession(req.session)) {
+    return res.status(403).json({
+      success: false,
+      error: 'This action requires a university-backed mentor account.',
+      needsIdentity: false,
+      legacyClaimRequired: Boolean(req.session.mentorId)
+    });
   }
   next();
 }
@@ -133,10 +158,15 @@ export function requireSelfOrAdmin(req, res, next) {
   if (!req.session) {
     return res.status(401).json({ success: false, error: 'Please sign in to your mentor account.' });
   }
-  const targetId = parseInt(req.params.id, 10);
   if (req.session.isAdmin) return next();
-  if (req.session.mentorId === targetId) return next();
-  return res.status(403).json({ success: false, error: 'You can only manage your own mentor profile.' });
+  const targetId = parseInt(req.params.id, 10);
+  if (req.session.mentorId === targetId && canonicalMentorForSession(req.session)) return next();
+  return res.status(403).json({
+    success: false,
+    error: 'You can only manage a university-backed mentor profile.',
+    needsIdentity: !req.session.authIdentifier,
+    legacyClaimRequired: !req.session.authIdentifier
+  });
 }
 
 /** An admin on the ADMIN_EMAILS list. */

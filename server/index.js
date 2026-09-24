@@ -75,6 +75,9 @@ import {
   consumeStudidState,
   findStudentIdentity,
   upsertStudentIdentity,
+  getLegacyClaimSummary,
+  issueLegacyClaim,
+  claimLegacyOwnership,
   contactEmailTakenBy,
   mailHandoffStats,
   recentMailHandoffs
@@ -800,29 +803,70 @@ app.get('/api/auth/me', (req, res) => {
   const mentor = req.session.mentorId
     ? getMentorViewById(req.session.mentorId, { includeArchived: true })
     : null;
+  const canonicalMentor = mentor && req.session.authIdentifier && mentor.authIdentifier === req.session.authIdentifier
+    ? mentor
+    : null;
   const identity = req.session.authIdentifier
     ? findStudentIdentity(req.session.authIdentifier)
     : null;
+  const legacyClaim = getLegacyClaimSummary(req.session.email);
   res.json({
     success: true,
     session: {
       email: req.session.email,
-      isMentor: Boolean(mentor),
+      isMentor: Boolean(canonicalMentor),
       isAdmin: req.session.isAdmin,
-      mentorId: mentor?.id || null,
+      mentorId: canonicalMentor?.id || null,
       universityVerified: Boolean(req.session.authIdentifier),
-      needsIdentity: Boolean(!req.session.authIdentifier && !mentor && !req.session.isAdmin),
+      needsIdentity: Boolean(!req.session.authIdentifier && !canonicalMentor && !req.session.isAdmin),
       // What the identity provider said, so the client can show it rather
       // than asking the student to tell us something we already know.
       institution: identity?.institutionName || identity?.scope || null
     },
-    mentor: mentor ? publicMentor(mentor) : null,
+    mentor: canonicalMentor ? publicMentor(canonicalMentor) : null,
+    legacyClaim,
+    legacyClaimRequired: Boolean(!canonicalMentor && legacyClaim.total),
     entitlements: getEntitlementsForOwner({
       email: req.session.email,
       authIdentifier: req.session.authIdentifier
     })
   });
 });
+
+app.get('/api/auth/legacy-claim', requireVerified, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.json({ success: true, data: getLegacyClaimSummary(req.session.email) });
+});
+
+app.post('/api/auth/legacy-claim/request', requireVerified,
+  rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+    const email = String(req.body?.email || req.session.email || '').trim().toLowerCase();
+    const claim = issueLegacyClaim({ email, authIdentifier: req.session.authIdentifier });
+    try {
+      const mail = await sendVerificationEmail({ email, code: claim.code, purpose: 'legacy-claim' });
+      res.json({ success: true, data: { email, previewUrl: mail?.previewUrl || null } });
+    } catch (mailErr) {
+      console.error('[legacy-claim] email failed:', mailErr.message);
+      res.status(502).json({ success: false, error: 'We could not send the claim code right now.' });
+    }
+  }));
+
+app.post('/api/auth/legacy-claim/verify', requireVerified,
+  rateLimit({ max: 10, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+    const email = String(req.body?.email || req.session.email || '').trim().toLowerCase();
+    const result = claimLegacyOwnership({
+      email,
+      authIdentifier: req.session.authIdentifier,
+      code: req.body?.code
+    });
+    const session = createSession({
+      email: req.session.email,
+      mentorId: result.mentorId,
+      authIdentifier: req.session.authIdentifier,
+      emailProven: req.session.emailProven
+    });
+    res.json({ success: true, data: result, sessionToken: session.token });
+  }));
 
 app.post('/api/auth/signout', (req, res) => {
   const header = req.headers.authorization || '';
@@ -841,6 +885,11 @@ app.get('/api/auth/status', (req, res) => {
 function setIdentityVary(req, res) {
   res.vary('Authorization');
   if (req.session) res.set('Cache-Control', 'private, no-store');
+}
+
+function studentBookingView(booking) {
+  const { studentAuthIdentifier, cancelToken, ...safe } = booking;
+  return safe;
 }
 
 /** Strips fields that should never reach other people's browsers. */
@@ -954,11 +1003,13 @@ app.get('/api/mentors/:id/slots', (req, res) => {
 
 /** A mentor's own booking diary. */
 app.get('/api/mentors/:id/bookings', requireSelfOrAdmin, (req, res) => {
+  setIdentityVary(req, res);
   res.json({ success: true, data: getBookingsForMentor(req.params.id) });
 });
 
 /** A mentor's sales and payouts. */
 app.get('/api/mentors/:id/orders', requireSelfOrAdmin, (req, res) => {
+  setIdentityVary(req, res);
   res.json({ success: true, data: getOrdersForMentor(req.params.id) });
 });
 
@@ -1048,10 +1099,9 @@ app.get('/api/bookings/:id/ics', (req, res) => {
 
   // A booking id alone is not enough; you must hold the session or the token.
   const token = req.query.token;
-  const ownsStudent = req.session && (
-    booking.studentAuthIdentifier && req.session.authIdentifier
-      ? booking.studentAuthIdentifier === req.session.authIdentifier
-      : !booking.studentAuthIdentifier && req.session.email === booking.studentEmail
+  const ownsStudent = Boolean(
+    req.session?.authIdentifier
+    && booking.studentAuthIdentifier === req.session.authIdentifier
   );
   const owns = req.session && (
     ownsStudent ||
@@ -1081,6 +1131,7 @@ app.post('/api/bookings/:id/cancel', wrap(async (req, res) => {
     email: req.session?.email,
     authIdentifier: req.session?.authIdentifier,
     mentorId: req.session?.mentorId,
+    mentorAuthIdentifier: req.session?.authIdentifier,
     cancelToken: req.body.cancelToken || req.query.token,
     isAdmin: Boolean(req.session?.isAdmin)
   });
@@ -1096,7 +1147,7 @@ app.post('/api/bookings/:id/cancel', wrap(async (req, res) => {
   sendCancellationEmail({ booking: cancelled, mentor, icsContent, to: notify })
     .catch(err => console.warn('[email] cancellation notice failed:', err.message));
 
-  res.json({ success: true, data: cancelled });
+  res.json({ success: true, data: studentBookingView(cancelled) });
 }));
 
 // ─── Mentor applications ────────────────────────────────
@@ -1367,7 +1418,8 @@ app.put('/api/resources/:id', requireMentor, (req, res) => {
   if (resource.mentorId !== req.session.mentorId && !req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'You can only edit your own resources.' });
   }
-  if (resource.type === 'paid' && req.body.type === 'paid' && !canMentorSell(req.session.mentorId)) {
+  const changesPrice = Object.prototype.hasOwnProperty.call(req.body || {}, 'price');
+  if (resource.type === 'paid' && (req.body.type === 'paid' || changesPrice) && !canMentorSell(req.session.mentorId)) {
     return res.status(409).json({
       success: false,
       error: 'Set up payouts before pricing a playbook — otherwise we have nowhere to send your earnings.',
@@ -1604,9 +1656,10 @@ app.post('/api/checkout', requireVerified, wrap(async (req, res) => {
 app.get('/api/checkout/:orderId/status', requireVerified, wrap(async (req, res) => {
   const order = getOrderById(req.params.orderId);
   if (!order) return res.status(404).json({ success: false, error: 'Order not found.' });
-  const ownsOrder = order.buyerAuthIdentifier && req.session.authIdentifier
-    ? order.buyerAuthIdentifier === req.session.authIdentifier
-    : !order.buyerAuthIdentifier && order.buyerEmail === req.session.email;
+  const ownsOrder = Boolean(
+    req.session.authIdentifier
+    && order.buyerAuthIdentifier === req.session.authIdentifier
+  );
   if (!ownsOrder && !req.session.isAdmin) {
     return res.status(403).json({ success: false, error: 'This is not your order.' });
   }
@@ -2015,6 +2068,9 @@ app.listen(PORT, async () => {
   // very first boot on a fresh volume.
   loadDb();
   await seedDemoContentOnFirstBoot(!databaseExistedAtBoot);
+  // The seed writer is deliberately standalone; reload once so the backup and
+  // the first request observe the same canonical schema.
+  loadDb();
 
   // After seeding, so the first snapshot is of a database worth restoring.
   startBackupSchedule();

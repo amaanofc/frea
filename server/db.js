@@ -6,7 +6,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DB_FILE, SEED_FILE } from './paths.js';
+import { DB_FILE, SEED_FILE, UPLOADS_DIR } from './paths.js';
 import {
   normaliseSchedule,
   toCanonicalDate,
@@ -277,7 +277,7 @@ const INITIAL_MENTORS = [
  * Runs on every read, so a legacy data.json heals itself in place rather than
  * silently producing mismatched dates and empty calendars.
  */
-const RESOURCE_SCHEMA_VERSION = 4;
+const RESOURCE_SCHEMA_VERSION = 5;
 
 function resourceVersionId(resourceId, versionNumber) {
   return `${resourceId}-v${versionNumber}`;
@@ -308,11 +308,14 @@ function migrate(db) {
   db.sessions = db.sessions || [];
   db.suggestions = db.suggestions || [];
   db.reports = db.reports || [];
+  db.stars = Array.isArray(db.stars) ? db.stars : [];
   db.mailLog = Array.isArray(db.mailLog) ? db.mailLog : [];
   db.oauthStates = Array.isArray(db.oauthStates) ? db.oauthStates : [];
   db.studidStates = Array.isArray(db.studidStates) ? db.studidStates : [];
   db.pendingBindings = Array.isArray(db.pendingBindings) ? db.pendingBindings : [];
   db.studentIdentities = Array.isArray(db.studentIdentities) ? db.studentIdentities : [];
+  db.legacyClaimTokens = Array.isArray(db.legacyClaimTokens) ? db.legacyClaimTokens : [];
+  db.legacyClaims = Array.isArray(db.legacyClaims) ? db.legacyClaims : [];
   db.stats = db.stats || {};
   if (typeof db.stats.totalBookings !== 'number') db.stats.totalBookings = 0;
   if (typeof db.stats.averageRating !== 'number') db.stats.averageRating = 4.9;
@@ -385,40 +388,29 @@ function migrate(db) {
     delete resource.fileName;
   });
 
-  // Backfill the canonical identity onto old records where the contact email
-  // can be resolved. Unmatched legacy rows are intentionally left intact for
-  // the compatibility lookup rather than being discarded.
-  const identityForEmail = (email) => {
-    const clean = String(email || '').trim().toLowerCase();
-    return db.studentIdentities.find(i => i.contactEmail === clean) || null;
-  };
-  db.mentors.forEach(mentor => {
-    if (!mentor.authIdentifier) {
-      const identity = identityForEmail(mentor.email);
-      if (identity) mentor.authIdentifier = identity.authIdentifier;
-    }
-  });
+  // Older bookings used display dates/times. Normalise them before any slot
+  // lookup or booking comparison sees the row. A legacy year-less display date
+  // is resolved from the booking's creation year, not today's clock.
   db.bookings.forEach(booking => {
-    if (!booking.studentAuthIdentifier) {
-      const identity = identityForEmail(booking.studentEmail);
-      if (identity) booking.studentAuthIdentifier = identity.authIdentifier;
-    }
+    const referenceYear = booking.createdAt
+      ? new Date(booking.createdAt).getUTCFullYear()
+      : new Date().getUTCFullYear();
+    const canonicalDate = toCanonicalDate(booking.date, referenceYear);
+    if (canonicalDate) booking.date = canonicalDate;
+    const canonicalTime = toCanonicalTime(booking.time);
+    if (canonicalTime) booking.time = canonicalTime;
+    if (!booking.status) booking.status = 'confirmed';
   });
+
+  // Legacy rows stay email-keyed until their owner explicitly claims them.
+  // Contact email is mutable contact data, never proof of Studid ownership.
   db.orders.forEach(order => {
-    if (!order.buyerAuthIdentifier) {
-      const identity = identityForEmail(order.buyerEmail);
-      if (identity) order.buyerAuthIdentifier = identity.authIdentifier;
-    }
     if (!order.purchasedVersionId) {
       const resource = db.resources.find(r => r.id === order.resourceId);
       if (resource) order.purchasedVersionId = resource.currentVersionId;
     }
   });
   db.entitlements.forEach(entitlement => {
-    if (!entitlement.authIdentifier) {
-      const identity = identityForEmail(entitlement.email);
-      if (identity) entitlement.authIdentifier = identity.authIdentifier;
-    }
     if (!entitlement.versionId) {
       const resource = db.resources.find(r => r.id === entitlement.resourceId);
       if (resource) entitlement.versionId = resource.currentVersionId;
@@ -463,25 +455,11 @@ function migrate(db) {
       grantedAt: order.paidAt || order.createdAt || new Date().toISOString()
     });
   });
-  db.sessions.forEach(session => {
-    if (!session.authIdentifier) {
-      const identity = identityForEmail(session.email);
-      if (identity) session.authIdentifier = identity.authIdentifier;
-    }
-  });
-  // A non-mentor email-only session cannot be trusted for student actions after
-  // the identity-key migration. Remove it so the client is sent back through
-  // university sign-in instead of carrying a token that only yields 403s.
+  // Keep legacy mentor sessions available for the explicit claim flow, but do
+  // not turn them into student sessions. Student actions require Studid.
   db.sessions = db.sessions.filter(session =>
     session.authIdentifier || session.mentorId || session.isAdmin === true
   );
-  db.stars = Array.isArray(db.stars) ? db.stars : [];
-  db.stars.forEach(star => {
-    if (!star.authIdentifier) {
-      const identity = identityForEmail(star.email);
-      if (identity) star.authIdentifier = identity.authIdentifier;
-    }
-  });
 
   db.resourceSchemaVersion = RESOURCE_SCHEMA_VERSION;
   return db;
@@ -802,7 +780,7 @@ export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, d
   // One student cannot hold two live bookings with the same mentor.
   const duplicate = db.bookings.some(b =>
     b.mentorId === mentor.id &&
-    (b.studentAuthIdentifier === authIdentifier || (!b.studentAuthIdentifier && b.studentEmail === email)) &&
+    b.studentAuthIdentifier === authIdentifier &&
     b.status !== 'cancelled' &&
     !isPastDate(b.date)
   );
@@ -852,17 +830,23 @@ function meetingUrlFor(bookingId) {
 }
 
 /** Cancel a booking. Either party may cancel; the token proves it's theirs. */
-export function cancelBooking({ bookingId, email, authIdentifier = null, mentorId = null, cancelToken, isAdmin = false }) {
+export function cancelBooking({ bookingId, email, authIdentifier = null, mentorId = null, mentorAuthIdentifier = null, cancelToken, isAdmin = false }) {
   const db = loadDb();
   const booking = db.bookings.find(b => b.id === bookingId);
   if (!booking) throw new Error('Booking not found.');
 
-  const clean = (email || '').trim().toLowerCase();
   const cleanAuthIdentifier = (authIdentifier || '').trim();
-  const isStudent = booking.studentAuthIdentifier && cleanAuthIdentifier
+  const isStudent = cleanAuthIdentifier
     ? booking.studentAuthIdentifier === cleanAuthIdentifier
-    : !booking.studentAuthIdentifier && Boolean(clean && booking.studentEmail === clean);
-  const isMentor = mentorId != null && parseInt(mentorId, 10) === parseInt(booking.mentorId, 10);
+    : false;
+  const mentor = db.mentors.find(m => m.id === parseInt(booking.mentorId, 10));
+  const isMentor = Boolean(
+    mentor
+    && mentorAuthIdentifier
+    && mentor.authIdentifier === mentorAuthIdentifier
+    && mentorId != null
+    && parseInt(mentorId, 10) === parseInt(booking.mentorId, 10)
+  );
   const allowed = isAdmin
     || (cancelToken && cancelToken === booking.cancelToken)
     || isStudent
@@ -877,12 +861,16 @@ export function cancelBooking({ bookingId, email, authIdentifier = null, mentorI
   booking.cancelledAt = new Date().toISOString();
   booking.cancelledBy = isAdmin ? 'admin' : (isMentor ? 'mentor' : 'student');
 
-  const mentor = db.mentors.find(m => m.id === booking.mentorId);
   if (mentor && mentor.callsCompleted > 0) mentor.callsCompleted -= 1;
   if (db.stats.totalBookings > 0) db.stats.totalBookings -= 1;
 
   saveDb(db);
   return booking;
+}
+
+function mentorBookingView(booking) {
+  const { studentAuthIdentifier, cancelToken, ...safe } = booking;
+  return safe;
 }
 
 /** Bookings for one mentor, newest first, with upcoming/past split. */
@@ -892,7 +880,7 @@ export function getBookingsForMentor(mentorId) {
   const all = db.bookings
     .filter(b => b.mentorId === mId)
     .map(b => ({
-      ...b,
+      ...mentorBookingView(b),
       displayDate: b.displayDate || toDisplayDate(b.date),
       displayTime: b.displayTime || toDisplayTime(b.time)
     }))
@@ -907,7 +895,7 @@ export function getBookingsForMentor(mentorId) {
   };
 }
 
-/** Bookings for one student, by canonical identity with legacy email fallback. */
+/** Bookings for one student. Canonical sessions never inherit unbound email rows. */
 export function getBookingsForStudent(owner) {
   const db = loadDb();
   const key = ownerKey(owner);
@@ -917,7 +905,7 @@ export function getBookingsForStudent(owner) {
       if (b.studentAuthIdentifier) {
         return Boolean(key.authIdentifier && b.studentAuthIdentifier === key.authIdentifier);
       }
-      return Boolean(key.email && b.studentEmail === key.email);
+      return false;
     })
     .map(b => ({
       ...b,
@@ -984,6 +972,14 @@ export function createMentorApplication(appData) {
   // institution says they are, which is what should own the profile — and the
   // payouts attached to it.
   let mentor = db.mentors.find(m => m.authIdentifier && m.authIdentifier === authIdentifier);
+
+  if (!mentor) {
+    const legacyMatches = db.mentors.filter(m => !m.authIdentifier
+      && String(m.email || '').toLowerCase() === email);
+    if (legacyMatches.length) {
+      throw new Error('An older mentor profile uses this contact email. Claim that account before creating a new profile.');
+    }
+  }
 
   if (mentor) {
     // Update existing mentor profile
@@ -1511,12 +1507,21 @@ export function getReferencedUploadNames() {
     .filter(Boolean))];
 }
 
+function assertUploadFileExists(handle) {
+  const root = path.resolve(UPLOADS_DIR);
+  const fullPath = path.resolve(root, String(handle || ''));
+  if (!handle || !fullPath.startsWith(`${root}${path.sep}`) || !fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+    throw new Error('That upload is missing. Upload the file again before publishing.');
+  }
+  return handle;
+}
+
 function assertOwnedUpload(mentorId, fileName) {
   const handle = String(fileName || '');
   if (!handle || handle !== path.basename(handle) || !handle.startsWith(`doc-${mentorId}-`)) {
     throw new Error('That file was not uploaded by this account.');
   }
-  return handle;
+  return assertUploadFileExists(handle);
 }
 
 export function createResource(resourceData, mentorId) {
@@ -1668,7 +1673,7 @@ export function toggleStar({ mentorId, email, authIdentifier = null }) {
   if (!mentor) throw new Error('Mentor not found.');
 
   // Starring yourself would make the count meaningless.
-  const sameIdentity = mentor.authIdentifier && cleanAuthIdentifier
+  const sameIdentity = cleanAuthIdentifier
     ? mentor.authIdentifier === cleanAuthIdentifier
     : (mentor.email || '').toLowerCase() === clean;
   if (sameIdentity) throw new Error('You cannot star your own profile.');
@@ -1676,7 +1681,7 @@ export function toggleStar({ mentorId, email, authIdentifier = null }) {
   db.stars = db.stars || [];
   const idx = db.stars.findIndex(s => {
     if (s.mentorId !== id) return false;
-    if (s.authIdentifier && cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
+    if (cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
     return Boolean(clean && s.email === clean);
   });
 
@@ -1722,7 +1727,7 @@ export function hasStarred(mentorId, email, authIdentifier = null) {
   const db = loadDb();
   return (db.stars || []).some(s => {
     if (s.mentorId !== id) return false;
-    if (s.authIdentifier && cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
+    if (cleanAuthIdentifier) return s.authIdentifier === cleanAuthIdentifier;
     return Boolean(clean && s.email === clean);
   });
 }
@@ -1745,7 +1750,7 @@ function entitlementBelongsTo(entitlement, owner) {
   if (entitlement.authIdentifier) {
     return Boolean(key.authIdentifier && entitlement.authIdentifier === key.authIdentifier);
   }
-  return Boolean(key.email && entitlement.email === key.email);
+  return Boolean(key.authIdentifier && entitlement.authIdentifier === key.authIdentifier);
 }
 
 export function grantEntitlement({ email, authIdentifier = null, resourceId, versionId = null, orderId = null, reason = 'purchase' }) {
@@ -1755,6 +1760,17 @@ export function grantEntitlement({ email, authIdentifier = null, resourceId, ver
 
   const resource = db.resources.find(r => r.id === resourceId);
   const resolvedVersionId = versionId || resource?.currentVersionId || null;
+  if (key.authIdentifier) {
+    const unbound = db.entitlements.find(e =>
+      e.resourceId === resourceId
+      && !e.authIdentifier
+      && key.email
+      && e.email === key.email
+    );
+    if (unbound) {
+      throw new Error('This legacy ownership must be claimed before it can be used.');
+    }
+  }
   const existing = db.entitlements.find(e => e.resourceId === resourceId && entitlementBelongsTo(e, key));
   if (existing) {
     if (key.authIdentifier && !existing.authIdentifier) existing.authIdentifier = key.authIdentifier;
@@ -1906,6 +1922,9 @@ export function createPendingOrder({ resourceId, buyerEmail, buyerAuthIdentifier
   if (resource.type !== 'paid' || !(resource.price > 0)) {
     throw new Error('This resource is free — no payment is needed.');
   }
+  const currentVersion = getResourceVersions(resource.id).find(v => v.id === resource.currentVersionId);
+  if (!currentVersion) throw new Error('This playbook has no available version.');
+  assertUploadFileExists(currentVersion.fileName);
   if (hasEntitlement({ email: cleanEmail, authIdentifier: cleanAuthIdentifier }, resourceId)) {
     throw new Error('You already own this playbook.');
   }
@@ -2403,41 +2422,130 @@ export function upsertStudentIdentity({ authIdentifier, entityId, affiliations =
     });
   }
 
-  // Bind any legacy rows that were waiting for this identity to appear.
-  db.mentors.forEach(mentor => {
-    if (!mentor.authIdentifier && clean && mentor.email === clean) {
-      mentor.authIdentifier = authIdentifier;
-    }
+  // Contact email is contact data, not ownership. Legacy rows are bound only
+  // through the explicit claim flow below, never as a side effect of signup.
+  saveDb(db);
+  return findStudentIdentity(authIdentifier);
+}
+
+function legacyRowsForEmail(db, email) {
+  const clean = String(email || '').trim().toLowerCase();
+  const matches = (row, field) => String(row[field] || '').trim().toLowerCase() === clean;
+  return {
+    mentors: (db.mentors || []).filter(row => !row.authIdentifier && matches(row, 'email')),
+    bookings: (db.bookings || []).filter(row => !row.studentAuthIdentifier && matches(row, 'studentEmail')),
+    orders: (db.orders || []).filter(row => !row.buyerAuthIdentifier && matches(row, 'buyerEmail')),
+    entitlements: (db.entitlements || []).filter(row => !row.authIdentifier && matches(row, 'email')),
+    stars: (db.stars || []).filter(row => !row.authIdentifier && matches(row, 'email'))
+  };
+}
+
+function legacySummary(rows) {
+  return {
+    mentors: rows.mentors.length,
+    bookings: rows.bookings.length,
+    orders: rows.orders.length,
+    entitlements: rows.entitlements.length,
+    stars: rows.stars.length,
+    total: rows.mentors.length + rows.bookings.length + rows.orders.length + rows.entitlements.length + rows.stars.length
+  };
+}
+
+/** Count legacy rows that an identity may explicitly claim. */
+export function getLegacyClaimSummary(email) {
+  const db = loadDb();
+  return legacySummary(legacyRowsForEmail(db, email));
+}
+
+/**
+ * Issue a one-time code for an explicit legacy-account claim. Registration
+ * never performs this binding implicitly: a mutable contact address is not a
+ * Studid identity.
+ */
+export function issueLegacyClaim({ email, authIdentifier }) {
+  const db = loadDb();
+  const clean = String(email || '').trim().toLowerCase();
+  const identity = String(authIdentifier || '').trim();
+  if (!clean || !identity) throw new Error('A verified identity and legacy email are required.');
+  if (!findStudentIdentity(identity)) throw new Error('Verify with your university before claiming an old account.');
+  if (!isEmailVerified(clean)) throw new Error('That legacy contact email has no prior verification record.');
+
+  const rows = legacyRowsForEmail(db, clean);
+  const summary = legacySummary(rows);
+  if (!summary.total) throw new Error('No legacy frea account was found for that email.');
+
+  db.legacyClaimTokens = (db.legacyClaimTokens || []).filter(token =>
+    !(token.email === clean && token.authIdentifier === identity && token.expiresAt > Date.now())
+  );
+  const code = String(crypto.randomInt(100000, 1000000));
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+  db.legacyClaimTokens.push({
+    id: `legacy-claim-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    email: clean,
+    authIdentifier: identity,
+    code,
+    expiresAt,
+    createdAt: new Date().toISOString()
   });
-  db.bookings.forEach(booking => {
-    if (!booking.studentAuthIdentifier && clean && booking.studentEmail === clean) {
-      booking.studentAuthIdentifier = authIdentifier;
-    }
-  });
-  db.orders.forEach(order => {
-    if (!order.buyerAuthIdentifier && clean && order.buyerEmail === clean) {
-      order.buyerAuthIdentifier = authIdentifier;
-    }
-  });
-  db.entitlements.forEach(entitlement => {
-    if (!entitlement.authIdentifier && clean && entitlement.email === clean) {
-      entitlement.authIdentifier = authIdentifier;
-    }
-  });
-  db.stars = Array.isArray(db.stars) ? db.stars : [];
-  db.stars.forEach(star => {
-    if (!star.authIdentifier && clean && star.email === clean) {
-      star.authIdentifier = authIdentifier;
-    }
-  });
-  db.sessions.forEach(session => {
-    if (!session.authIdentifier && clean && session.email === clean) {
-      session.authIdentifier = authIdentifier;
+  saveDb(db);
+  return { email: clean, code, expiresAt, summary };
+}
+
+/** Consume a claim code and bind only rows that are still unbound. */
+export function claimLegacyOwnership({ email, authIdentifier, code }) {
+  const db = loadDb();
+  const clean = String(email || '').trim().toLowerCase();
+  const identity = String(authIdentifier || '').trim();
+  const supplied = String(code || '').trim();
+  const token = (db.legacyClaimTokens || []).find(row =>
+    row.email === clean && row.authIdentifier === identity && row.code === supplied && row.expiresAt > Date.now()
+  );
+  if (!token) throw new Error('That legacy-account claim code is invalid or expired.');
+
+  db.legacyClaimTokens = db.legacyClaimTokens.filter(row => row.id !== token.id);
+  if (!findStudentIdentity(identity)) throw new Error('Verify with your university before claiming an old account.');
+  if (!isEmailVerified(clean)) throw new Error('That legacy contact email has no prior verification record.');
+
+  const rows = legacyRowsForEmail(db, clean);
+  const summary = legacySummary(rows);
+  if (!summary.total) throw new Error('No legacy frea account was found for that email.');
+  if (rows.mentors.length > 1) {
+    throw new Error('More than one legacy mentor profile uses that email. Contact frea to merge it safely.');
+  }
+
+  const conflicts = [
+    ...(db.mentors || []).filter(row => row.email && String(row.email).toLowerCase() === clean && row.authIdentifier && row.authIdentifier !== identity),
+    ...(db.bookings || []).filter(row => row.studentEmail && String(row.studentEmail).toLowerCase() === clean && row.studentAuthIdentifier && row.studentAuthIdentifier !== identity),
+    ...(db.orders || []).filter(row => row.buyerEmail && String(row.buyerEmail).toLowerCase() === clean && row.buyerAuthIdentifier && row.buyerAuthIdentifier !== identity),
+    ...(db.entitlements || []).filter(row => row.email && String(row.email).toLowerCase() === clean && row.authIdentifier && row.authIdentifier !== identity),
+    ...(db.stars || []).filter(row => row.email && String(row.email).toLowerCase() === clean && row.authIdentifier && row.authIdentifier !== identity)
+  ];
+  if (conflicts.length) {
+    throw new Error('That legacy account is already linked to another university identity.');
+  }
+
+  rows.mentors.forEach(row => { row.authIdentifier = identity; });
+  rows.bookings.forEach(row => { row.studentAuthIdentifier = identity; });
+  rows.orders.forEach(row => { row.buyerAuthIdentifier = identity; });
+  rows.entitlements.forEach(row => { row.authIdentifier = identity; });
+  rows.stars.forEach(row => { row.authIdentifier = identity; });
+  (db.sessions || []).forEach(session => {
+    if (!session.authIdentifier && String(session.email || '').toLowerCase() === clean) {
+      session.authIdentifier = identity;
     }
   });
 
+  const mentor = rows.mentors[0] || null;
+  db.legacyClaims.unshift({
+    id: `legacy-claim-record-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+    email: clean,
+    authIdentifier: identity,
+    mentorId: mentor?.id || null,
+    counts: summary,
+    claimedAt: new Date().toISOString()
+  });
   saveDb(db);
-  return findStudentIdentity(authIdentifier);
+  return { email: clean, authIdentifier: identity, mentorId: mentor?.id || null, counts: summary };
 }
 
 /**

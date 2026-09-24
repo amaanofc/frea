@@ -444,19 +444,29 @@ const button = (href, label) => `
  * tokens, so nothing downstream breaks and this is a one-function revert if
  * the trade turns out to be wrong.
  */
-export async function sendVerificationEmail({ email, code }) {
+export async function sendVerificationEmail({ email, code, purpose = 'verification' }) {
+  const isLegacyClaim = purpose === 'legacy-claim';
+  const subject = isLegacyClaim
+    ? `${code} is your frea legacy-account claim code`
+    : `${code} is your frea verification code`;
+  const intro = isLegacyClaim
+    ? 'Use this code to explicitly connect your old frea account to your university identity.'
+    : 'Enter it on joinfrea.com to confirm your university email address.';
+  const closing = isLegacyClaim
+    ? 'The code expires in 24 hours and can be used once. If you did not request this, ignore this email.'
+    : 'The code expires in 24 hours and can be used once.';
   return send({
     to: email,
     // The code rides in the subject so it is readable from a notification or
     // a preview pane without opening anything.
-    subject: `${code} is your frea verification code`,
+    subject,
     // Written out rather than derived: the code is the payload, and it should
     // not depend on how a tag-stripper happens to lay the page out.
     text: [
       `Your frea verification code is ${code}`,
       '',
-      'Enter it on joinfrea.com to confirm your university email address.',
-      'The code expires in 24 hours and can be used once.',
+      intro,
+      closing,
       '',
       "If you didn't request this, you can ignore this email.",
       '',
@@ -466,11 +476,12 @@ export async function sendVerificationEmail({ email, code }) {
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #222222; max-width: 480px;">
     <p style="margin: 0 0 18px;">Your frea verification code is</p>
     <p style="font-family: Consolas, Menlo, monospace; font-size: 32px; font-weight: 700; letter-spacing: 5px; margin: 0 0 18px; color: #111111;">${code}</p>
-    <p style="margin: 0 0 18px;">Enter it on joinfrea.com to confirm your university email address. The code expires in 24 hours and can be used once.</p>
+    <p style="margin: 0 0 18px;">${intro}</p>
+    <p style="margin: 0 0 24px;">${closing}</p>
     <p style="margin: 0 0 24px;">If you didn't request this, you can ignore this email.</p>
     <p style="margin: 0; font-size: 13px; color: #666666;">frea &mdash; free peer mentoring for UK university students</p>
   </div>`,
-  }, 'verification');
+  }, isLegacyClaim ? 'legacy-claim' : 'verification');
 }
 
 // ─── Booking confirmations ──────────────────────────────

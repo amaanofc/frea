@@ -51,6 +51,8 @@ import {
   startSignIn,
   verifyWithUniversity,
   completeUniversitySignIn,
+  requestLegacyClaim,
+  verifyLegacyClaim,
 } from './api.js';
 import { ICONS } from './icons.js';
 import { applyRouteMeta } from './seo.js';
@@ -5597,6 +5599,10 @@ function renderNoMentorProfile() {
           and your university is already confirmed - so setting one up is just
           the form. It goes live the moment you submit it.
         </p>
+        ${getSession()?.legacyClaim?.total ? `
+          <p style="font-size: 13px; color: #92400e; margin: 18px 0 10px;">You have ${getSession().legacyClaim.total} older frea record${getSession().legacyClaim.total === 1 ? '' : 's'} to connect before creating a new profile.</p>
+          <button type="button" class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/my-space')">connect old records</button>
+        ` : ''}
         <button type="button" id="no-profile-apply" class="pill-btn pill-btn--dark pill-btn--animated" style="margin-top: 8px;">
           become a mentor
         </button>
@@ -6785,6 +6791,57 @@ window.renderCancelBooking = renderCancelBooking;
 
 // ─── My Space ─────
 
+function renderLegacyClaimCard() {
+  const session = getSession();
+  const summary = session?.legacyClaim;
+  if (!summary?.total) return '';
+  return `
+    <section id="legacy-claim-panel" style="margin: 0 0 28px; padding: 18px; border: 1.5px solid #f59e0b; border-radius: 14px; background: #fffbeb;">
+      <h2 style="font-size: 17px; font-weight: 800; color: #92400e; margin: 0 0 6px;">connect an older frea account</h2>
+      <p style="font-size: 13.5px; color: #78350f; margin: 0 0 14px;">We found ${summary.total} legacy record${summary.total === 1 ? '' : 's'} for this account. Claim them explicitly with the old contact email; new sign-ins never inherit them automatically.</p>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <label for="legacy-claim-email" style="font-size: 12.5px; font-weight: 700; color: #78350f;">old contact email</label>
+        <input id="legacy-claim-email" type="email" value="${escapeHtml(session.email || '')}" style="flex: 1 1 220px; min-width: 180px; padding: 9px 10px; border: 1px solid #f59e0b; border-radius: 8px; font: inherit;">
+        <button type="button" class="pill-btn pill-btn--dark" onclick="window.requestLegacyClaimFromSpace()">email me a code</button>
+      </div>
+      <div id="legacy-claim-code-area" style="display: none; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px;">
+        <label for="legacy-claim-code" style="font-size: 12.5px; font-weight: 700; color: #78350f;">claim code</label>
+        <input id="legacy-claim-code" inputmode="numeric" autocomplete="one-time-code" style="width: 120px; padding: 9px 10px; border: 1px solid #f59e0b; border-radius: 8px; font: inherit;">
+        <button type="button" class="pill-btn pill-btn--dark" onclick="window.verifyLegacyClaimFromSpace()">connect account</button>
+      </div>
+    </section>`;
+}
+
+async function requestLegacyClaimFromSpace() {
+  const input = document.getElementById('legacy-claim-email');
+  const codeArea = document.getElementById('legacy-claim-code-area');
+  if (!input || !codeArea) return;
+  try {
+    await requestLegacyClaim(input.value);
+    codeArea.style.display = 'flex';
+    document.getElementById('legacy-claim-code')?.focus();
+    showToast('Check that old inbox for the one-time claim code.');
+  } catch (err) {
+    showToast(err.message || 'Could not send a legacy-account claim code.');
+  }
+}
+
+async function verifyLegacyClaimFromSpace() {
+  const email = document.getElementById('legacy-claim-email')?.value?.trim();
+  const code = document.getElementById('legacy-claim-code')?.value?.trim();
+  if (!email || !code) return showToast('Enter the old email and claim code first.');
+  try {
+    await verifyLegacyClaim(email, code);
+    await fetchMe();
+    showToast('Your older frea records are now connected.');
+    renderPage(getRoute());
+  } catch (err) {
+    showToast(err.message || 'That claim code could not be verified.');
+  }
+}
+window.requestLegacyClaimFromSpace = requestLegacyClaimFromSpace;
+window.verifyLegacyClaimFromSpace = verifyLegacyClaimFromSpace;
+
 function renderMySpace() {
   if (!hasUniversityIdentity()) {
     setTimeout(() => openVerificationModal({
@@ -6802,6 +6859,7 @@ function renderMySpace() {
       <p style="font-size: 15px; opacity: 0.75; margin-bottom: 28px;">
         Your mentoring sessions and every freabie or playbook you have obtained, ready to download again.
       </p>
+      ${renderLegacyClaimCard()}
       <div id="my-space-sessions">
         ${hasUniversityIdentity()
       ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'

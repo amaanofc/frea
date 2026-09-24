@@ -327,6 +327,25 @@ console.log('\n─── 6. Resources, entitlement & downloads ───');
   const freeId = free.json.data.id;
   const paidId = paidOk.json.data.id;
 
+  // A price-only edit must obey the same payout gate as a full paid-resource
+  // publish. Otherwise a mentor can silently make a listing unsellable.
+  const priceDb = readDb();
+  const priceMentor = priceDb.mentors.find(m => m.id === globalThis.__mentorId);
+  priceMentor.payoutsEnabled = false;
+  delete priceMentor.stripeAccountId;
+  fs.writeFileSync(DB, JSON.stringify(priceDb, null, 2));
+  const priceOnly = await call('PUT', `/resources/${paidId}`, {
+    token: mentorToken, body: { price: 11 }
+  });
+  ok('price-only paid edits require payout readiness',
+    priceOnly.status === 409 && priceOnly.json.payoutsRequired === true,
+    JSON.stringify(priceOnly.json));
+  const restoreDb = readDb();
+  const restoreMentor = restoreDb.mentors.find(m => m.id === globalThis.__mentorId);
+  restoreMentor.stripeAccountId = 'acct_test_fixture';
+  restoreMentor.payoutsEnabled = true;
+  fs.writeFileSync(DB, JSON.stringify(restoreDb, null, 2));
+
   // Downloads.
   const anonDl = await fetch(`${API}/resources/${freeId}/download`);
   ok('anonymous download refused', anonDl.status === 401);

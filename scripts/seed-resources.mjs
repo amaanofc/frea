@@ -5,9 +5,8 @@
 //   node scripts/seed-resources.mjs
 //
 // The previous 25 seeded records had no files at all, so every download 404'd.
-// This writes one genuine document per supported format, attaches it to a real
-// mentor, and records it with a real `fileName` — exercising the same
-// upload/download path a mentor's own file takes.
+// This writes one genuine document per supported format and records it through
+// the canonical product/version shape used by the API.
 //
 // This is demo content. `npm run reset:launch` removes it.
 
@@ -109,10 +108,9 @@ export async function seedDemoResources({ quiet = false } = {}) {
   const db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 
   // Clear the fake catalogue and any files it never had.
-  const removed = (db.resources || []).length
-    + db.mentors.reduce((n, m) => n + (m.docs || []).length, 0);
+  const removed = (db.resources || []).length + (db.resourceVersions || []).length;
   db.resources = [];
-  db.mentors.forEach(m => { m.docs = []; });
+  db.resourceVersions = [];
   db.entitlements = [];
 
   log(`Cleared ${removed} catalogue entries (none had files attached).\n`);
@@ -155,17 +153,27 @@ export async function seedDemoResources({ quiet = false } = {}) {
       type: seed.type,
       price: seed.price,
       format: seed.format,
-      fileName,
       pages: seed.ext === '.pptx' ? '2 slides' : 'Self-contained document',
       category: seed.category,
       previewBullets: seed.bullets,
       downloads: 0,
       rating: 5.0,
+      currentVersionId: null,
       createdAt: new Date().toISOString()
     };
 
+    const version = {
+      id: `${resource.id}-v1`,
+      resourceId: resource.id,
+      versionNumber: 1,
+      fileName,
+      format: resource.format,
+      pages: resource.pages,
+      createdAt: resource.createdAt
+    };
+    resource.currentVersionId = version.id;
+    db.resourceVersions.unshift(version);
     db.resources.unshift(resource);
-    mentor.docs.unshift(resource);
 
     log(`  ✓ ${seed.format.padEnd(11)} ${fileName}  (${(bytes / 1024).toFixed(1)} KB)  —  ${mentor.name}`);
   }

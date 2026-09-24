@@ -113,9 +113,19 @@ test('landing page renders its hero and mission', async () => {
 // covered by the smoke suite; there is nothing left on the landing page to
 // assert against. Restore a test here if the numbers ever come back.
 
-test('no hidden control can block a form from submitting', async () => {
-  await goto('#/become-a-mentor');
-  const { document } = dom.window;
+test('no hidden control can block a form from submitting', () => {
+  const { window } = dom;
+  window.localStorage.setItem('frea_session', JSON.stringify({
+    email: 'verified.student@example.com',
+    sessionToken: 'frontend-hidden-control-token',
+    universityVerified: true,
+    isMentor: false,
+    isAdmin: false
+  }));
+  const container = window.document.createElement('div');
+  container.innerHTML = window.renderBecomeMentor();
+  window.document.body.appendChild(container);
+  const { document } = window;
 
   // A control that fails constraint validation while hidden cannot be focused
   // to report why, so the browser aborts submit and says nothing: the button
@@ -130,7 +140,9 @@ test('no hidden control can block a form from submitting', async () => {
     return null;
   };
 
-  for (const form of document.querySelectorAll('form')) {
+  const forms = document.querySelectorAll('form');
+  assert.equal(forms.length, 1, 'the verified mentor form should be present');
+  for (const form of forms) {
     for (const el of form.querySelectorAll('input, select, textarea')) {
       if (!el.willValidate) continue;   // disabled controls are skipped, which is the fix
       const hidden = hiddenBy(el);
@@ -139,6 +151,9 @@ test('no hidden control can block a form from submitting', async () => {
         `#${el.id || el.name} is hidden by #${hidden} and invalid — it will block submit with no visible error`);
     }
   }
+
+  container.remove();
+  window.localStorage.removeItem('frea_session');
 });
 
 test('the mentor recruitment pitch is public while the application action is gated', async () => {
@@ -162,8 +177,34 @@ test('a university-backed session exposes the application form', () => {
   }));
   const container = window.document.createElement('div');
   container.innerHTML = window.renderBecomeMentor();
-  assert.ok(container.querySelector('#become-mentor-form'), 'verified users should see the application form');
+  window.document.body.appendChild(container);
+  const form = container.querySelector('#become-mentor-form');
+  assert.ok(form, 'verified users should see the application form');
   assert.ok(container.querySelector('#bm-email'), 'the form should collect a contact email');
+
+  const set = (id, value) => { container.querySelector(`#${id}`).value = value; };
+  set('bm-name', 'Test Mentor');
+  set('bm-major', 'Computer Science');
+  set('bm-email', 'test@ed.ac.uk');
+  set('bm-achieve-1', 'first-class-honours');
+  set('bm-toptip', 'Start applications in September.');
+  const invalid = [...form.querySelectorAll('input, select, textarea')]
+    .filter(el => el.willValidate && !el.checkValidity())
+    .map(el => el.id || el.tagName);
+  assert.deepEqual(invalid, [], 'a filled application form should be valid');
+
+  window.toggleDocPriceField('paid', 'bm-doc-price-wrap');
+  const price = container.querySelector('#bm-doc-price');
+  assert.equal(price.disabled, false, 'price should be enabled when paid is chosen');
+  assert.ok(price.checkValidity(), `default price ${price.value} should be valid`);
+  price.value = '0.50';
+  assert.ok(!price.checkValidity(), 'below £1 should be rejected');
+  price.value = '101';
+  assert.ok(!price.checkValidity(), 'above £100 should be rejected');
+  price.value = '4.99';
+  assert.ok(price.checkValidity(), '2dp prices must be allowed');
+
+  container.remove();
   window.localStorage.removeItem('frea_session');
 });
 
