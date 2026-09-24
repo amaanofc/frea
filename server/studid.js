@@ -37,11 +37,36 @@
 import crypto from 'crypto';
 import { saveStudidState, consumeStudidState } from './db.js';
 
-const API = 'https://api.studid.io/v2/auth/verification';
+// Overridable so the flow can be exercised against a stub — the federation
+// gateway is a live third party, and a suite that cannot stand one up can only
+// ever test the failure path.
+const API_BASE = (process.env.STUDID_API_BASE || 'https://api.studid.io/v2').replace(/\/+$/, '');
+const API = `${API_BASE}/auth/verification`;
 const STATE_TTL_MS = 30 * 60 * 1000;
+
+// Every failure to reach the gateway ends up in front of a student, so they all
+// say the same actionable thing rather than leaking a transport error.
+const UNAVAILABLE = 'University sign-in is unavailable right now. Please try again shortly.';
 
 function publicBase() {
   return (process.env.PUBLIC_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+}
+
+/**
+ * Where Studid sends the student back to.
+ *
+ * The state goes in the PATH, not a query parameter, and that is the whole
+ * point of this function. Studid documents the return as
+ * `<redirectUrl>?verificationId=…` — it appends a query string rather than
+ * merging one, so a redirectUrl that already carried `?state=…` came back as
+ * `…/callback?state=abc?verificationId=123`. Express then parses the state as
+ * the literal `abc?verificationId=123`, no stored row matches it, and every
+ * student who completed their university login was told their attempt had
+ * expired. In the path there is nothing for an appended query string to
+ * collide with.
+ */
+function callbackUrl(state, base = publicBase()) {
+  return `${base.replace(/\/+$/, '')}/api/auth/studid/callback/${encodeURIComponent(state)}`;
 }
 
 /**
@@ -50,26 +75,46 @@ function publicBase() {
  * `secretToken` is minted by us, handed to Studid on creation, and presented
  * as the bearer when reading the result back. It is the only thing protecting
  * that result, so it is per-verification and never leaves the server.
+ *
+ * `base` is the origin the student is actually on — see `studidReturnBase` in
+ * index.js. They have to come back to the same one, or the popup and the page
+ * that opened it are cross-origin and the result cannot be handed over.
  */
-export async function startVerification() {
+export async function startVerification(base = publicBase()) {
   const state = crypto.randomBytes(24).toString('hex');
   const secretToken = crypto.randomBytes(32).toString('hex');
+  const redirectUrl = callbackUrl(state, base);
 
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      secretToken,
-      redirectUrl: `${publicBase()}/api/auth/studid/callback?state=${state}`,
-      serviceName: 'frea'
-    }),
-    signal: AbortSignal.timeout(15_000)
-  });
+  let res;
+  try {
+    res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secretToken,
+        redirectUrl,
+        serviceName: 'frea'
+      }),
+      signal: AbortSignal.timeout(15_000)
+    });
+  } catch (err) {
+    // A gateway that is down or unreachable throws rather than answering, and
+    // the message is machine noise — undici says "fetch failed". This message
+    // is shown to a student, so it says something a student can act on.
+    console.error(`[studid] create unreachable: ${err.message} (${API})`);
+    throw new Error(UNAVAILABLE);
+  }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.id || !body.link) {
-    console.error('[studid] create failed:', res.status, JSON.stringify(body).slice(0, 200));
-    throw new Error('University sign-in is unavailable right now. Please try again shortly.');
+    // The redirect URL is logged with the failure because it is the field
+    // Studid rejects: PUBLIC_BASE_URL left at its localhost default on a
+    // deployed box produces a redirect nobody can reach, and the response body
+    // alone does not say which of our inputs was wrong.
+    console.error(
+      `[studid] create failed: ${res.status} ${JSON.stringify(body).slice(0, 200)} (redirectUrl: ${redirectUrl})`
+    );
+    throw new Error(UNAVAILABLE);
   }
 
   saveStudidState({
@@ -95,10 +140,20 @@ export async function completeVerification(state) {
   const row = consumeStudidState(state);
   if (!row) throw new Error('This sign-in attempt expired or was already used. Please start again.');
 
-  const res = await fetch(`${API}/${encodeURIComponent(row.verificationId)}`, {
-    headers: { Authorization: `Bearer ${row.secretToken}` },
-    signal: AbortSignal.timeout(15_000)
-  });
+  let res;
+  try {
+    res = await fetch(`${API}/${encodeURIComponent(row.verificationId)}`, {
+      headers: { Authorization: `Bearer ${row.secretToken}` },
+      signal: AbortSignal.timeout(15_000)
+    });
+  } catch (err) {
+    // The student has already logged in at their university by this point, so
+    // this is the worst moment to show them a transport error. The state row is
+    // spent either way — a replay must not mint a second session — so the only
+    // way on is to start again.
+    console.error(`[studid] poll unreachable: ${err.message}`);
+    throw new Error('We could not confirm your university sign-in. Please try again.');
+  }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -179,7 +234,7 @@ async function resolveInstitutionName(entityId) {
     // names and hostnames, and a full entityId with its scheme and path scores
     // poorly.
     const host = new URL(entityId).hostname;
-    const res = await fetch(`https://api.studid.io/v2/search?q=${encodeURIComponent(host)}`, {
+    const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(host)}`, {
       signal: AbortSignal.timeout(8_000)
     });
     if (!res.ok) return null;
