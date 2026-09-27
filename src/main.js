@@ -5641,6 +5641,13 @@ function updateNavbarMentorStatus() {
       <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
     `;
     menu.innerHTML = `
+      <a href="/mentor-dashboard" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor-dashboard')">
+        <span class="dropdown-item-icon">📊</span>
+        <div>
+          <div class="dropdown-item-title">my space · mentoring</div>
+          <div class="dropdown-item-desc">availability, profile & products</div>
+        </div>
+      </a>
       <a href="/mentor/${session.mentorId}" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor/${session.mentorId}')">
         <span class="dropdown-item-icon">👤</span>
         <div>
@@ -5793,6 +5800,8 @@ function initNoMentorProfile() {
 
 
 let activeDashboardTab = 'schedule';
+// Which role's half of my space is showing: 'mentee' or 'mentor'.
+let activeSpaceTab = 'mentee';
 let mentorScheduleData = null;
 // Dated exceptions being edited, the month the grid is showing, and the date
 // whose panel is open. Unsaved until "save availability".
@@ -6160,6 +6169,9 @@ function renderMentorPanels() {
 
 function switchMentorPortalTab(tab) {
   activeDashboardTab = tab;
+  // The sub-tabs repaint the whole route, so the role tab has to be held or
+  // the mentor is dropped into their student view mid-edit.
+  activeSpaceTab = 'mentor';
   renderPage();
 }
 window.switchMentorPortalTab = switchMentorPortalTab;
@@ -7365,49 +7377,61 @@ window.verifyLegacyClaimFromSpace = verifyLegacyClaimFromSpace;
  */
 function renderMySpace() {
   const mentor = mentorRoleAvailable();
+  if (!mentor && activeSpaceTab === 'mentor') activeSpaceTab = 'mentee';
 
   if (!hasUniversityIdentity()) {
     setTimeout(() => openVerificationModal({
       email: null,
       actionName: 'open your my space'
     }), 200);
-  } else {
+  } else if (activeSpaceTab === 'mentee') {
     setTimeout(loadMySpace, 30);
   }
+
+  const onMentor = mentor && activeSpaceTab === 'mentor';
 
   return `
     <div class="page-container" style="padding: 48px 20px 60px;">
       <span class="section__caption">your frea space</span>
       <h1 class="section__title" style="font-size: clamp(30px, 4vw, 44px); margin-bottom: 8px;">my space</h1>
-      <p style="font-size: 15px; opacity: 0.75; margin-bottom: 28px;">
+      <p style="font-size: 15px; opacity: 0.75; margin-bottom: ${mentor ? '20px' : '28px'};">
         ${mentor
-      ? 'Your chats — the ones you booked and the ones you are mentoring — and everything you publish.'
+      ? 'Everything you have booked as a student, and everything you run as a mentor.'
       : 'Your mentoring sessions and every freabie or playbook you have obtained, ready to download again.'}
       </p>
 
-      ${renderLegacyClaimCard()}
-
-      <h2 class="space-heading">your chats</h2>
-      <div id="my-space-sessions">
-        ${hasUniversityIdentity()
-      ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
-      : `<div style="padding: 30px 0;">
-           <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
-           <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
-             <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
-           </button>
-         </div>`}
-      </div>
-
-      <h2 class="space-heading" style="margin-top: 36px;">your freabies &amp; playbooks</h2>
-      <div id="my-space-vault-grid" class="docs-grid">
-        ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
-      </div>
-
       ${mentor ? `
-        <h2 class="space-heading" style="margin-top: 44px;">your mentoring</h2>
-        ${renderMentorPanels()}
+        <div class="space-role-tabs" role="tablist">
+          <button type="button" class="space-role-tab ${!onMentor ? 'active' : ''}"
+                  data-space-tab="mentee" role="tab" aria-selected="${!onMentor}">
+            ${ICONS.calendar} chats you've booked
+          </button>
+          <button type="button" class="space-role-tab ${onMentor ? 'active' : ''}"
+                  data-space-tab="mentor" role="tab" aria-selected="${onMentor}">
+            ${ICONS.teacher} your mentoring
+          </button>
+        </div>
       ` : ''}
+
+      ${onMentor ? renderMentorPanels() : `
+        ${renderLegacyClaimCard()}
+        <div id="my-space-sessions">
+          ${hasUniversityIdentity()
+        ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
+        : `<div style="padding: 30px 0;">
+             <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
+             <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
+               <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
+             </button>
+           </div>`}
+        </div>
+        <div style="margin-top: 36px;">
+          <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">your freabies &amp; playbooks</h2>
+          <div id="my-space-vault-grid" class="docs-grid">
+            ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
+          </div>
+        </div>
+      `}
 
       ${hasUniversityIdentity() ? `
         <div style="margin-top: 40px; padding-top: 28px; border-top: 1.5px dashed var(--color-cocoa-ink);">
@@ -7436,67 +7460,61 @@ function mentorRoleAvailable() {
   return Boolean(hasUniversityIdentity() && getMentorSession()?.mentorId);
 }
 
+function switchSpaceTab(tab) {
+  activeSpaceTab = tab;
+  renderPage();
+}
+
+/**
+ * Wires whichever half is on screen.
+ *
+ * The mentor half is the old portal verbatim, so it keeps its own init — which
+ * also means its sub-tabs still repaint through renderPage, and that repaint
+ * has to land back on the mentor tab rather than dropping the person into
+ * their student view mid-edit.
+ */
 function initMySpace() {
+  document.querySelectorAll('[data-space-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchSpaceTab(btn.dataset.spaceTab));
+  });
+
   wireContactEmailChange({
     trigger: document.getElementById('ms-change-email'),
     panel: document.getElementById('ms-change-email-panel'),
     onChanged: () => renderPage()
   });
 
-  if (mentorRoleAvailable()) initMentorDashboard();
+  if (mentorRoleAvailable() && activeSpaceTab === 'mentor') initMentorDashboard();
 }
 window.renderMySessions = renderMySpace;
 
-/**
- * Everything in one diary, whichever side of it you are on.
- *
- * A mentor books chats of their own, so they had two lists — one here and one
- * in a mentor portal — and neither title said whose sessions it held. They are
- * twenty-minute calls in the same week either way, so they are one list in
- * date order, and each row says which way round it is.
- */
 async function loadMySpace() {
   const sessionsRoot = document.getElementById('my-space-sessions');
   const vaultRoot = document.getElementById('my-space-vault-grid');
   if (!sessionsRoot || !vaultRoot) return;
 
   try {
-    const mentorId = getMentorSession()?.mentorId;
-    const [mine, mentoring] = await Promise.all([
-      fetchMySpace(),
-      mentorId ? fetchMentorBookings(mentorId) : Promise.resolve({ upcoming: [], past: [] })
-    ]);
-
+    const data = await fetchMySpace();
     /**
      * `sessions` is nested, and reading it flat is why this list was empty.
      *
-     * /api/my-space answers `{ sessions: { upcoming, past }, products }`. The
-     * client destructured `upcoming` and `past` off the top of that, so both
-     * were always undefined, defaulted to empty, and every student — mentor or
-     * not — was told they had no sessions yet while their booking sat in the
-     * database. `products` sits at the top level, which is why the vault below
-     * worked and hid it.
+     * /api/my-space answers `{ sessions: { upcoming, past }, products }`. This
+     * destructured `upcoming` and `past` off the top of that, so both were
+     * always undefined, defaulted to empty, and every student was told they
+     * had no sessions while their booking sat in the database. `products` is
+     * top level, which is why the vault below worked and hid it.
      */
-    const { sessions = {}, products = [] } = mine || {};
-    const tag = (list, mentoringSide) => (list || []).map(b => ({ ...b, mentoring: mentoringSide }));
-    const byWhenSoonestFirst = (a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
-
-    const upcoming = [...tag(sessions.upcoming, false), ...tag(mentoring?.upcoming, true)]
-      .sort(byWhenSoonestFirst);
-    const past = [...tag(sessions.past, false), ...tag(mentoring?.past, true)]
-      .sort(byWhenSoonestFirst).reverse();
-
-    const mentorUpcoming = upcoming.filter(b => b.mentoring).length;
-    const countEl = document.getElementById('portal-upcoming-count');
-    if (countEl) countEl.textContent = String(mentorUpcoming);
+    const { sessions = {}, products = [] } = data || {};
+    const { upcoming = [], past = [] } = sessions;
 
     sessionsRoot.innerHTML = upcoming.length || past.length ? `
       ${upcoming.length ? `
+        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">upcoming sessions</h2>
         <div style="display: grid; gap: 12px; margin-bottom: 32px;">
           ${upcoming.map(b => sessionCard(b, true)).join('')}
         </div>` : ''}
       ${past.length ? `
-        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">earlier</h2>
+        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">past sessions</h2>
         <div style="display: grid; gap: 12px;">
           ${past.map(b => sessionCard(b, false)).join('')}
         </div>` : ''}
@@ -7532,30 +7550,22 @@ window.loadMySpace = loadMySpace;
 
 function sessionCard(b, isUpcoming) {
   const meetingUrl = b.meetingUrl || b.googleMeetUrl || '';
-  // Cancelling tells the other side, and which side that is differs — the
-  // mentor's version emails the student and reopens the slot.
-  const cancel = b.mentoring ? 'window.mentorCancelBooking' : 'window.cancelMySession';
-  const who = b.mentoring
-    ? `you're mentoring ${escapeHtml(b.studentEmail || 'a student')}`
-    : `with ${escapeHtml(b.mentorName || 'your mentor')}`;
-
   return `
     <div style="background: #fff; border: 1.5px solid var(--color-charcoal); border-radius: 14px; padding: 16px 18px; ${isUpcoming ? '' : 'opacity: 0.66;'}">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
         <div>
-          <div style="font-size: 16px; font-weight: 800; color: var(--color-charcoal); margin-bottom: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span>${escapeHtml(toLongDisplayDate(b.date))} · ${escapeHtml(b.displayTime || toDisplayTime(b.time))}</span>
-            ${b.mentoring ? '<span class="doc-badge doc-badge--free" style="font-size: 11px;">mentoring</span>' : ''}
+          <div style="font-size: 16px; font-weight: 800; color: var(--color-charcoal); margin-bottom: 2px;">
+            ${escapeHtml(b.mentorName)}
           </div>
           <div style="font-size: 13.5px; opacity: 0.75;">
-            ${who} · ${escapeHtml(b.timezone || 'UK time')}
+            ${escapeHtml(toLongDisplayDate(b.date))} · ${escapeHtml(b.displayTime || toDisplayTime(b.time))} (${escapeHtml(b.timezone || 'UK time')})
           </div>
         </div>
         ${isUpcoming ? `
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <a href="${escapeHtml(meetingUrl)}" target="_blank" rel="noopener noreferrer" class="pill-btn pill-btn--dark" style="text-decoration: none; font-size: 12.5px; padding: 6px 14px;">join call</a>
             <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.downloadBookingInvite('${escapeHtml(b.id)}')">.ics</button>
-            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="${cancel}('${escapeHtml(b.id)}')">cancel</button>
+            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.cancelMySession('${escapeHtml(b.id)}')">cancel</button>
           </div>` : ''}
       </div>
     </div>
@@ -7753,9 +7763,11 @@ function renderPage() {
     return;
   }
 
-  // Mentoring is part of my space now, not a place of its own. The route stays
-  // only so old bookmarks and links still land somewhere.
+  // The mentor portal is a tab of my space now. The route stays so bookmarks,
+  // the footer link and every "open my mentor dashboard" button still land
+  // somewhere — on the mentor half, which is what they meant.
   if (path === '/mentor-dashboard') {
+    activeSpaceTab = 'mentor';
     navigateTo('/my-space', { replace: true });
     return;
   }

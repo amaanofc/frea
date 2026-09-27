@@ -135,20 +135,22 @@ one its real owner has not registered with yet.
 
 ## One account home
 
-`/my-space` is the only account destination, and it is one page in one order:
-your chats, your freabies, your mentoring (only if you have a profile), where
-we write to you. No role tabs — a mentor is also a student, and splitting the
-page by role only asked them which hat they were wearing before showing them
-anything.
+`/my-space` is the only account destination. A mentor is also a student — they
+book chats of their own — so it carries two role tabs, `activeSpaceTab`:
+`mentee` (what they booked, their freabies) and `mentor` (`renderMentorPanels`:
+availability, profile, products). Anything belonging to the person rather than
+to either role — the contact address, a legacy claim — sits outside the tabs,
+once.
 
-**Chats are one list.** A mentor books chats of their own and has chats booked
-with them; both are twenty-minute calls in the same week, so they merge in date
-order and each row says which way round it is. They used to be two lists in two
-places, and neither title said whose sessions it held.
+There used to be a separate mentor portal, and the split was its own bug: two
+"sessions" lists where neither name said whose, one contact address rendered in
+both places, and two navbar entries with nothing to tell them apart.
+`/mentor-dashboard` still resolves — bookmarks and old links use it — and
+redirects to the mentor tab.
 
-`renderMentorPanels` is the old portal without its page heading or footer.
-`/mentor-dashboard` still resolves and redirects here, for bookmarks and old
-links only — nothing in the UI points at it.
+**A mentor sub-tab repaint must hold `activeSpaceTab`.** `switchMentorPortalTab`
+calls `renderPage`, so without setting it back to `mentor` a mentor editing
+their profile is dropped into their student view mid-edit.
 
 **`/api/my-space` nests sessions: `{ sessions: { upcoming, past }, products }`.**
 The client read `upcoming` and `past` flat for as long as the page existed, so
