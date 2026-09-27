@@ -126,7 +126,7 @@ which sends a code to the new inbox and moves nothing until it comes back.
 both, or a mentor signs in against one address while booking notices go to the
 other — and the session is reissued, since everything is keyed on
 `session.email`. `wireContactEmailChange` is the client side of it, offered in
-My Space and on the mentor form.
+My Space, on the mentor dashboard's profile tab, and on the mentor form.
 
 Do not turn this into a plain text field, and do not add a separate
 "notifications only" address that skips the code: booking notices carry a

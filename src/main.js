@@ -5933,6 +5933,26 @@ function renderMentorDashboard() {
             Keep your achievements and fresher advice up-to-date.
           </p>
 
+          <!--
+            Outside the form below, deliberately. This is account-level rather
+            than profile content, and its own inputs have nothing to do with
+            saving a bio.
+          -->
+          <div style="padding: 14px 16px; margin-bottom: 22px; border: 1.5px dashed var(--color-cocoa-ink); border-radius: 12px;">
+            <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; margin-bottom: 6px;">
+              Where booking notices go
+            </div>
+            <div style="font-size: 15px; font-weight: 700;">
+              ${escapeHtml(verifiedEmail() || currentMentor.email || '')}
+              <button type="button" class="auth-flow__link" id="mp-change-email"
+                      style="font-size: 13px; font-weight: 600; margin-left: 8px;">change</button>
+            </div>
+            <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">
+              Bookings, cancellations and sign-in codes all arrive here.
+            </div>
+            <div id="mp-change-email-panel" style="display: none; margin-top: 10px; max-width: 460px;"></div>
+          </div>
+
           <form id="portal-profile-form" onsubmit="window.saveMentorProfile(event)">
             <div class="mentor-form-group">
               <label class="mentor-form-label">Bio / Profile Headline</label>
@@ -6265,6 +6285,14 @@ function initMentorDashboard() {
 
   renderScheduleEditor();
   renderMentorLinksEditor(currentMentor);
+
+  wireContactEmailChange({
+    trigger: document.getElementById('mp-change-email'),
+    panel: document.getElementById('mp-change-email-panel'),
+    // The address is printed above the control, so repaint rather than leaving
+    // the old one on screen beside a "changed" toast.
+    onChanged: () => renderPage()
+  });
   renderPitchVideoControl('portal-pitch-container', currentMentor.pitchVideoUrl || '');
   renderMentorResourceList(currentMentor);
   loadMentorEarnings(currentMentor.id);
