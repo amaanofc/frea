@@ -2567,6 +2567,75 @@ export function contactEmailTakenBy(email, authIdentifier) {
 }
 
 /**
+ * Moves someone's contact address, everywhere it is held.
+ *
+ * The university's pseudonym is the identity; this address is where mail goes
+ * and how they sign in once SSO stops working for them. It is held in two
+ * places — the identity row, and `mentor.email` if they have a profile — and
+ * both have to move together, or a mentor would sign in against one address
+ * while booking notices went to the other.
+ *
+ * The caller proves the new inbox with a code first. Without that this would
+ * be a way to point somebody else's booking notices, which carry a student's
+ * name and meeting link, at an address of your choosing — and to squat an
+ * address its real owner has not registered with yet.
+ */
+export function changeContactEmail({ authIdentifier, email }) {
+  const clean = (email || '').trim().toLowerCase();
+  if (!clean) throw new Error('A new email address is required.');
+  if (!authIdentifier) throw new Error('Your university sign-in could not be read. Please verify again.');
+
+  const db = loadDb();
+  const identity = (db.studentIdentities || []).find(i => i.authIdentifier === authIdentifier);
+  if (!identity) throw new Error('No account was found for your university sign-in.');
+
+  const clash = (db.studentIdentities || [])
+    .find(i => i.contactEmail === clean && i.authIdentifier !== authIdentifier);
+  if (clash) throw new Error('That email address is already in use by another student.');
+
+  const previous = identity.contactEmail;
+  identity.contactEmail = clean;
+  identity.lastSeenAt = new Date().toISOString();
+
+  const mentor = (db.mentors || []).find(m => m.authIdentifier === authIdentifier);
+  if (mentor) mentor.email = clean;
+
+  saveDb(db);
+  return { email: clean, previous, mentorId: mentor ? mentor.id : null };
+}
+
+/**
+ * A contact change waiting on the code sent to the new address.
+ *
+ * Keyed by the pseudonym rather than the address, so starting a second change
+ * replaces the first instead of leaving two live at once.
+ */
+export function savePendingContactChange({ authIdentifier, email, expiresAt }) {
+  const db = loadDb();
+  const now = Date.now();
+  db.pendingContactChanges = (Array.isArray(db.pendingContactChanges) ? db.pendingContactChanges : [])
+    .filter(p => p.authIdentifier !== authIdentifier && (p.expiresAt || 0) > now);
+  db.pendingContactChanges.push({
+    authIdentifier,
+    email: (email || '').trim().toLowerCase(),
+    expiresAt: expiresAt || (now + 60 * 60 * 1000),
+    createdAt: new Date().toISOString()
+  });
+  saveDb(db);
+}
+
+export function consumePendingContactChange(authIdentifier) {
+  const db = loadDb();
+  const rows = Array.isArray(db.pendingContactChanges) ? db.pendingContactChanges : [];
+  const row = rows.find(p => p.authIdentifier === authIdentifier);
+  db.pendingContactChanges = rows.filter(p => p.authIdentifier !== authIdentifier);
+  saveDb(db);
+  if (!row) return null;
+  if ((row.expiresAt || 0) < Date.now()) return null;
+  return row;
+}
+
+/**
  * The identity behind a contact address, for signing in.
  *
  * Registration proves who someone is through their university; every sign-in

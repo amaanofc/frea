@@ -97,6 +97,22 @@ export async function verifyEmailCode(email, code) {
   return json;
 }
 
+/**
+ * Moves the address frea writes to. Two steps, because the new inbox is proven
+ * before anything moves — see /api/auth/contact-email/* for why.
+ */
+export async function startContactEmailChange(email) {
+  return request('/auth/contact-email/start', { method: 'POST', body: { email } });
+}
+
+export async function confirmContactEmailChange(email, code) {
+  const json = await request('/auth/contact-email/confirm', { method: 'POST', body: { email, code } });
+  // The server reissued the session against the new address; keeping the old
+  // token would leave every later request authenticated as the old one.
+  setSession({ ...getSession(), email: json.email, sessionToken: json.sessionToken });
+  return json;
+}
+
 export async function verifyEmailToken(token) {
   const json = await request(`/auth/verify?token=${encodeURIComponent(token)}`);
   setSession({

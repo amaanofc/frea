@@ -79,6 +79,9 @@ import {
   issueLegacyClaim,
   claimLegacyOwnership,
   contactEmailTakenBy,
+  changeContactEmail,
+  savePendingContactChange,
+  consumePendingContactChange,
   mailHandoffStats,
   recentMailHandoffs
 } from './db.js';
@@ -958,6 +961,115 @@ app.get('/api/auth/me', (req, res) => {
     })
   });
 });
+
+// ─── Changing the contact address ───────────────────────
+//
+// The university's pseudonym is the identity; this address is only where mail
+// goes and how they sign in once their SSO stops working. So it is theirs to
+// change — but the new inbox is proven by a code first, exactly as the original
+// was at registration. Without that, a change would redirect booking notices,
+// which carry a student's name and meeting link, to an address nobody has shown
+// they can read, and would let anyone squat an address its owner has not
+// registered with yet.
+
+app.post('/api/auth/contact-email/start', requireVerified,
+  rateLimit({ max: 5, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+    const clean = String(req.body?.email || '').trim().toLowerCase();
+    const authIdentifier = req.session.authIdentifier;
+
+    if (!authIdentifier) {
+      return res.status(403).json({
+        success: false,
+        error: 'Changing your address needs university sign-in. Please verify with your university first.'
+      });
+    }
+
+    if (!clean || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+    }
+
+    // Same rule as registration: .ac.uk mail is what does not arrive, and an
+    // address whose codes vanish is an account nobody can get back into.
+    if (clean.endsWith('.ac.uk')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please use a personal email address — university addresses filter our mail, so codes and invites often never arrive.'
+      });
+    }
+
+    if (clean === String(req.session.email || '').trim().toLowerCase()) {
+      return res.status(400).json({ success: false, error: 'That is already your contact address.' });
+    }
+
+    if (contactEmailTakenBy(clean, authIdentifier)) {
+      return res.status(409).json({
+        success: false,
+        error: 'That email address is already in use by another student. Please use a different one.'
+      });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    saveVerificationToken({
+      email: clean,
+      token: crypto.randomBytes(24).toString('hex'),
+      code,
+      expiresAt: Date.now() + 60 * 60 * 1000
+    });
+    savePendingContactChange({ authIdentifier, email: clean });
+
+    try {
+      await sendVerificationEmail({ email: clean, code });
+    } catch (mailErr) {
+      console.error('[contact] could not send the change code:', mailErr.message);
+      return res.status(502).json({
+        success: false,
+        error: 'We could not send the confirmation code just now. Please try again in a moment.'
+      });
+    }
+
+    res.json({ success: true, needsCode: true, email: clean });
+  }));
+
+app.post('/api/auth/contact-email/confirm', requireVerified,
+  rateLimit({ max: 10, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+    const clean = String(req.body?.email || '').trim().toLowerCase();
+    const code = String(req.body?.code || '').trim();
+    const authIdentifier = req.session.authIdentifier;
+
+    if (!authIdentifier) {
+      return res.status(403).json({ success: false, error: 'Changing your address needs university sign-in.' });
+    }
+    if (!clean || !code) {
+      return res.status(400).json({ success: false, error: 'Email and verification code are required.' });
+    }
+
+    // Read the pending change before spending the code, so a code for some
+    // other purpose cannot be redeemed here.
+    const pending = consumePendingContactChange(authIdentifier);
+    if (!pending || pending.email !== clean) {
+      return res.status(400).json({
+        success: false,
+        error: 'That change expired or was already used. Please start again.'
+      });
+    }
+
+    verifyEmailCode(clean, code);
+
+    const moved = changeContactEmail({ authIdentifier, email: clean });
+    markEmailVerified(clean);
+
+    // The session carries the address, so it has to be reissued — otherwise
+    // everything keyed on session.email would still be looking at the old one.
+    const session = createSession({
+      email: clean,
+      mentorId: moved.mentorId,
+      authIdentifier,
+      emailProven: true
+    });
+
+    console.log(`[contact] address moved for ${authIdentifier}`);
+    res.json({ success: true, email: clean, sessionToken: session.token });
+  }));
 
 app.get('/api/auth/legacy-claim', requireVerified, (req, res) => {
   res.set('Cache-Control', 'private, no-store');

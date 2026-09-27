@@ -20,6 +20,8 @@ import {
   uploadDocument,
   sendEmailVerification,
   verifyEmailCode,
+  startContactEmailChange,
+  confirmContactEmailChange,
   verifyEmailToken,
   fetchAdminApplications,
   fetchAdminSuggestions,
@@ -1239,7 +1241,10 @@ function renderBecomeMentor() {
             <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">
               ${ICONS.tickCircle} The inbox you confirmed by code. Bookings, cancellations and
               payout notices all arrive here.
+              <button type="button" class="auth-flow__link" id="bm-change-email"
+                      style="font-size: 12px;">use a different address</button>
             </span>
+            <div id="bm-change-email-panel" style="display: none; margin-top: 10px;"></div>
           </div>
 
           <!-- LinkedIn Verification URL -->
@@ -2812,6 +2817,118 @@ function contactEmailStepHtml({ institution }) {
 }
 
 /** Wires the contact-address step and opens the session on submit. */
+/**
+ * "use a different address": nominate, prove, then it moves.
+ *
+ * The address is a preference, not the identity — the university's pseudonym is
+ * that — so it is theirs to change. What it is not is free text: it is where
+ * booking notices go and how they sign in once their university SSO stops
+ * working for them, so the new inbox is proven by a code before anything moves,
+ * the same way it was bound in the first place.
+ *
+ * Lives in a panel rather than a modal because it is offered from inside the
+ * mentor form, and taking that form off the screen part-way through is the
+ * thing this flow has been unpicking all week.
+ */
+function wireContactEmailChange({ trigger, panel, onChanged }) {
+  if (!trigger || !panel) return;
+
+  const close = () => { panel.style.display = 'none'; panel.innerHTML = ''; };
+
+  const fail = (message) => {
+    const el = panel.querySelector('.cec-error');
+    if (!el) { showToast(message); return; }
+    el.style.display = 'block';
+    el.innerText = message;
+  };
+
+  function renderNominate() {
+    panel.innerHTML = `
+      <div class="modal__input-row">
+        <input type="email" class="modal__input" id="cec-email" placeholder="e.g. you@gmail.com" autocomplete="email">
+        <button type="button" id="cec-send" class="pill-btn pill-btn--dark">send code</button>
+      </div>
+      <div class="cec-error auth-flow__error" style="display: none;"></div>
+      <div style="font-size: 12px; opacity: 0.6; margin-top: 6px;">
+        We'll send a 6-digit code there. Nothing moves until you enter it.
+      </div>
+    `;
+
+    const input = panel.querySelector('#cec-email');
+    const btn = panel.querySelector('#cec-send');
+
+    const submit = async () => {
+      const email = (input.value || '').trim().toLowerCase();
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return fail('Please enter a valid email address.');
+      }
+      btn.disabled = true;
+      btn.innerText = 'sending…';
+      try {
+        await startContactEmailChange(email);
+        renderConfirm(email);
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'send code';
+        fail(err.message);
+      }
+    };
+
+    btn.addEventListener('click', submit);
+    // This panel sits inside the mentor form, where a bare Enter would submit
+    // the application rather than the address.
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    input.focus();
+  }
+
+  function renderConfirm(email) {
+    panel.innerHTML = `
+      <div style="font-size: 13px; margin-bottom: 8px;">
+        Code sent to <strong>${escapeHtml(email)}</strong>
+      </div>
+      <div class="modal__input-row">
+        <input type="text" inputmode="numeric" maxlength="6" class="modal__input auth-flow__code" id="cec-code" placeholder="••••••" autocomplete="one-time-code">
+        <button type="button" id="cec-confirm" class="pill-btn pill-btn--dark">confirm</button>
+      </div>
+      <div class="cec-error auth-flow__error" style="display: none;"></div>
+      <div style="font-size: 12px; opacity: 0.6; margin-top: 6px;">
+        <button type="button" class="auth-flow__link" id="cec-back" style="font-size: 12px;">use a different address</button>
+      </div>
+    `;
+
+    const input = panel.querySelector('#cec-code');
+    const btn = panel.querySelector('#cec-confirm');
+
+    const submit = async () => {
+      const code = (input.value || '').trim();
+      if (code.length < 6) return fail('Please enter the 6-digit code.');
+      btn.disabled = true;
+      btn.innerText = 'confirming…';
+      try {
+        await confirmContactEmailChange(email, code);
+        close();
+        showToast('Contact address updated.');
+        if (typeof onChanged === 'function') onChanged(email);
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'confirm';
+        fail(err.message);
+      }
+    };
+
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+    panel.querySelector('#cec-back').addEventListener('click', renderNominate);
+    input.focus();
+  }
+
+  trigger.addEventListener('click', () => {
+    if (panel.style.display === 'block') { close(); return; }
+    panel.style.display = 'block';
+    renderNominate();
+  });
+}
+
 function wireContactEmailStep({ ticket, onCodeSent }) {
   const btn = document.getElementById('contact-email-btn');
   const input = document.getElementById('contact-email');
@@ -6936,6 +7053,23 @@ function renderMySpace() {
           ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
         </div>
       </div>
+
+      ${hasUniversityIdentity() ? `
+        <div style="margin-top: 40px; padding-top: 28px; border-top: 1.5px dashed var(--color-cocoa-ink);">
+          <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 6px;">where we write to you</h2>
+          <p style="font-size: 14px; opacity: 0.75; margin: 0 0 12px; max-width: 520px; line-height: 1.55;">
+            Bookings, confirmations and sign-in codes all go here. Your university
+            already proved who you are, so this is just the inbox you want to read
+            them in.
+          </p>
+          <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">
+            ${escapeHtml(verifiedEmail() || '')}
+            <button type="button" class="auth-flow__link" id="ms-change-email"
+                    style="font-size: 13px; font-weight: 600; margin-left: 8px;">change</button>
+          </div>
+          <div id="ms-change-email-panel" style="display: none; margin-top: 10px; max-width: 460px;"></div>
+        </div>
+      ` : ''}
     </div>
     ${renderFooter()}
   `;
@@ -7267,9 +7401,24 @@ function renderPage() {
     } else {
       renderSignupLinks();
       renderPitchVideoControl('signup-pitch-container', '');
+      wireContactEmailChange({
+        trigger: document.getElementById('bm-change-email'),
+        panel: document.getElementById('bm-change-email-panel'),
+        onChanged: (email) => {
+          const field = document.getElementById('bm-email');
+          if (field) field.value = email;
+        }
+      });
     }
   } else if (path === '/my-space') {
     app.innerHTML = renderMySpace();
+    wireContactEmailChange({
+      trigger: document.getElementById('ms-change-email'),
+      panel: document.getElementById('ms-change-email-panel'),
+      // The address is printed above the control, so repaint rather than
+      // leaving the old one on screen next to a "changed" toast.
+      onChanged: () => renderPage()
+    });
   } else if (path === '/checkout-complete') {
     app.innerHTML = renderCheckoutComplete(route);
   } else if (path === '/cancel') {

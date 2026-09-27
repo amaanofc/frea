@@ -251,6 +251,61 @@ group('THE RETURN URL SURVIVES STUDID APPENDING TO IT');
     JSON.stringify(payload2).slice(0, 200));
   ok('on the address they nominated', payload2.email === contact);
   ok('and the session is flagged university-verified', payload2.universityVerified === true);
+
+  // ── Moving that address afterwards.
+  //
+  // The pseudonym is the identity, so the address is a preference and theirs to
+  // change — but the new inbox is proven first, or this would be a way to point
+  // somebody's booking notices wherever you liked.
+  group('CHANGING THE CONTACT ADDRESS');
+
+  const token = payload2.sessionToken;
+  const authed = (path, body) => fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body)
+  });
+
+  const moved = `studid-moved-${Date.now()}@example.com`;
+
+  const acUk = await authed('/auth/contact-email/start', { email: 'someone@manchester.ac.uk' }).then(r => r.json());
+  ok('a .ac.uk address is refused here too', acUk.success === false, JSON.stringify(acUk).slice(0, 120));
+
+  const same = await authed('/auth/contact-email/start', { email: contact }).then(r => r.json());
+  ok('so is the address they already have', same.success === false);
+
+  const started = await authed('/auth/contact-email/start', { email: moved }).then(r => r.json());
+  ok('nominating a new address sends a code rather than moving anything',
+    started.success === true && started.needsCode === true, JSON.stringify(started).slice(0, 160));
+
+  const stillOld = (readDb().studentIdentities || []).find(i => i.contactEmail === contact);
+  ok('nothing has moved yet', Boolean(stillOld));
+
+  const wrong = await authed('/auth/contact-email/confirm', { email: moved, code: '000000' }).then(r => r.json());
+  ok('a wrong code moves nothing', wrong.success === false);
+
+  // The failed confirm spends the pending change, so start again — which is
+  // what the UI does too.
+  await authed('/auth/contact-email/start', { email: moved });
+  const changeCode = (readDb().verificationTokens || []).find(t => t.email === moved)?.code;
+  ok('a code was issued to the new address', Boolean(changeCode));
+
+  const confirmed = await authed('/auth/contact-email/confirm', { email: moved, code: changeCode }).then(r => r.json());
+  ok('proving it moves the address', confirmed.success === true && confirmed.email === moved,
+    JSON.stringify(confirmed).slice(0, 160));
+  ok('and reissues the session against it', typeof confirmed.sessionToken === 'string');
+
+  const after = readDb();
+  const identityNow = (after.studentIdentities || []).find(i => i.authIdentifier === payload2.authIdentifier || i.contactEmail === moved);
+  ok('the identity carries the new address', identityNow?.contactEmail === moved);
+  ok('and no identity is left on the old one',
+    !(after.studentIdentities || []).some(i => i.contactEmail === contact));
+
+  const signInOld = await fetch(`${API}/auth/send-verification`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: contact })
+  });
+  ok('the old address no longer signs anyone in', signInOld.status === 404, `status ${signInOld.status}`);
 }
 
 // ─── 2. The student comes back to the origin they left ──

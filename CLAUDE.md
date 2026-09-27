@@ -119,10 +119,19 @@ would hand a profile to whoever verifies with it next.
 
 So a form must never ask for it again. The mentor signup form did, validated
 it, then threw the answer away; it now shows the verified address read-only.
-There is no way to change a contact address anywhere in the product yet. Adding
-one means proving the new inbox with a code the way registration does — not a
-free-text field, and not a separate "just for notifications" address either,
-since booking notices carry a student's name and meeting link.
+
+**Changing it goes through `/api/auth/contact-email/start` then `/confirm`,**
+which sends a code to the new inbox and moves nothing until it comes back.
+`changeContactEmail` then moves the identity row and `mentor.email` together —
+both, or a mentor signs in against one address while booking notices go to the
+other — and the session is reissued, since everything is keyed on
+`session.email`. `wireContactEmailChange` is the client side of it, offered in
+My Space and on the mentor form.
+
+Do not turn this into a plain text field, and do not add a separate
+"notifications only" address that skips the code: booking notices carry a
+student's name and meeting link, and an unproven address is also a way to squat
+one its real owner has not registered with yet.
 
 ## Writing new UI
 
