@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 let pass = 0, fail = 0;
 const ok = (label, cond, detail = '') => {
@@ -96,7 +97,7 @@ const API = `${BASE}/api`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'frea-studid-'));
 
 const server = spawn(process.execPath, ['server/index.js'], {
-  cwd: new URL('..', import.meta.url).pathname,
+  cwd: fileURLToPath(new URL('..', import.meta.url)),
   env: {
     ...process.env,
     PORT: String(PORT),
