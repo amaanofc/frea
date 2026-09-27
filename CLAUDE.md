@@ -49,6 +49,31 @@ or an allow-list.
 SPF and DKIM; injected markup there is a phishing tool, not a defacement.
 Subjects stay raw — nodemailer encodes those.
 
+## University sign-in (Studid)
+
+The whole flow runs in a popup, and both hand-offs around it have broken before.
+
+**Every exit from `/api/auth/studid/*` that a popup can reach answers with
+`studidPopupReply`,** not JSON. The popup has no UI of its own and the app is
+waiting on a posted message; a JSON body there is a window of raw text and a page
+that hangs on "opening your university sign-in…" forever.
+
+**The student comes back to the origin they left from,** not to
+`PUBLIC_BASE_URL`. Apex and `www` both serve the app, and postMessage across
+origins is dropped in silence — which looked exactly like a button that did
+nothing. `studidReturnBase` picks the origin and the bridge page posts to its
+own; the opener's strict origin check in `src/api.js` stays strict.
+
+**The state travels in the callback path, never the query string.** Studid
+returns the student to `<redirectUrl>?verificationId=…`, appending rather than
+merging, so a `?state=` of ours came back as `state=abc?verificationId=123` and
+matched no row. Every student who finished their university login was told the
+attempt had expired.
+
+`npm run test:studid` covers all three. It starts its own server against a stub
+gateway (`STUDID_API_BASE`), because the real one is a free service run by one
+person and cannot mint a test student.
+
 ## Writing new UI
 
 **No `onclick=` (or any inline `on*=`) in new markup.** Use `addEventListener`,

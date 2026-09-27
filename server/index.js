@@ -358,7 +358,12 @@ const hits = new Map();
 const byEmail = (req) =>
   (req.body?.email || req.session?.email || req.ip || 'anon').toString().trim().toLowerCase();
 
-function rateLimit({ windowMs = 60_000, max = 10, key = req => req.ip } = {}) {
+/**
+ * `onLimit` exists for the routes whose caller cannot read JSON. The university
+ * sign-in runs in a popup and the app is waiting on a posted message, so a
+ * plain 429 body there is a window of raw JSON and a page that hangs.
+ */
+function rateLimit({ windowMs = 60_000, max = 10, key = req => req.ip, onLimit = null } = {}) {
   return (req, res, next) => {
     const id = `${req.path}:${key(req)}`;
     const now = Date.now();
@@ -370,10 +375,9 @@ function rateLimit({ windowMs = 60_000, max = 10, key = req => req.ip } = {}) {
     }
     record.count += 1;
     if (record.count > max) {
-      return res.status(429).json({
-        success: false,
-        error: 'Too many attempts. Please wait a minute and try again.'
-      });
+      const message = 'Too many attempts. Please wait a minute and try again.';
+      if (onLimit) return onLimit(req, res, message);
+      return res.status(429).json({ success: false, error: message });
     }
     next();
   };
@@ -496,7 +500,98 @@ app.post('/api/auth/send-verification',
 
 // ─── Student verification via university SSO ────────────
 
-/** Step one: send the student to their university's login. */
+/**
+ * The page the popup answers with, at every exit from this flow.
+ *
+ * Everything in the flow runs in a popup, so the only way any outcome reaches
+ * the app is by being posted to the opener. A route here that replies with
+ * ordinary JSON leaves the popup showing `{"success":false,…}` and the page
+ * that opened it waiting forever on a message that is never coming — the
+ * button stuck on "opening your university sign-in…", no error, nothing. That
+ * is what "clicking verify does nothing" was.
+ *
+ * The target origin is the popup's OWN origin, not PUBLIC_BASE_URL. Both
+ * joinfrea.com and www.joinfrea.com serve the app, PUBLIC_BASE_URL can only
+ * name one of them, and postMessage to an origin the opener is not on is
+ * dropped without a word by the receiving side. The popup is on whichever
+ * origin the student started from — `studidReturnBase` keeps it that way — so
+ * its own origin is the right one, and the opener still checks it strictly.
+ *
+ * Always 200, including for a failure. This is a page, not an API response, and
+ * its whole job is to run one line of script; an error status invites a proxy to
+ * swap the body for its own error page, which would take the explanation with
+ * it. What went wrong is in the payload.
+ */
+function studidPopupReply(res, payload) {
+  res.type('html').send(`<!doctype html>
+<meta charset="utf-8">
+<title>Signing you in…</title>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; text-align: center; color: #334155;">
+<p>${payload.ok ? 'Verified — you can close this window.' : 'Sign-in did not complete. You can close this window.'}</p>
+<script>
+  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  try { if (window.opener) window.opener.postMessage({ source: 'frea-studid-auth', ...payload }, window.location.origin); } catch (e) {}
+  window.close();
+</script>
+</body>`);
+}
+
+/**
+ * The origin to bring the student back to.
+ *
+ * It has to be the one they left from. The popup hands its result to the page
+ * that opened it, and postMessage is same-origin by design: send the student
+ * out from www.joinfrea.com and back to joinfrea.com and the message is
+ * silently discarded — they complete their university login, the popup closes,
+ * and the site behaves as though they had never clicked. Since both domains
+ * are live (DEPLOY.md §4 adds them as separate custom domains) and
+ * PUBLIC_BASE_URL can only be one of them, half the students who typed the
+ * other one could not sign in at all.
+ *
+ * Where the host comes from, in order: the request's own Host, then the
+ * referring page. Host is the direct answer but a proxy may have rewritten it
+ * — Vite's dev proxy does, to localhost:3001, which is how this bug is
+ * reproducible locally — and the referrer is then what still names the page the
+ * student is looking at.
+ *
+ * Either way the candidate must be a host we recognise: PUBLIC_BASE_URL's, with
+ * or without a `www.`. Neither header is trustworthy, and an unchecked one is
+ * not merely untidy: somebody could start a verification with a Host of their
+ * own, hand the resulting university link to a student, and have the student's
+ * completed login land its state on their server — which is enough to redeem
+ * the sign-in as them. So anything unrecognised falls back to the configured
+ * base, where the worst case is the message being dropped as it was before.
+ */
+function studidReturnBase(req) {
+  const configured = baseUrl();
+
+  let configuredHost, scheme;
+  try {
+    const url = new URL(configured);
+    configuredHost = url.host;
+    // The scheme comes from PUBLIC_BASE_URL rather than from the request, so a
+    // request that reached us over plain http — Railway redirects those, but a
+    // health checker or a stray link can still produce one — cannot hand Studid
+    // an http return URL for an https site.
+    scheme = url.protocol;
+  } catch (_) {
+    return configured;
+  }
+
+  const bare = (h) => h.toLowerCase().replace(/^www\./, '');
+  const allowed = (host) => Boolean(host) && bare(host) === bare(configuredHost);
+
+  const host = String(req.get('host') || '');
+  if (allowed(host)) return `${scheme}//${host}`;
+
+  try {
+    const referrer = new URL(String(req.get('referer') || ''));
+    if (allowed(referrer.host)) return `${scheme}//${referrer.host}`;
+  } catch (_) { /* no referrer, or not a URL */ }
+
+  return configured;
+}
+
 /**
  * Step one: send the student to their university's login.
  *
@@ -509,11 +604,27 @@ app.post('/api/auth/send-verification',
  *
  * What this is actually for is not letting us hammer Studid, who run the
  * federation gateway for nothing.
+ *
+ * A failure here answers with the popup page, not with JSON: this window has
+ * no user interface of its own, and the app is waiting on a message from it.
  */
-app.get('/api/auth/studid/start', rateLimit({ max: 100, windowMs: 10 * 60_000, key: req => `ip:${req.ip}` }), wrap(async (req, res) => {
-  const { url } = await startVerification();
-  res.redirect(url);
-}));
+app.get('/api/auth/studid/start', rateLimit({
+  max: 100,
+  windowMs: 10 * 60_000,
+  key: req => `ip:${req.ip}`,
+  onLimit: (req, res, message) => studidPopupReply(res, { ok: false, error: message })
+}), async (req, res) => {
+  try {
+    const { url } = await startVerification(studidReturnBase(req));
+    res.redirect(url);
+  } catch (err) {
+    console.error('[studid] could not start verification:', err.message);
+    studidPopupReply(res, {
+      ok: false,
+      error: err.message || 'University sign-in is unavailable right now. Please try again shortly.'
+    });
+  }
+});
 
 /**
  * Step two: they come back from their university.
@@ -525,27 +636,24 @@ app.get('/api/auth/studid/start', rateLimit({ max: 100, windowMs: 10 * 60_000, k
  * A returning student is signed straight in. A new one gets a short-lived
  * ticket instead of a session, because we still need somewhere to send their
  * calendar invites and have not asked yet.
+ *
+ * Two shapes, one handler. The state now travels in the path, because Studid
+ * returns the student to `<redirectUrl>?verificationId=…` — it appends a query
+ * string rather than merging one, so the old `?state=…` form came back as
+ * `?state=abc?verificationId=123` and no row ever matched. The query form is
+ * still accepted so an attempt already in flight across a deploy still lands.
  */
-app.get('/api/auth/studid/callback', wrap(async (req, res) => {
-  const origin = (process.env.PUBLIC_BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+const studidCallback = wrap(async (req, res) => {
+  const reply = (payload) => studidPopupReply(res, payload);
 
-  const reply = (payload) => {
-    res.type('html').send(`<!doctype html>
-<meta charset="utf-8">
-<title>Signing you in…</title>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; text-align: center; color: #334155;">
-<p>${payload.ok ? 'Verified — you can close this window.' : 'Sign-in did not complete. You can close this window.'}</p>
-<script>
-  var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
-  try { if (window.opener) window.opener.postMessage({ source: 'frea-studid-auth', ...payload }, ${JSON.stringify(origin)}); } catch (e) {}
-  window.close();
-</script>
-</body>`);
-  };
+  // Anything from the first `?`, `&` or `#` onward is something appended to
+  // our URL, not part of the state we minted.
+  const raw = req.params.state || req.query.state || '';
+  const state = String(raw).split(/[?&#]/)[0];
 
   let result;
   try {
-    result = await completeVerification(req.query.state);
+    result = await completeVerification(state);
   } catch (err) {
     return reply({ ok: false, error: err.message });
   }
@@ -596,7 +704,10 @@ app.get('/api/auth/studid/callback', wrap(async (req, res) => {
 
   console.log(`[studid] new student from ${result.scope || result.entityId}`);
   reply({ ok: true, needsEmail: true, ticket, institution: result.institutionName || result.scope });
-}));
+});
+
+app.get('/api/auth/studid/callback/:state', studidCallback);
+app.get('/api/auth/studid/callback', studidCallback);
 
 /**
  * Step three, for a new student: bind a contact address and open the session.
@@ -2056,6 +2167,15 @@ app.listen(PORT, async () => {
     console.log('[frea backend] WARNING: DATA_DIR is not set. On a hosted platform');
     console.log('               this writes into the app directory, which a deploy');
     console.log('               replaces — every booking and upload would be lost.');
+  }
+  // University sign-in cannot work at all with the default base URL on a
+  // deployed box: the redirect we hand Studid points at a machine only the
+  // container can reach, and Studid refuses it — so nobody can register, and
+  // the only clue is a create failure in the log.
+  if (/localhost|127\.0\.0\.1/.test(baseUrl()) && process.env.NODE_ENV === 'production') {
+    console.log('[frea backend] WARNING: PUBLIC_BASE_URL is still a localhost URL.');
+    console.log('               University sign-in returns students to it, so no');
+    console.log('               student can register until it is your real domain.');
   }
   if (!stripeConfigured()) {
     console.log('[frea backend] Stripe not configured — paid playbooks will be refused at checkout.');

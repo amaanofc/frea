@@ -23,7 +23,7 @@
     "test:stars": "node test/stars.e2e.mjs",
     "test:verifylink": "node test/verify-link.e2e.mjs",
     "test:legacy-claim": "node test/legacy-claim.e2e.mjs",
-    "test:all": "npm run test && npm run test:api && npm run test:journeys && npm run test:regressions && npm run test:pitch && npm run test:connect && npm run test:stars && npm run test:verifylink && npm run test:legacy-claim && npm run test:webhooks",
+    "test:all": "npm run test && npm run test:api && npm run test:journeys && npm run test:regressions && npm run test:pitch && npm run test:connect && npm run test:stars && npm run test:verifylink && npm run test:legacy-claim && npm run test:webhooks && npm run test:studid",
     "stripe": "tools/stripe/stripe.exe",
     "stripe:login": "tools/stripe/stripe.exe login",
     "stripe:listen": "tools/stripe/stripe.exe listen --forward-to localhost:3001/api/stripe/webhook",
@@ -34,7 +34,8 @@
     "railway": "npx --yes @railway/cli",
     "deploy": "npx --yes @railway/cli up",
     "logs": "npx --yes @railway/cli logs",
-    "test:webhooks": "node test/webhooks.e2e.mjs"
+    "test:webhooks": "node test/webhooks.e2e.mjs",
+    "test:studid": "node test/studid.e2e.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",

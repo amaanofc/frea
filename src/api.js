@@ -510,6 +510,12 @@ export function verifyWithUniversity() {
     function onMessage(event) {
       // Origin stops another page posting a forged session in; the source tag
       // stops us reacting to unrelated traffic on our own origin.
+      //
+      // This is strict on purpose, and it is why the server sends the student
+      // back to the origin they left from rather than to PUBLIC_BASE_URL. Both
+      // joinfrea.com and www.joinfrea.com serve the app; when the popup came
+      // back on the other one, this line dropped the result in silence and the
+      // whole flow looked like a button that did nothing.
       if (event.origin !== window.location.origin) return;
       if (!event.data || event.data.source !== 'frea-studid-auth') return;
 

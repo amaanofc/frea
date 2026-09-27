@@ -90,7 +90,11 @@ Notes that bite:
 - **`PORT` is set by Railway.** Don't add it — the server already reads it.
 - **`PUBLIC_BASE_URL` must be your real domain.** Every emailed link, Stripe
   redirect and sitemap URL derives from it. Get this wrong and verification
-  emails point at localhost.
+  emails point at localhost. It is also the URL university sign-in returns
+  students to, so a localhost value there means nobody can register at all —
+  Studid will not send a student back to a host only the container can reach.
+  The server says so at boot when `NODE_ENV=production`; the only other clue is
+  `[studid] create failed` in the log.
 - **`STRIPE_WEBHOOK_SECRET` is not the one from `stripe listen`.** That secret
   is local-only — and it is a different shape, so you can tell them apart: the
   CLI secret is `whsec_` + 64 hex characters, a Dashboard secret is about half
@@ -122,6 +126,15 @@ For each domain Railway shows two records under **Show DNS records**:
 **Read the TXT Name column literally.** It is `_railway-verify`, *not* `@`.
 Putting the apex verification on `@` looks plausible, resolves fine, and never
 verifies — that mistake cost an afternoon.
+
+**Both domains being live is why university sign-in cannot just use
+`PUBLIC_BASE_URL` to come back to.** The popup hands its result to the page that
+opened it, and the browser drops that hand-off across origins without a word, so
+a student who arrived on `www` and was returned to the apex completed their
+university login and saw nothing happen. The server now returns them to the
+origin they left from, accepting either domain and nothing else — so if you add a
+third hostname that serves the app, either redirect it to the canonical one or
+teach `studidReturnBase` in `server/index.js` about it.
 
 ### DNS must be on Cloudflare, not Namecheap
 
