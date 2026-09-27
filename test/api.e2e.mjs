@@ -136,6 +136,24 @@ let bookingId = null, cancelToken = null;
   ok('meeting URL is a real joinable room', /^https:\/\/meet\.jit\.si\//.test(booked.json.data.meetingUrl), booked.json.data.meetingUrl);
   ok('calendar links returned', Boolean(booked.json.data.calendarLinks?.google));
 
+  /**
+   * The shape my space reads, pinned.
+   *
+   * Sessions come back nested under `sessions`; `products` sits at the top
+   * level. The client read both flat, so a student's chats were always empty
+   * and they were told they had none while the booking sat in the database —
+   * and every test passed, because the only assertion here read `products`,
+   * which is the half that happens to be flat.
+   */
+  const space = await call('GET', '/my-space', { token: studentToken });
+  ok('my space nests sessions and keeps products at the top level',
+    space.json.data?.sessions && Array.isArray(space.json.data.sessions.upcoming)
+      && Array.isArray(space.json.data.products),
+    JSON.stringify(Object.keys(space.json.data || {})));
+  ok('and the booking just made is in it',
+    space.json.data.sessions.upcoming.some(b => b.id === bookingId),
+    JSON.stringify(space.json.data.sessions.upcoming.map(b => b.id)).slice(0, 160));
+
   // THE headline bug: the slot must now disappear from availability.
   const after = await call('GET', '/mentors/1/slots?year=2026&month=10');
   const stillThere = after.json.data.allOpenSlots.some(s => s.date === open.date && s.time === open.time);
