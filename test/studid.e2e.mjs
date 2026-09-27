@@ -204,6 +204,15 @@ group('THE RETURN URL SURVIVES STUDID APPENDING TO IT');
     /The University of Manchester/.test(html), html.slice(0, 400));
   ok('and posts to its own origin, so www vs apex cannot drop it',
     /postMessage\([^)]*window\.location\.origin\)/.test(html));
+  // The opener link does not survive every institution's IdP: a hop that sets
+  // Cross-Origin-Opener-Policy severs it, window.opener is null by the time the
+  // student lands here, and the message above is never sent. localStorage is
+  // shared by same-origin documents however the windows are related, so it is
+  // the channel the app actually reads.
+  ok('and leaves the result where a severed opener cannot take it',
+    /localStorage\.setItem\('frea:studid:result'/.test(html), html.slice(0, 400));
+  ok('stamped from the browser clock the app compares it against',
+    /at:\s*Date\.now\(\)/.test(html), html.slice(0, 400));
 
   // The rest of registration, from the ticket the bridge page carried.
   const ticket = JSON.parse(html.match(/var payload = (\{.*\});/)[1]).ticket;

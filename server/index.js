@@ -517,6 +517,18 @@ app.post('/api/auth/send-verification',
  * origin the student started from — `studidReturnBase` keeps it that way — so
  * its own origin is the right one, and the opener still checks it strictly.
  *
+ * The result is written to localStorage BEFORE it is posted, and that write is
+ * the channel that actually carries it. `window.opener` does not survive this
+ * flow reliably: the popup leaves our origin for Studid and then for the
+ * university's own IdP, and any hop that answers with
+ * `Cross-Origin-Opener-Policy: same-origin` moves the popup into a new
+ * browsing context group. The opener link is then severed for good — by the
+ * time the student lands back here `window.opener` is null, so the message
+ * below is never sent, and the app is left exactly where it was. We do not
+ * control those headers and cannot audit every institution in the federation.
+ * localStorage is shared by every same-origin document regardless of how the
+ * windows are related, so it survives what the opener link does not.
+ *
  * Always 200, including for a failure. This is a page, not an API response, and
  * its whole job is to run one line of script; an error status invites a proxy to
  * swap the body for its own error page, which would take the explanation with
@@ -530,6 +542,9 @@ function studidPopupReply(res, payload) {
 <p>${payload.ok ? 'Verified — you can close this window.' : 'Sign-in did not complete. You can close this window.'}</p>
 <script>
   var payload = ${JSON.stringify(payload).replace(/</g, '\\u003c')};
+  // Stamped from this browser's clock, because that is the clock the app
+  // compares it against when deciding whether a result is stale.
+  try { localStorage.setItem('frea:studid:result', JSON.stringify({ at: Date.now(), payload: payload })); } catch (e) {}
   try { if (window.opener) window.opener.postMessage({ source: 'frea-studid-auth', ...payload }, window.location.origin); } catch (e) {}
   window.close();
 </script>
@@ -2159,31 +2174,22 @@ setInterval(sweepOrphanedUploads, 6 * 60 * 60 * 1000).unref();
 
 const databaseExistedAtBoot = fs.existsSync(DB_FILE);
 
-app.listen(PORT, async () => {
-  console.log(`[frea backend] http://localhost:${PORT}`);
-  console.log(`[frea backend] public base URL: ${baseUrl()}`);
-  console.log(`[frea backend] data directory: ${DATA_DIR}`);
-  if (!process.env.DATA_DIR && process.env.NODE_ENV === 'production') {
-    console.log('[frea backend] WARNING: DATA_DIR is not set. On a hosted platform');
-    console.log('               this writes into the app directory, which a deploy');
-    console.log('               replaces — every booking and upload would be lost.');
-  }
-  // University sign-in cannot work at all with the default base URL on a
-  // deployed box: the redirect we hand Studid points at a machine only the
-  // container can reach, and Studid refuses it — so nobody can register, and
-  // the only clue is a create failure in the log.
-  if (/localhost|127\.0\.0\.1/.test(baseUrl()) && process.env.NODE_ENV === 'production') {
-    console.log('[frea backend] WARNING: PUBLIC_BASE_URL is still a localhost URL.');
-    console.log('               University sign-in returns students to it, so no');
-    console.log('               student can register until it is your real domain.');
-  }
-  if (!stripeConfigured()) {
-    console.log('[frea backend] Stripe not configured — paid playbooks will be refused at checkout.');
-  }
-  if (!process.env.ADMIN_EMAILS) {
-    console.log('[frea backend] ADMIN_EMAILS not set — the admin dashboard is closed to everyone.');
-  }
-
+/**
+ * Nothing is served until the database has settled.
+ *
+ * `loadDb()` rewrites the whole file on a fresh volume and on a schema
+ * migration, and seeding rewrites it again — and the store is read-modify-write
+ * over that single file. Listening first meant `/api/health` answered, and real
+ * requests were served, while those writes were still in flight: a row written
+ * by an early request was read, then silently erased by the seed or migration
+ * write landing on top of it.
+ *
+ * It showed up as a university sign-in whose state had "expired" seconds after
+ * it was issued, and only when the box was busy enough for the boot writes to
+ * finish late — which is to say it looked like a flaky test and was in fact the
+ * first few seconds after every deploy.
+ */
+async function boot() {
   // Touch the database so it exists, then fill in demo content if this is the
   // very first boot on a fresh volume.
   loadDb();
@@ -2192,12 +2198,40 @@ app.listen(PORT, async () => {
   // the first request observe the same canonical schema.
   loadDb();
 
-  // After seeding, so the first snapshot is of a database worth restoring.
-  startBackupSchedule();
+  app.listen(PORT, () => {
+    console.log(`[frea backend] http://localhost:${PORT}`);
+    console.log(`[frea backend] public base URL: ${baseUrl()}`);
+    console.log(`[frea backend] data directory: ${DATA_DIR}`);
+    if (!process.env.DATA_DIR && process.env.NODE_ENV === 'production') {
+      console.log('[frea backend] WARNING: DATA_DIR is not set. On a hosted platform');
+      console.log('               this writes into the app directory, which a deploy');
+      console.log('               replaces — every booking and upload would be lost.');
+    }
+    // University sign-in cannot work at all with the default base URL on a
+    // deployed box: the redirect we hand Studid points at a machine only the
+    // container can reach, and Studid refuses it — so nobody can register, and
+    // the only clue is a create failure in the log.
+    if (/localhost|127\.0\.0\.1/.test(baseUrl()) && process.env.NODE_ENV === 'production') {
+      console.log('[frea backend] WARNING: PUBLIC_BASE_URL is still a localhost URL.');
+      console.log('               University sign-in returns students to it, so no');
+      console.log('               student can register until it is your real domain.');
+    }
+    if (!stripeConfigured()) {
+      console.log('[frea backend] Stripe not configured — paid playbooks will be refused at checkout.');
+    }
+    if (!process.env.ADMIN_EMAILS) {
+      console.log('[frea backend] ADMIN_EMAILS not set — the admin dashboard is closed to everyone.');
+    }
 
-  // One connection, so an unreachable mail server shows up in the logs and on
-  // /api/health at boot rather than as a hung sign-up.
-  probeSmtp();
-});
+    // After seeding, so the first snapshot is of a database worth restoring.
+    startBackupSchedule();
+
+    // One connection, so an unreachable mail server shows up in the logs and on
+    // /api/health at boot rather than as a hung sign-up.
+    probeSmtp();
+  });
+}
+
+boot();
 
 export default app;

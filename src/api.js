@@ -481,8 +481,45 @@ export async function starMentor(mentorId) {
  * Popup rather than redirect: this is called from inside the booking modal,
  * and a redirect would discard the slot they had picked.
  */
+const STUDID_RESULT_KEY = 'frea:studid:result';
+
+/**
+ * A result is only ours if it belongs to the attempt we are running.
+ *
+ * Old enough and it is debris from an abandoned attempt — signing somebody in
+ * on it would be signing them in as whoever walked away.
+ */
+const STUDID_RESULT_TTL_MS = 10 * 60 * 1000;
+
+/** Takes the pending result, if there is one. Single use. */
+function takeStudidResult() {
+  let raw = null;
+  try { raw = localStorage.getItem(STUDID_RESULT_KEY); } catch (_) { return null; }
+  if (!raw) return null;
+  try { localStorage.removeItem(STUDID_RESULT_KEY); } catch (_) { /* private mode */ }
+
+  let stored;
+  try { stored = JSON.parse(raw); } catch (_) { return null; }
+  if (!stored || !stored.payload) return null;
+  if (!stored.at || Date.now() - stored.at > STUDID_RESULT_TTL_MS) return null;
+  return stored.payload;
+}
+
+/**
+ * How long a student gets to finish at their university before we give up.
+ *
+ * Generous on purpose: this covers finding their institution in a list,
+ * their own login page, and an MFA push they may have to reach for a phone
+ * to approve.
+ */
+const STUDID_TIMEOUT_MS = 6 * 60 * 1000;
+
 export function verifyWithUniversity() {
   return new Promise((resolve, reject) => {
+    // Debris from an attempt that was abandoned earlier would otherwise resolve
+    // this one instantly, with an outcome that is not this student's.
+    try { localStorage.removeItem(STUDID_RESULT_KEY); } catch (_) { /* private mode */ }
+
     const w = 560, h = 700;
     const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
     const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
@@ -499,50 +536,82 @@ export function verifyWithUniversity() {
 
     let settled = false;
     let poll;
+    let timer;
     const finish = (fn, arg) => {
       if (settled) return;
       settled = true;
       window.removeEventListener('message', onMessage);
+      window.removeEventListener('storage', onStorage);
       clearInterval(poll);
+      clearTimeout(timer);
       fn(arg);
+    };
+
+    const deliver = (data) => {
+      if (!data.ok) {
+        finish(reject, new Error(data.error || 'University sign-in failed.'));
+        return;
+      }
+
+      if (!data.needsEmail) {
+        setSession({
+          email: data.email,
+          sessionToken: data.sessionToken,
+          isMentor: data.isMentor,
+          isAdmin: data.isAdmin,
+          universityVerified: Boolean(data.universityVerified),
+          institution: data.institution || null,
+          mentorId: null, name: null, university: null
+        });
+      }
+      finish(resolve, data);
     };
 
     function onMessage(event) {
       // Origin stops another page posting a forged session in; the source tag
       // stops us reacting to unrelated traffic on our own origin.
-      //
-      // This is strict on purpose, and it is why the server sends the student
-      // back to the origin they left from rather than to PUBLIC_BASE_URL. Both
-      // joinfrea.com and www.joinfrea.com serve the app; when the popup came
-      // back on the other one, this line dropped the result in silence and the
-      // whole flow looked like a button that did nothing.
       if (event.origin !== window.location.origin) return;
       if (!event.data || event.data.source !== 'frea-studid-auth') return;
+      deliver(event.data);
+    }
 
-      if (!event.data.ok) {
-        finish(reject, new Error(event.data.error || 'University sign-in failed.'));
-        return;
-      }
-
-      if (!event.data.needsEmail) {
-        setSession({
-          email: event.data.email,
-          sessionToken: event.data.sessionToken,
-          isMentor: event.data.isMentor,
-          isAdmin: event.data.isAdmin,
-          universityVerified: Boolean(event.data.universityVerified),
-          institution: event.data.institution || null,
-          mentorId: null, name: null, university: null
-        });
-      }
-      finish(resolve, event.data);
+    function onStorage(event) {
+      if (event.key !== STUDID_RESULT_KEY || !event.newValue) return;
+      const payload = takeStudidResult();
+      if (payload) deliver(payload);
     }
 
     window.addEventListener('message', onMessage);
+    window.addEventListener('storage', onStorage);
 
     poll = setInterval(() => {
-      if (popup.closed) finish(reject, new Error('Sign-in window was closed before it finished.'));
-    }, 500);
+      const payload = takeStudidResult();
+      if (payload) deliver(payload);
+    }, 400);
+
+    /**
+     * `popup.closed` is deliberately not treated as a cancel here.
+     *
+     * It reads `true` for a window that is still open in front of the student.
+     * The popup leaves our origin for Studid and then for their university's
+     * IdP, and any hop answering with `Cross-Origin-Opener-Policy: same-origin`
+     * puts it in a new browsing context group — our handle to it is severed and
+     * reports itself closed from that moment on. Rejecting on that signal
+     * settled this promise while the student was still typing their password,
+     * tore down the listeners, and dropped the real result when it arrived.
+     * Since the failure was reported as an ordinary cancel it was shown as
+     * nothing at all: a completed university login that left the page exactly
+     * as it was.
+     *
+     * So the window is no longer asked whether it is open. The result arrives
+     * through localStorage, which does not depend on the windows being related,
+     * and the only way out without one is this timeout — which says so.
+     */
+    timer = setTimeout(() => {
+      finish(reject, new Error(
+        'We did not hear back from your university sign-in. If you finished in the other window, please try again.'
+      ));
+    }, STUDID_TIMEOUT_MS);
   });
 }
 

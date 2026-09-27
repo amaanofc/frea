@@ -70,9 +70,41 @@ merging, so a `?state=` of ours came back as `state=abc?verificationId=123` and
 matched no row. Every student who finished their university login was told the
 attempt had expired.
 
-`npm run test:studid` covers all three. It starts its own server against a stub
-gateway (`STUDID_API_BASE`), because the real one is a free service run by one
-person and cannot mint a test student.
+**The result comes back through `localStorage`, not through the opener.** The
+bridge page writes `frea:studid:result` and *then* posts the message; the app
+reads the key. `window.opener` does not survive this flow: the popup visits
+Studid and then the institution's own IdP, and any hop answering with
+`Cross-Origin-Opener-Policy: same-origin` moves it into a new browsing context
+group and severs the link for good. We do not control those headers and cannot
+audit every institution in the federation. localStorage is shared by same-origin
+documents however the windows are related. The entry is single-use and carries
+a timestamp, so debris from an abandoned attempt cannot sign the next person in.
+
+**`popup.closed` is never a cancel signal.** A severed handle reports itself
+closed while the window is still open in front of the student. Rejecting on it
+settled the attempt mid-login, removed the listeners, and dropped the real
+result when it arrived — and because that reads as an ordinary cancel it was
+shown as nothing at all. A completed university login that left the page exactly
+as it was is this bug, not a student changing their mind.
+
+`npm run test:studid` covers all of these. It starts its own server against a
+stub gateway (`STUDID_API_BASE`), because the real one is a free service run by
+one person and cannot mint a test student. What a stub cannot reproduce is the
+browsing-context swap, so the two rules above are the ones to re-check by hand
+against a real institution.
+
+## Gating an action
+
+**An action on a public page gates in place, with `requireVerifiedSession`.**
+It renders the same flow into `#modal-content` and runs `onVerified` where the
+student already is. `requireAuth` is only for a route that is private in its own
+right — my space, the mentor portal, admin — where the whole page is the thing
+being protected.
+
+Booking used to call `requireAuth` and route to `/sign-in`, which took the
+mentor, the calendar and the slot off the screen and needed a payload carried
+through sign-in to put them back. A mentor profile is public; only the booking
+is gated.
 
 ## Writing new UI
 

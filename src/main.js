@@ -2683,23 +2683,40 @@ function renderAuthFlow({ host, actionName = 'continue', email: startEmail = '',
  * `onVerified` runs once a session exists — after the contact address for a
  * first-time student, immediately for a returning one.
  */
+/**
+ * Which attempt is the live one.
+ *
+ * The trigger stays clickable while a student is at their university, so they
+ * can start again if the window got lost. An attempt they have abandoned must
+ * not then report its own timeout over the top of the one they are watching.
+ */
+let studidAttempt = 0;
+
 async function startUniversityVerification({ trigger, errorElId, onVerified, renderEmailStep }) {
+  const attempt = ++studidAttempt;
+  const superseded = () => attempt !== studidAttempt;
+
   const errorEl = errorElId ? document.getElementById(errorElId) : null;
   if (errorEl) errorEl.style.display = 'none';
 
-  const original = trigger ? trigger.innerHTML : null;
+  // Read once and kept on the element: by the second attempt the button is
+  // showing the waiting label, and restoring that would leave it stuck.
+  if (trigger && !trigger.dataset.label) trigger.dataset.label = trigger.innerHTML;
+  const original = trigger ? trigger.dataset.label : null;
   if (trigger) {
-    trigger.disabled = true;
-    trigger.innerHTML = '<span>opening your university sign-in…</span>';
+    // Deliberately still clickable. The window can be lost in ways we cannot
+    // detect from here, and a disabled button would leave the student with
+    // nothing to press for six minutes.
+    trigger.innerHTML = '<span>waiting for your university… (click to start again)</span>';
   }
 
+  const restore = () => {
+    if (trigger) trigger.innerHTML = original;
+  };
+
   const fail = (message) => {
-    if (trigger) {
-      trigger.disabled = false;
-      trigger.innerHTML = original;
-    }
-    // Closing the window is an ordinary cancel, not worth shouting about.
-    if (/closed before it finished/i.test(message)) return;
+    if (superseded()) return;
+    restore();
     trackEvent('studid_verify_failed', { reason: message });
     if (errorEl) {
       errorEl.style.display = 'block';
@@ -2718,6 +2735,8 @@ async function startUniversityVerification({ trigger, errorElId, onVerified, ren
     return fail(err.message);
   }
 
+  if (superseded()) return;
+  restore();
   trackEvent('studid_verify_success', { institution: result.institution || null, returning: !result.needsEmail });
 
   if (result.needsEmail) {
@@ -4639,45 +4658,26 @@ function openBookingModal(mentorId) {
     }
   }
 
-  // The one gate, called the one way. Carry the selected slot through sign-in
-  // so a student does not have to find it again on a calendar that may have
-  // changed while the identity provider was open.
-  if (!requireAuth({
-    intent: `book a chat with ${mentor.name}`,
-    next: `/mentor/${mentor.id}`,
-    resume: {
-      mentorId: mentor.id,
-      selectedDay,
-      selectedSlot,
-      selectedDate: calendarState.selectedDate,
-      selectedDisplayDate: calendarState.selectedDisplayDate || selectedDay
+  /**
+   * The gate opens where the booking does, not on another page.
+   *
+   * Every other student-only action — starring a mentor, claiming a resource,
+   * applying to mentor — gates in this modal. Booking was the exception: it
+   * routed to /sign-in, which took the mentor, the calendar and the slot the
+   * student had just chosen off the screen, and needed a payload carried
+   * through sign-in to put them back afterwards. The route gate exists for
+   * pages that are private in their own right; a mentor profile is public and
+   * this is an action gate, so it belongs in the same place the booking does.
+   */
+  requireVerifiedSession({
+    actionName: `book a chat with ${mentor.name}`,
+    onVerified: () => {
+      trackEvent('booking_modal_opened', { mentorId: mentor.id, mentorName: mentor.name, day: selectedDay, slot: selectedSlot });
+      renderBookingModal({ mentor, selectedDay, selectedSlot });
+      openOverlay();
     }
-  })) return;
-
-  trackEvent('booking_modal_opened', { mentorId: mentor.id, mentorName: mentor.name, day: selectedDay, slot: selectedSlot });
-
-  renderBookingModal({ mentor, selectedDay, selectedSlot });
-
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  });
 }
-
-function resumeBookingModal(resume) {
-  const mentor = MENTORS.find(m => m.id === parseInt(resume.mentorId));
-  if (!mentor) return;
-  calendarState.mentorId = mentor.id;
-  calendarState.selectedDate = resume.selectedDate || null;
-  calendarState.selectedDisplayDate = resume.selectedDisplayDate || resume.selectedDay;
-  calendarState.selectedSlot = resume.selectedSlot;
-  window.__selectedDay = calendarState.selectedDisplayDate;
-  window.__selectedSlot = calendarState.selectedSlot;
-  renderBookingModal({ mentor, selectedDay: resume.selectedDay, selectedSlot: resume.selectedSlot });
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-window.resumeBookingModal = resumeBookingModal;
 
 /**
  * Paints the gate for the slot already chosen.
@@ -7049,25 +7049,21 @@ function canRenderPrivateRoute(path) {
  * at an arbitrary route by handing someone a link.
  */
 let pendingAuth = { intent: 'continue', next: '/' };
-let pendingAuthResume = null;
 
 /**
- * The only entry to authentication, from anywhere.
+ * The gate for a route that is private in its own right.
  *
- * The router calls it for a private route; a button on a listed page calls it
- * before acting. Same page, same flow, same copy — so there is nothing to
- * keep in sync, which is exactly what went wrong last time.
+ * The router calls it before rendering one, and so does a link that would
+ * land on one. An action on a public page does not belong here — it uses
+ * `requireVerifiedSession`, which gates in place rather than taking the page
+ * the student is looking at away from them.
  *
  * Returns true when the caller may proceed. When it returns false it has
  * already navigated, so the caller should simply stop.
  */
-function requireAuth({ intent = 'continue', next = null, resume = null } = {}) {
-  if (hasUniversityIdentity()) {
-    pendingAuthResume = null;
-    return true;
-  }
+function requireAuth({ intent = 'continue', next = null } = {}) {
+  if (hasUniversityIdentity()) return true;
   pendingAuth = { intent, next: next || getRoute() };
-  pendingAuthResume = resume;
   navigateTo('/sign-in');
   return false;
 }
@@ -7111,8 +7107,6 @@ function renderSignInPage() {
 
 function initSignInPage() {
   const next = pendingAuth.next;
-  const resume = pendingAuthResume;
-  pendingAuthResume = null;
   renderAuthFlow({
     host: document.getElementById('sign-in-flow'),
     actionName: pendingAuth.intent,
@@ -7121,7 +7115,6 @@ function initSignInPage() {
       // still cannot see.
       const target = (!next || next === '/sign-in') ? '/' : next;
       navigateTo(target);
-      if (resume) setTimeout(() => resumeBookingModal(resume), 120);
     }
   });
 }
