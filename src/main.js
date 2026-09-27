@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 
 import './style.css';
-import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS, getAllDocs, getDocById, getUniversityFromEmail, EMAIL_UNI_MAP } from './data.js';
+import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS, getAllDocs, getDocById } from './data.js';
 import { getMentorAvatar } from './avatars.js';
 import { initAnalytics, trackEvent } from './analytics.js';
 import {
@@ -1055,6 +1055,59 @@ function renderProfile(mentorId) {
 function renderBecomeMentor() {
   trackEvent('become_mentor_page_view');
 
+  const session = getSession();
+  const liveMentorId = hasUniversityIdentity() && session?.isMentor ? session.mentorId : null;
+
+  /**
+   * A mentor who already has a profile is not applying again.
+   *
+   * This page used to hand them the blank application form, which is not
+   * harmless: /api/mentors/apply updates the profile that already belongs to
+   * their pseudonym, and `achievements` is replaced wholesale — so retyping one
+   * of the three and submitting quietly dropped the other two. Editing lives in
+   * the dashboard, so send them there.
+   */
+  if (liveMentorId) {
+    return `
+      <div class="page-view page-container become-mentor">
+        <a class="profile-back" onclick="window.navigateTo('/')">← back to home</a>
+
+        <div class="become-mentor__header">
+          <h1 class="become-mentor__title">you're already a senior mentor</h1>
+          <p class="become-mentor__lead">
+            Your profile is live in the directory, and students can book you right now.
+          </p>
+        </div>
+
+        <div class="mentor-form-card" style="text-align: center;">
+          <div class="become-mentor__verification-banner" style="justify-content: center; margin-bottom: 18px;">
+            <span>${ICONS.tickCircle}</span>
+            <span>${escapeHtml(session.name || 'Your profile')} · verified through
+              <strong>${escapeHtml(session.university || verifiedInstitution() || 'your university')}</strong></span>
+          </div>
+          <p style="font-size: 14.5px; opacity: 0.8; line-height: 1.55; max-width: 460px; margin: 0 auto 20px auto;">
+            To change your tip, achievements, availability or anything else, use your
+            mentor dashboard — it edits the profile you already have instead of
+            starting a new one.
+          </p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button type="button" class="pill-btn pill-btn--dark pill-btn--animated" id="bm-existing-dashboard">
+              <span class="pill-btn__inner">
+                <span>open my mentor dashboard</span>
+                <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
+              </span>
+            </button>
+            <button type="button" class="pill-btn pill-btn--subtle" id="bm-existing-profile">
+              <span>view my live profile</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      ${renderFooter()}
+    `;
+  }
+
   return `
     <div class="page-view page-container become-mentor">
       <a class="profile-back" onclick="window.navigateTo('/')">← back to home</a>
@@ -1167,11 +1220,26 @@ function renderBecomeMentor() {
             <input type="hidden" id="bm-photo-data" value="">
           </div>
 
+          <!--
+            Not asked for again, because it was already proven.
+
+            This used to be an empty box. The student had just nominated a
+            personal address and typed a code out of it to get this far, and the
+            form asked for it a second time — then discarded the answer, because
+            /api/mentors/apply takes the address from the session and never from
+            the body. Typing a different one did not change where mail went; it
+            only sent them back through verification for a value that was going
+            to be ignored.
+          -->
           <div class="mentor-form-group">
-            <label class="mentor-form-label">Where should we send booking notices? <span>*</span></label>
-            <input type="email" class="mentor-form-input" id="bm-email" required placeholder="e.g. you@gmail.com" oninput="window.handleMentorEmailInput(this.value)">
-            <div id="bm-uni-detect-badge" style="display: none;"></div>
-            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Your university already verified you, so this can be any inbox you actually read — a personal one usually arrives faster than a university address.</span>
+            <label class="mentor-form-label">Where booking notices go</label>
+            <input type="email" class="mentor-form-input" id="bm-email" required readonly
+                   value="${escapeHtml(verifiedEmail() || '')}"
+                   style="background: #f7f5f2; cursor: default;">
+            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">
+              ${ICONS.tickCircle} The inbox you confirmed by code. Bookings, cancellations and
+              payout notices all arrive here.
+            </span>
           </div>
 
           <!-- LinkedIn Verification URL -->
@@ -2196,41 +2264,7 @@ function setLivePostitColor(color) {
 }
 window.setLivePostitColor = setLivePostitColor;
 
-// ─── University Email Auto-Match & Live Achievements ───
-
-function handleMentorEmailInput(email) {
-  const badgeEl = document.getElementById('bm-uni-detect-badge');
-  const uniSelect = document.getElementById('bm-uni');
-  if (!email) {
-    if (badgeEl) badgeEl.style.display = 'none';
-    return;
-  }
-  const detectedUni = getUniversityFromEmail(email);
-  if (detectedUni && uniSelect) {
-    let matched = false;
-    for (let i = 0; i < uniSelect.options.length; i++) {
-      if (uniSelect.options[i].value === detectedUni) {
-        uniSelect.selectedIndex = i;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
-      const opt = document.createElement('option');
-      opt.value = detectedUni;
-      opt.innerText = detectedUni;
-      opt.selected = true;
-      uniSelect.appendChild(opt);
-    }
-    if (badgeEl) {
-      badgeEl.style.display = 'block';
-      badgeEl.innerHTML = `<span class="uni-detect-badge">${ICONS.tickCircle} Auto-matched campus: <strong>${detectedUni}</strong></span>`;
-    }
-  } else {
-    if (badgeEl) badgeEl.style.display = 'none';
-  }
-}
-window.handleMentorEmailInput = handleMentorEmailInput;
+// ─── Live Achievements ───
 
 function updateLiveAchievements() {
   const a1 = document.getElementById('bm-achieve-1')?.value.trim();
@@ -3156,39 +3190,59 @@ async function handleBecomeMentorSubmit(e) {
 
       // Show confirmation modal with instant live activation (No interview)
       const modal = document.getElementById('modal-content');
+      const profileEmail = registeredMentor.email || email;
       modal.innerHTML = `
-        <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+        <button class="modal__close" id="bm-done-close" aria-label="Close">${ICONS.close}</button>
         <div class="modal--confirmation" style="padding: 32px 24px; text-align: center;">
           <div class="modal__celebration" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            ${ICONS.tickCircle} <span style="font-weight: 800; font-size: 22px;">You're Live on frea!</span>
+            ${ICONS.tickCircle} <span style="font-weight: 800; font-size: 22px;">You're live on frea!</span>
           </div>
           <h2 class="modal__title" style="font-size: 28px; margin: 8px 0 10px 0;">profile activated!</h2>
           <p class="modal__body" style="font-size: 15px; max-width: 480px; margin: 0 auto 16px auto; line-height: 1.5;">
-            Welcome aboard, <strong>${name}</strong>! Your official <strong>${email}</strong> status is verified.
+            Welcome aboard, <strong>${escapeHtml(name)}</strong> — <strong>${escapeHtml(verifiedInstitution() || uni)}</strong>
+            vouched for you, so there is nothing left to wait for.
           </p>
 
           <div style="background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 12px; padding: 16px 20px; margin: 18px 0; text-align: left;">
             <div style="font-weight: 700; color: #15803d; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 14.5px;">
-              <span>${ICONS.lightning}</span> Instant Onboarding: Zero Interviews Required
+              <span style="display: inline-flex;">${ICONS.flash}</span> Live now — no interview, no queue
             </div>
             <div style="font-size: 13.5px; color: #166534; line-height: 1.55;">
-              Your senior mentor profile, achievements, and calendar are <strong>live right now</strong> in the directory. Younger UK students can book 20-min 1-on-1 mentoring sessions directly on your calendar, and your study resources are listed in the catalogue!
+              Your profile, achievements and calendar are in the directory already. Students can book
+              20-minute chats on your calendar, and booking notices go to
+              <strong>${escapeHtml(profileEmail)}</strong>.
             </div>
           </div>
 
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 24px;">
-            <button class="pill-btn pill-btn--animated" onclick="closeModal(); window.navigateTo('/mentor-dashboard')">
+            <button class="pill-btn pill-btn--animated" id="bm-done-dashboard">
               <span class="pill-btn__inner">
                 <span>open my mentor dashboard</span>
                 <span class="pill-btn__arrow">→</span>
               </span>
             </button>
-            <button class="pill-btn pill-btn--subtle" onclick="closeModal(); window.navigateTo('/mentor/' + registeredMentor.id)">
+            <button class="pill-btn pill-btn--subtle" id="bm-done-profile">
               <span>view my live profile</span>
             </button>
           </div>
         </div>
       `;
+
+      /**
+       * Wired here rather than with onclick=, because the id is a local.
+       *
+       * "view my live profile" carried `onclick="… '/mentor/' + registeredMentor.id"`,
+       * and an inline handler runs in global scope where that local does not
+       * exist. Every click threw a ReferenceError — after `closeModal()` in the
+       * same attribute had already run, so the modal shut and the mentor was
+       * dropped back on the empty form with no profile and no explanation.
+       */
+      modal.querySelector('#bm-done-close')
+        .addEventListener('click', () => closeModal());
+      modal.querySelector('#bm-done-dashboard')
+        .addEventListener('click', () => { closeModal(); navigateTo('/mentor-dashboard'); });
+      modal.querySelector('#bm-done-profile')
+        .addEventListener('click', () => { closeModal(); navigateTo(`/mentor/${registeredMentor.id}`); });
 
       const overlay = document.getElementById('modal-overlay');
       overlay.classList.add('open');
@@ -3208,10 +3262,16 @@ async function handleBecomeMentorSubmit(e) {
   // success state.
   clearFormError('bm-form-error');
 
-  // The mentor profile is created against the verified session email, so
-  // verification has to happen first.
+  /**
+   * No `email` here, deliberately.
+   *
+   * requireVerifiedSession treats a mismatch between the address passed in and
+   * the session's as "this action belongs to somebody else" and reopens
+   * verification. The profile is created against the session address whatever
+   * the form says, so passing the field's value could only ever send a mentor
+   * to verify an address that was not going to be used.
+   */
   requireVerifiedSession({
-    email,
     universityName: uni,
     actionName: 'publish your mentor profile',
     onVerified: proceedSubmission
@@ -7183,10 +7243,26 @@ function renderPage() {
     app.innerHTML = renderBecomeMentor();
     // The pitch renders for everyone; the form only exists once a university
     // has vouched for them, so its controls are wired only then.
+    // Already a mentor: the page is a signpost to the dashboard, not a form.
+    const existingDash = document.getElementById('bm-existing-dashboard');
+    if (existingDash) {
+      existingDash.addEventListener('click', () => navigateTo('/mentor-dashboard'));
+      document.getElementById('bm-existing-profile')
+        ?.addEventListener('click', () => navigateTo(`/mentor/${getSession()?.mentorId}`));
+    }
+
     const gateBtn = document.getElementById('mentor-gate-start');
     if (gateBtn) {
+      // In place, like every other action on a public page: this page is the
+      // pitch, and routing away to /sign-in replaced it with a generic gate
+      // that told the applicant nothing about what they were part-way through.
       gateBtn.addEventListener('click', () => {
-        requireAuth({ intent: 'become a mentor', next: '/become-a-mentor' });
+        requireVerifiedSession({
+          actionName: 'build your mentor profile',
+          // The gate borrowed this modal, so it has to hand it back; the page
+          // then repaints into the form, with the university already filled in.
+          onVerified: () => { closeModal(); renderPage(); }
+        });
       });
     } else {
       renderSignupLinks();

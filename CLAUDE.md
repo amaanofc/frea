@@ -106,6 +106,24 @@ mentor, the calendar and the slot off the screen and needed a payload carried
 through sign-in to put them back. A mentor profile is public; only the booking
 is gated.
 
+**Don't pass an `email` to `requireVerifiedSession` unless the action really is
+for that specific address.** A mismatch with the session's address is read as
+"this belongs to someone else" and reopens verification.
+
+## The contact address
+
+`/api/mentors/apply` takes the address from `req.session.email` and ignores
+anything in the body, because `mentor.email` is an identity key — the legacy
+sign-in path matches on it via `findMentorByEmail` — so a form-supplied address
+would hand a profile to whoever verifies with it next.
+
+So a form must never ask for it again. The mentor signup form did, validated
+it, then threw the answer away; it now shows the verified address read-only.
+There is no way to change a contact address anywhere in the product yet. Adding
+one means proving the new inbox with a code the way registration does — not a
+free-text field, and not a separate "just for notifications" address either,
+since booking notices carry a student's name and meeting link.
+
 ## Writing new UI
 
 **No `onclick=` (or any inline `on*=`) in new markup.** Use `addEventListener`,
