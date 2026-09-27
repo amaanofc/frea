@@ -237,6 +237,68 @@ console.log('\n─── 5. Mentor auth & the schedule round-trip ───');
   });
   ok('12-hour input normalises to the same rota', JSON.stringify(twelve.json.data.weeklySchedule) === JSON.stringify({ '1': ['17:00', '18:30'], '4': ['09:00'] }), JSON.stringify(twelve.json.data.weeklySchedule));
 
+  // ── Dated exceptions: the weekly pattern with a day taken out of it.
+  const away = mondays[0].date;
+  const withAway = await call('PUT', `/mentors/${mentorId}/schedule`, {
+    token: mentorToken,
+    body: {
+      weeklySchedule: { '1': ['17:00', '18:30'], '4': ['09:00'] },
+      scheduleOverrides: { [away]: [] }
+    }
+  });
+  ok('a dated exception saves', withAway.json.success === true, JSON.stringify(withAway.json).slice(0, 160));
+  ok('and an empty one survives the round trip — it is the day off',
+    Array.isArray(withAway.json.data.scheduleOverrides?.[away])
+      && withAway.json.data.scheduleOverrides[away].length === 0,
+    JSON.stringify(withAway.json.data.scheduleOverrides));
+
+  const awaySlots = await call('GET', `/mentors/${mentorId}/slots?year=2026&month=11`);
+  const awayDay = awaySlots.json.data.days.find(d => d.date === away);
+  ok('that date offers nothing, though the pattern says otherwise',
+    awayDay.hasSlots === false && awayDay.rotaCount === 0, JSON.stringify(awayDay?.slots));
+  ok('and it is flagged as away rather than simply empty',
+    awayDay.away === true && awayDay.customised === true, JSON.stringify(awayDay));
+  ok('the other Mondays are untouched',
+    awaySlots.json.data.days.filter(d => d.dayOfWeek === 'Mon' && d.hasSlots).length > 0);
+
+  // The check that matters: the booking path, not just the rendered month.
+  const bookAway = await call('POST', '/bookings', {
+    token: studentToken,
+    body: { mentorId, date: away, time: '17:00' }
+  });
+  ok('a slot on a day marked away cannot be booked',
+    bookAway.status >= 400, `status ${bookAway.status} ${JSON.stringify(bookAway.json).slice(0, 120)}`);
+
+  // An exception can also open a day the weekly pattern leaves closed.
+  const sunday = awaySlots.json.data.days.find(d => d.dayOfWeek === 'Sun' && !d.isPast);
+  const opened = await call('PUT', `/mentors/${mentorId}/schedule`, {
+    token: mentorToken,
+    body: {
+      weeklySchedule: { '1': ['17:00', '18:30'], '4': ['09:00'] },
+      scheduleOverrides: { [sunday.date]: ['11:00'] }
+    }
+  });
+  ok('an exception opens a day the pattern closes', opened.json.success === true);
+  const openedSlots = await call('GET', `/mentors/${mentorId}/slots?year=2026&month=11`);
+  const openedDay = openedSlots.json.data.days.find(d => d.date === sunday.date);
+  ok('and that date offers exactly what it was given',
+    JSON.stringify(openedDay.slots) === JSON.stringify(['11:00']), JSON.stringify(openedDay.slots));
+
+  // Saving a schedule without mentioning exceptions must not erase them — the
+  // profile form does exactly that.
+  const untouched = await call('PUT', `/mentors/${mentorId}/schedule`, {
+    token: mentorToken, body: { weeklySchedule: { '1': ['17:00', '18:30'], '4': ['09:00'] } }
+  });
+  ok('a save that omits exceptions leaves them alone',
+    JSON.stringify(untouched.json.data.scheduleOverrides) === JSON.stringify({ [sunday.date]: ['11:00'] }),
+    JSON.stringify(untouched.json.data.scheduleOverrides));
+
+  // Clear them explicitly before the rest of the suite books anything.
+  await call('PUT', `/mentors/${mentorId}/schedule`, {
+    token: mentorToken,
+    body: { weeklySchedule: { '1': ['17:00', '18:30'], '4': ['09:00'] }, scheduleOverrides: {} }
+  });
+
   // Unlimited links.
   const links = await call('PUT', `/mentors/${mentorId}`, {
     token: mentorToken,

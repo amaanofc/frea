@@ -133,6 +133,25 @@ Do not turn this into a plain text field, and do not add a separate
 student's name and meeting link, and an unproven address is also a way to squat
 one its real owner has not registered with yet.
 
+## Availability
+
+A mentor has a **weekly pattern** (`weeklySchedule`, keyed by weekday) and
+**dated exceptions** (`scheduleOverrides`, keyed by `YYYY-MM-DD`). An exception
+replaces that date outright.
+
+**An empty exception is a value, not an absence.** `{"2026-10-02": []}` is a day
+off and must outrank the pattern. `normaliseSchedule` drops empty weekdays —
+correct for the pattern, catastrophic for an exception — so overrides go
+through `normaliseOverrides`, and the two never share a code path.
+
+**`slotsForDate` is the only answer to "is this bookable".** The month a student
+sees and the check in `createBooking` both call it. A second implementation
+would be a second answer, and the one that matters is on the booking path.
+
+**A save that omits `scheduleOverrides` leaves them alone.** The profile form
+saves a schedule without knowing exceptions exist; sending `{}` would clear
+every day off a mentor had set.
+
 ## Writing new UI
 
 **No `onclick=` (or any inline `on*=`) in new markup.** Use `addEventListener`,

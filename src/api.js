@@ -218,8 +218,15 @@ export async function updateMentorProfile(id, profileData) {
   return json.data;
 }
 
-export async function updateMentorSchedule(id, weeklySchedule) {
-  const json = await request(`/mentors/${id}/schedule`, { method: 'PUT', body: { weeklySchedule } });
+/**
+ * `scheduleOverrides` is omitted rather than sent empty when the caller has
+ * none to send: the server leaves exceptions alone when the field is absent,
+ * and an empty object would wipe every day off the mentor had set.
+ */
+export async function updateMentorSchedule(id, weeklySchedule, scheduleOverrides) {
+  const body = { weeklySchedule };
+  if (scheduleOverrides) body.scheduleOverrides = scheduleOverrides;
+  const json = await request(`/mentors/${id}/schedule`, { method: 'PUT', body });
   return json.data;
 }
 

@@ -4,7 +4,9 @@ import {
   isSlotPast,
   toDisplayTimeRange,
   todayCanonical,
-  BOOKING_LEAD_MINUTES
+  BOOKING_LEAD_MINUTES,
+  slotsForDate,
+  normaliseOverrides
 } from '../server/time.js';
 
 // ─── A slot earlier today is not bookable ───────────────
@@ -75,4 +77,67 @@ test('the meridiem is repeated only when the slot crosses it', () => {
 
 test('an unparseable time renders as itself rather than throwing', () => {
   assert.equal(toDisplayTimeRange('nonsense'), 'nonsense');
+});
+
+// ─── Dated exceptions to the weekly pattern ─────────────
+//
+// A weekly rota alone cannot say "not this Thursday, I have exams". Overrides
+// are keyed by date and win over the pattern — including when empty, which is
+// how a day off is written down. The empty case is the whole point, and it is
+// the one a normaliser is most likely to throw away.
+
+test('a date with no override follows the weekly pattern', () => {
+  const weekly = { '4': ['14:00', '15:00'] };          // Thursdays
+  assert.deepEqual(slotsForDate(weekly, {}, '2026-10-01'), ['14:00', '15:00']);
+});
+
+test('an override replaces the pattern for that date only', () => {
+  const weekly = { '4': ['14:00', '15:00'] };
+  const overrides = { '2026-10-01': ['09:30'] };
+  assert.deepEqual(slotsForDate(weekly, overrides, '2026-10-01'), ['09:30']);
+  // The Thursday after is untouched.
+  assert.deepEqual(slotsForDate(weekly, overrides, '2026-10-08'), ['14:00', '15:00']);
+});
+
+test('an empty override is a day off, not an absent one', () => {
+  const weekly = { '4': ['14:00'] };
+  assert.deepEqual(slotsForDate(weekly, { '2026-10-01': [] }, '2026-10-01'), []);
+});
+
+test('an override can open a day the pattern leaves closed', () => {
+  assert.deepEqual(slotsForDate({}, { '2026-10-03': ['11:00'] }, '2026-10-03'), ['11:00']);
+});
+
+test('normalising overrides keeps empty days and canonicalises times', () => {
+  const out = normaliseOverrides({
+    '2026-10-01': ['2:30 PM', '9am', '2:30 PM'],
+    '2026-10-02': []
+  });
+  assert.deepEqual(out['2026-10-01'], ['09:00', '14:30']);
+  assert.ok(Object.prototype.hasOwnProperty.call(out, '2026-10-02'));
+  assert.deepEqual(out['2026-10-02'], []);
+});
+
+test('normalising overrides drops dates that are not dates', () => {
+  const out = normaliseOverrides({ 'someday': ['10:00'], '2026-13-45': ['10:00'] });
+  assert.deepEqual(Object.keys(out), []);
+});
+
+test('overrides before keepFrom are pruned', () => {
+  const out = normaliseOverrides(
+    { '2020-01-01': [], '2099-01-01': ['10:00'] },
+    { keepFrom: '2026-01-01' }
+  );
+  assert.deepEqual(Object.keys(out), ['2099-01-01']);
+});
+
+test('a weekly pattern is never consulted when the date is overridden', () => {
+  // The bug this guards: reading the pattern first and treating an empty
+  // override as "nothing set, fall through" would reopen every day off.
+  const weekly = { '0': ['10:00'], '1': ['10:00'], '2': ['10:00'], '3': ['10:00'],
+                   '4': ['10:00'], '5': ['10:00'], '6': ['10:00'] };
+  const away = { '2026-10-05': [], '2026-10-06': [], '2026-10-07': [] };
+  for (const date of Object.keys(away)) {
+    assert.deepEqual(slotsForDate(weekly, away, date), [], `${date} should be closed`);
+  }
 });

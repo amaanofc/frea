@@ -159,6 +159,55 @@ export function normaliseSchedule(schedule) {
   return out;
 }
 
+/**
+ * Exceptions to the weekly pattern, keyed by date.
+ *
+ * An empty array is a value here, not an absence: `{"2026-10-02": []}` means
+ * "away that day", which has to outrank a weekly pattern that says otherwise.
+ * `normaliseSchedule` above drops empty days for the opposite reason — nothing
+ * is lost by forgetting a weekday with no slots — so the two cannot share an
+ * implementation, and an override must never be run through that one.
+ *
+ * `keepFrom` prunes dates that have gone by. Overrides accumulate for as long
+ * as a mentor is active, and yesterday's day off is not worth carrying.
+ */
+export function normaliseOverrides(overrides, { keepFrom = null } = {}) {
+  const out = {};
+  if (!overrides || typeof overrides !== 'object') return out;
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!Array.isArray(value)) continue;
+
+    const date = toCanonicalDate(String(key).trim());
+    if (!date || !isCanonicalDate(date)) continue;
+    if (keepFrom && date < keepFrom) continue;
+
+    out[date] = value
+      .map(toCanonicalTime)
+      .filter(Boolean)
+      .filter((t, i, arr) => arr.indexOf(t) === i)
+      .sort();
+  }
+  return out;
+}
+
+/**
+ * What a mentor actually offers on one date.
+ *
+ * The override wins when there is one — including when it is empty, which is
+ * how a day off is expressed. Everything that decides whether a slot exists
+ * goes through here: the month the student sees, and the check when they try
+ * to book. Two implementations of this rule would be two answers to "is this
+ * bookable", and the one that matters is the one on the booking path.
+ */
+export function slotsForDate(weeklySchedule, overrides, canonicalDate) {
+  const byDate = overrides || {};
+  if (Object.prototype.hasOwnProperty.call(byDate, canonicalDate)) {
+    return byDate[canonicalDate] || [];
+  }
+  return (weeklySchedule || {})[String(dayIndexFor(canonicalDate))] || [];
+}
+
 /** Slot start/end as real UTC Date objects. UK local time in, UTC out. */
 export function slotToUtcRange(canonicalDate, canonicalTime, durationMinutes = SESSION_MINUTES) {
   const [y, m, d] = canonicalDate.split('-').map(Number);

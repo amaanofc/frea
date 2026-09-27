@@ -9,6 +9,9 @@ import { fileURLToPath } from 'url';
 import { DB_FILE, SEED_FILE, UPLOADS_DIR } from './paths.js';
 import {
   normaliseSchedule,
+  normaliseOverrides,
+  slotsForDate,
+  todayCanonical,
   toCanonicalDate,
   toCanonicalTime,
   toDisplayDate,
@@ -322,6 +325,9 @@ function migrate(db) {
 
   db.mentors.forEach(m => {
     m.weeklySchedule = normaliseSchedule(m.weeklySchedule);
+    // Dates that have gone by are dropped on every load, so a mentor who has
+    // been here a year is not carrying last November's days off.
+    m.scheduleOverrides = normaliseOverrides(m.scheduleOverrides, { keepFrom: todayCanonical() });
     delete m.schedule;
 
     if (!Array.isArray(m.links)) {
@@ -624,6 +630,7 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
   // Total days in target month
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
   const schedule = mentor.weeklySchedule || {};
+  const overrides = mentor.scheduleOverrides || {};
 
   const daysResult = [];
   const allOpenSlots = [];
@@ -635,8 +642,10 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
     const dayOfWeekStr = DAY_SHORT[dayOfWeekIdx];
     const displayDate = `${dayOfWeekStr} ${day} ${monthName}`;
 
-    // Recurring availability for this weekday, canonical "HH:MM"
-    const recurringSlots = schedule[String(dayOfWeekIdx)] || [];
+    // What this mentor offers on this date: the day's own override if they set
+    // one, otherwise the weekly pattern. Canonical "HH:MM".
+    const recurringSlots = slotsForDate(schedule, overrides, dateStr);
+    const customised = Object.prototype.hasOwnProperty.call(overrides, dateStr);
 
     // A day in the past is never bookable, however the mentor's rota reads.
     const past = isPastDate(dateStr);
@@ -684,7 +693,11 @@ export function getMonthlySlotsForMentor(mentorId, year, month) {
       slotCount: availableSlots.length,
       // Distinguishes "the mentor works today but it has all gone" from "the
       // mentor does not work today at all".
-      rotaCount: slotDetail.length
+      rotaCount: slotDetail.length,
+      // This date departs from the weekly pattern. The mentor's own editor
+      // shows it differently; the student's calendar has no use for it.
+      customised,
+      away: customised && slotDetail.length === 0
     });
 
     slotDetail.filter(s => s.bookable).forEach(s => {
@@ -757,9 +770,10 @@ export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, d
     throw new Error('Mentor not found');
   }
 
-  // The requested slot must actually exist in this mentor's weekly rota.
-  const dayIdx = String(dayIndexFor(canonicalDate));
-  const rota = (mentor.weeklySchedule || {})[dayIdx] || [];
+  // The requested slot must exist on that date — which is the weekly pattern
+  // unless the mentor overrode the day, and a day they marked away offers
+  // nothing however the pattern reads.
+  const rota = slotsForDate(mentor.weeklySchedule, mentor.scheduleOverrides, canonicalDate);
   if (!rota.includes(canonicalTime)) {
     throw new Error(
       `${mentor.name} is not available at ${toDisplayTime(canonicalTime)} on ${toDisplayDate(canonicalDate)}. Please choose an open slot.`
@@ -1414,7 +1428,7 @@ function labelForUrl(url) {
   }
 }
 
-export function updateMentorSchedule(id, weeklySchedule) {
+export function updateMentorSchedule(id, weeklySchedule, scheduleOverrides) {
   const db = loadDb();
   const mentor = db.mentors.find(m => m.id === parseInt(id));
   if (!mentor) {
@@ -1430,6 +1444,22 @@ export function updateMentorSchedule(id, weeklySchedule) {
   }
 
   mentor.weeklySchedule = normalised;
+
+  // Absent means "leave them alone": the profile form saves a schedule without
+  // ever touching exceptions, and it must not wipe a mentor's days off.
+  if (scheduleOverrides !== undefined) {
+    const overrides = normaliseOverrides(scheduleOverrides, { keepFrom: todayCanonical() });
+    const dates = Object.keys(overrides);
+    if (dates.length > 400) {
+      throw new Error('That is more than 400 dated exceptions — please clear some first.');
+    }
+    const overrideSlots = Object.values(overrides).reduce((n, arr) => n + arr.length, 0);
+    if (overrideSlots > 2000) {
+      throw new Error('That is more slots than we can hold on dated exceptions — please trim them.');
+    }
+    mentor.scheduleOverrides = overrides;
+  }
+
   saveDb(db);
   return mentor;
 }

@@ -1153,6 +1153,10 @@ function safeMentorPayload(mentor, { includeEmail = false } = {}) {
     interviewRequired: Boolean(source.interviewRequired),
     status: source.status || 'active',
     weeklySchedule: source.weeklySchedule || {},
+    // Dated exceptions to that pattern. No more revealing than the calendar
+    // already is — a day off shows there as a day with nothing on it — and the
+    // mentor's own editor needs them back to edit them.
+    scheduleOverrides: source.scheduleOverrides || {},
     color: source.color || 'blue',
     docs: Array.isArray(source.docs) ? source.docs.map(listedResource) : []
   };
@@ -1212,7 +1216,7 @@ app.put('/api/mentors/:id', requireSelfOrAdmin, (req, res) => {
 });
 
 app.put('/api/mentors/:id/schedule', requireSelfOrAdmin, (req, res) => {
-  const updated = updateMentorSchedule(req.params.id, req.body.weeklySchedule);
+  const updated = updateMentorSchedule(req.params.id, req.body.weeklySchedule, req.body.scheduleOverrides);
   res.json({ success: true, data: publicMentor(getMentorViewById(updated.id, { includeArchived: true })) });
 });
 

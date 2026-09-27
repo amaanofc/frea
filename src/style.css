@@ -5567,3 +5567,185 @@ body {
   font-size: 14.5px;
   color: #15803d;
 }
+
+/* ─── Mentor availability editor ───────────────────────── */
+
+.sched-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.sched-section-title {
+  font-size: 16px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--color-charcoal);
+  margin: 0;
+}
+
+.sched-section-note {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+
+.sched-add-row {
+  background: var(--color-dew-drop);
+  border: 1.5px dashed rgba(23, 23, 23, 0.25);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sched-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 14px;
+  font-size: 16px;
+  font-family: var(--font-display);
+}
+
+/* The student's calendar sits in a narrow column, where square cells look
+   right. This grid spans a portal card, so squares would be enormous — it
+   keeps a fixed row height and a sane maximum width instead. */
+#portal-date-editor .frea-cal__grid,
+#portal-date-editor .frea-cal__weekdays {
+  max-width: 560px;
+  gap: 6px;
+}
+
+/* Layout only. Colour belongs to the state modifier below, or to the
+   frea-cal__cell--* the grid already shares with the student's calendar —
+   setting a background here painted over the orange "available" cell and left
+   its white number invisible. */
+.sched-cell {
+  aspect-ratio: auto;
+  min-height: 0;
+  height: 52px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sched-cell__count {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.sched-cell--custom {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.sched-cell--away {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.sched-cell--away .sched-cell__count {
+  color: #b91c1c;
+  opacity: 0.9;
+}
+
+.sched-cell--selected {
+  outline: 2.5px solid var(--color-charcoal);
+  outline-offset: 1px;
+}
+
+.sched-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.sched-key {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1.5px solid;
+}
+
+.sched-key--pattern { background: #ff6f1e; border-color: #ff6f1e; }
+.sched-key--custom  { background: #eff6ff; border-color: #3b82f6; }
+.sched-key--away    { background: #fef2f2; border-color: #fca5a5; }
+
+.sched-day-panel {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.sched-day-panel--empty {
+  border-style: dashed;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.sched-day-panel__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sched-day-panel__state {
+  font-size: 12.5px;
+  opacity: 0.65;
+}
+
+.sched-day-panel__slots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.sched-day-panel__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sched-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(23, 23, 23, 0.2);
+  background: var(--color-dew-drop);
+}
+
+@media (max-width: 640px) {
+  .sched-cell { min-height: 40px; }
+  .sched-cell__count { font-size: 9.5px; }
+  .sched-range-row,
+  .sched-add-row { gap: 8px; }
+}

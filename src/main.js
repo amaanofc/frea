@@ -67,6 +67,8 @@ import { applyRouteMeta } from './seo.js';
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
 
 function toCanonicalTime(input) {
   if (input == null) return null;
@@ -5737,6 +5739,8 @@ window.getMentorSession = getMentorSession;
 async function mentorSignOut() {
   await signOut();
   mentorScheduleData = null;
+  mentorOverrideData = null;
+  scheduleSelectedDate = null;
   mentorLinksData = null;
   setUnlockedDocIds([]);
   showToast('Signed out.');
@@ -5798,6 +5802,11 @@ function initNoMentorProfile() {
 
 let activeDashboardTab = 'schedule';
 let mentorScheduleData = null;
+// Dated exceptions being edited, the month the grid is showing, and the date
+// whose panel is open. Unsaved until "save availability".
+let mentorOverrideData = null;
+let scheduleMonth = null;
+let scheduleSelectedDate = null;
 
 function renderMentorDashboard() {
   const session = getMentorSession();
@@ -5879,16 +5888,17 @@ function renderMentorDashboard() {
         </div>
 
         <div class="portal-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
             <div>
               <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">
-                Weekly Call Availability
+                Call availability
               </h2>
-              <p style="font-size: 13.5px; opacity: 0.7; margin: 0;">
-                Add or remove 20-minute time slots for each day of the week. Freshers can only book during these designated times.
+              <p style="font-size: 13.5px; opacity: 0.7; margin: 0; max-width: 520px;">
+                Set the pattern you keep most weeks, then change individual dates when
+                a week is not like the others. Students can only book times you list.
               </p>
             </div>
-            <button type="button" id="save-schedule-btn" class="pill-btn pill-btn--animated" onclick="window.saveMentorSchedule()">
+            <button type="button" id="save-schedule-btn" class="pill-btn pill-btn--animated">
               <span class="pill-btn__inner">
                 <span>save availability</span>
                 <span class="pill-btn__arrow">✓</span>
@@ -5896,16 +5906,19 @@ function renderMentorDashboard() {
             </button>
           </div>
 
-          <div id="portal-schedule-summary" style="font-size: 13px; font-weight: 700; color: var(--color-marker-orange); margin-bottom: 14px;"></div>
+          <div id="portal-schedule-summary" style="font-size: 13px; font-weight: 700; color: var(--color-marker-orange); margin-bottom: 18px;"></div>
 
-          <!-- Schedule Days Table -->
-          <div id="portal-schedule-days-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
-            <!-- Populated dynamically by initMentorDashboard -->
+          <div class="sched-section-head">
+            <h3 class="sched-section-title">Your weekly pattern</h3>
+            <span class="sched-section-note">Repeats every week</span>
           </div>
 
-          <!-- Add Slot Inline Row -->
-          <div style="background: var(--color-dew-drop); border: 1.5px dashed rgba(23, 23, 23, 0.25); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <span style="font-weight: 700; font-size: 13.5px; color: var(--color-charcoal);">${ICONS.plus} Add slot:</span>
+          <div id="portal-schedule-days-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <!-- Populated by renderScheduleEditor -->
+          </div>
+
+          <div class="sched-add-row">
+            <span style="font-weight: 700; font-size: 13.5px; color: var(--color-charcoal);">${ICONS.plus} Add to the pattern:</span>
             <select id="new-slot-day" class="mentor-form-select" style="width: 140px; padding: 8px 12px;">
               <option value="1">Monday</option>
               <option value="2">Tuesday</option>
@@ -5915,10 +5928,23 @@ function renderMentorDashboard() {
               <option value="6">Saturday</option>
               <option value="0">Sunday</option>
             </select>
-            <input type="text" id="new-slot-time" class="mentor-form-input" style="width: 120px; padding: 8px 12px; text-align: center;" placeholder="e.g. 17:30" value="18:00" onkeydown="if(event.key==='Enter'){event.preventDefault();window.addScheduleSlot();}">
-            <button type="button" class="pill-btn pill-btn--subtle" onclick="window.addScheduleSlot()">
-              + Add Slot
+            <input type="text" id="new-slot-time" class="mentor-form-input" style="width: 120px; padding: 8px 12px; text-align: center;" placeholder="e.g. 17:30" value="18:00">
+            <button type="button" class="pill-btn pill-btn--subtle" data-sched="weekly-add">
+              + Add slot
             </button>
+          </div>
+
+          <div class="sched-section-head" style="margin-top: 30px;">
+            <h3 class="sched-section-title">Specific dates</h3>
+            <span class="sched-section-note">Overrides the pattern, that date only</span>
+          </div>
+          <p style="font-size: 13.5px; opacity: 0.7; margin: 0 0 14px; max-width: 560px;">
+            Away for reading week, or free on a one-off Sunday? Change the date itself —
+            the rest of your pattern stays exactly as it is.
+          </p>
+
+          <div id="portal-date-editor">
+            <!-- Populated by renderDateEditor -->
           </div>
         </div>
       </div>
@@ -6282,7 +6308,15 @@ function initMentorDashboard() {
       ? normaliseScheduleClient(existing)
       : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   }
+  if (!mentorOverrideData) {
+    mentorOverrideData = { ...(currentMentor.scheduleOverrides || {}) };
+  }
+  if (!scheduleMonth) {
+    const now = new Date();
+    scheduleMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
+  }
 
+  wireScheduleEditor();
   renderScheduleEditor();
   renderMentorLinksEditor(currentMentor);
 
@@ -6302,6 +6336,42 @@ function initMentorDashboard() {
 }
 window.initMentorDashboard = initMentorDashboard;
 
+// ─── The availability editor ────────────────────────────
+//
+// Two things, and the relationship between them is the whole design. The
+// weekly pattern is what a mentor keeps most weeks. An override is one date
+// that departs from it, and it replaces that date outright — including when it
+// is empty, which is how "I am away" is written down.
+//
+// `slotsForDate` in server/time.js decides the same question on the booking
+// path. These two have to agree, so the rule is stated the same way in both:
+// the date's own entry if it has one, otherwise the weekday's.
+
+/** 0 = Sunday, read in UTC so a local timezone cannot shift the day. */
+function dayIndexForIso(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+function isoFor(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function isoToday() {
+  const now = new Date();
+  return isoFor(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+function hasOverrideFor(iso) {
+  return Object.prototype.hasOwnProperty.call(mentorOverrideData || {}, iso);
+}
+
+/** What this mentor offers on a date, as the editor currently has it. */
+function effectiveSlotsFor(iso) {
+  if (hasOverrideFor(iso)) return mentorOverrideData[iso] || [];
+  return (mentorScheduleData || {})[String(dayIndexForIso(iso))] || [];
+}
+
 function renderScheduleEditor() {
   const container = document.getElementById('portal-schedule-days-container');
   if (!container) return;
@@ -6318,7 +6388,8 @@ function renderScheduleEditor() {
           ${slots.length > 0 ? slots.map(slot => `
             <span class="schedule-slot-chip">
               <span>${toDisplayTime(slot)}</span>
-              <button type="button" class="schedule-slot-remove" onclick="window.removeScheduleSlot('${idx}', '${slot}')" title="Remove slot">×</button>
+              <button type="button" class="schedule-slot-remove" data-sched="weekly-remove"
+                      data-day="${idx}" data-time="${escapeHtml(slot)}" title="Remove slot">×</button>
             </span>
           `).join('') : '<span style="font-size: 12.5px; opacity: 0.5;">No availability set</span>'}
         </div>
@@ -6326,13 +6397,155 @@ function renderScheduleEditor() {
     `;
   }).join('');
 
-  const total = Object.values(mentorScheduleData).reduce((n, a) => n + a.length, 0);
+  renderDateEditor();
+  renderScheduleSummary();
+}
+
+function renderScheduleSummary() {
   const summary = document.getElementById('portal-schedule-summary');
-  if (summary) {
-    summary.textContent = total === 0
-      ? 'You have no slots set — students cannot book you yet.'
-      : `${total} slot${total === 1 ? '' : 's'} a week, repeating. Students can book any of them.`;
+  if (!summary) return;
+
+  const total = Object.values(mentorScheduleData).reduce((n, a) => n + a.length, 0);
+  const dates = Object.keys(mentorOverrideData || {});
+  const away = dates.filter(d => (mentorOverrideData[d] || []).length === 0).length;
+  const changed = dates.length - away;
+
+  const parts = [];
+  parts.push(total === 0
+    ? 'No weekly pattern set'
+    : `${total} slot${total === 1 ? '' : 's'} a week, repeating`);
+  if (away) parts.push(`${away} day${away === 1 ? '' : 's'} off`);
+  if (changed) parts.push(`${changed} date${changed === 1 ? '' : 's'} changed`);
+
+  const nothing = total === 0 && !changed;
+  summary.textContent = nothing
+    ? 'You have no slots set — students cannot book you yet.'
+    : `${parts.join(' · ')}.`;
+}
+
+/**
+ * The month grid, and the panel for whichever date is selected.
+ *
+ * A month is the right unit here because that is how somebody thinks about
+ * being away: they picture a week in a month, not a list of dates.
+ */
+function renderDateEditor() {
+  const host = document.getElementById('portal-date-editor');
+  if (!host) return;
+
+  const { year, month } = scheduleMonth;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstOffset = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+  const today = isoToday();
+
+  let cells = '';
+  for (let i = 0; i < firstOffset; i++) cells += '<div class="frea-cal__cell frea-cal__cell--empty"></div>';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = isoFor(year, month, day);
+    const slots = effectiveSlotsFor(iso);
+    const past = iso < today;
+    const overridden = hasOverrideFor(iso);
+    const away = overridden && slots.length === 0;
+
+    let cls = 'frea-cal__cell sched-cell';
+    if (past) cls += ' frea-cal__cell--past';
+    else if (away) cls += ' sched-cell--away';
+    else if (overridden) cls += ' sched-cell--custom';
+    else if (slots.length) cls += ' frea-cal__cell--available';
+    else cls += ' frea-cal__cell--unavailable';
+    if (iso === today) cls += ' frea-cal__cell--today';
+    if (iso === scheduleSelectedDate) cls += ' sched-cell--selected';
+
+    const title = past
+      ? `${toDisplayDate(iso)} (past)`
+      : away
+        ? `${toDisplayDate(iso)} — away`
+        : `${slots.length} slot${slots.length === 1 ? '' : 's'} on ${toDisplayDate(iso)}${overridden ? ' (changed)' : ''}`;
+
+    cells += `
+      <div class="${cls}" ${past ? '' : `data-sched="pick-date" data-date="${iso}" role="button" tabindex="0"`}
+           title="${escapeHtml(title)}">
+        <span class="frea-cal__num">${day}</span>
+        ${past ? '' : `<span class="sched-cell__count">${away ? 'away' : (slots.length || '')}</span>`}
+      </div>
+    `;
   }
+
+  host.innerHTML = `
+    <div class="sched-month-nav">
+      <button type="button" class="pill-btn pill-btn--small" data-sched="prev-month" aria-label="Previous month">‹</button>
+      <strong>${MONTH_NAMES[month - 1]} ${year}</strong>
+      <button type="button" class="pill-btn pill-btn--small" data-sched="next-month" aria-label="Next month">›</button>
+    </div>
+
+    <div class="frea-cal__weekdays">
+      ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="frea-cal__weekday">${d}</div>`).join('')}
+    </div>
+    <div class="frea-cal__grid">${cells}</div>
+
+    <div class="sched-legend">
+      <span><i class="sched-key sched-key--pattern"></i> follows your pattern</span>
+      <span><i class="sched-key sched-key--custom"></i> changed</span>
+      <span><i class="sched-key sched-key--away"></i> away</span>
+    </div>
+
+    ${renderSelectedDatePanel()}
+
+    <div class="sched-range-row">
+      <span style="font-weight: 700; font-size: 13.5px;">Away between</span>
+      <input type="date" id="away-from" class="mentor-form-input" style="width: 160px; padding: 8px 10px;" min="${today}">
+      <span style="font-size: 13.5px;">and</span>
+      <input type="date" id="away-to" class="mentor-form-input" style="width: 160px; padding: 8px 10px;" min="${today}">
+      <button type="button" class="pill-btn pill-btn--subtle" data-sched="range-away">mark away</button>
+    </div>
+  `;
+}
+
+function renderSelectedDatePanel() {
+  if (!scheduleSelectedDate) {
+    return `<div class="sched-day-panel sched-day-panel--empty">
+      Pick a date above to change just that day.
+    </div>`;
+  }
+
+  const iso = scheduleSelectedDate;
+  const slots = effectiveSlotsFor(iso);
+  const overridden = hasOverrideFor(iso);
+  const patternSlots = (mentorScheduleData || {})[String(dayIndexForIso(iso))] || [];
+
+  const state = overridden
+    ? (slots.length === 0 ? 'You are away this day.' : 'Changed for this date only.')
+    : (patternSlots.length
+      ? 'Following your weekly pattern.'
+      : 'Your pattern has nothing on this day.');
+
+  return `
+    <div class="sched-day-panel">
+      <div class="sched-day-panel__head">
+        <strong>${escapeHtml(toLongDisplayDate(iso))}</strong>
+        <span class="sched-day-panel__state">${escapeHtml(state)}</span>
+      </div>
+
+      <div class="sched-day-panel__slots">
+        ${slots.length ? slots.map(t => `
+          <span class="schedule-slot-chip">
+            <span>${toDisplayTime(t)}</span>
+            <button type="button" class="schedule-slot-remove" data-sched="date-remove"
+                    data-time="${escapeHtml(t)}" title="Remove this time">×</button>
+          </span>
+        `).join('') : '<span style="font-size: 12.5px; opacity: 0.55;">Nothing on this date.</span>'}
+      </div>
+
+      <div class="sched-day-panel__actions">
+        <input type="text" id="date-slot-time" class="mentor-form-input"
+               style="width: 118px; padding: 8px 12px; text-align: center;" placeholder="e.g. 17:30">
+        <button type="button" class="pill-btn pill-btn--subtle" data-sched="date-add">+ add time</button>
+        ${slots.length ? '<button type="button" class="pill-btn pill-btn--small" data-sched="date-away">mark away</button>' : ''}
+        ${overridden ? '<button type="button" class="pill-btn pill-btn--small" data-sched="date-reset">back to pattern</button>' : ''}
+      </div>
+    </div>
+  `;
 }
 
 function removeScheduleSlot(dayIdx, slot) {
@@ -6343,7 +6556,6 @@ function removeScheduleSlot(dayIdx, slot) {
     renderScheduleEditor();
   }
 }
-window.removeScheduleSlot = removeScheduleSlot;
 
 function addScheduleSlot() {
   const dayIdx = document.getElementById('new-slot-day')?.value;
@@ -6369,7 +6581,142 @@ function addScheduleSlot() {
   renderScheduleEditor();
   showToast(`Added ${toDisplayTime(time)} on ${DAY_NAMES[parseInt(key)]}.`);
 }
-window.addScheduleSlot = addScheduleSlot;
+
+/** Starts a date off from whatever it shows now, so editing never blanks it. */
+function beginOverride(iso) {
+  if (!hasOverrideFor(iso)) mentorOverrideData[iso] = [...effectiveSlotsFor(iso)];
+  return mentorOverrideData[iso];
+}
+
+/**
+ * An override identical to the pattern is not worth keeping.
+ *
+ * Without this, opening a date and closing it again would leave a permanent
+ * exception behind that says nothing — and the month grid would mark the day
+ * "changed" when nothing about it had.
+ */
+function tidyOverride(iso) {
+  if (!hasOverrideFor(iso)) return;
+  const pattern = (mentorScheduleData || {})[String(dayIndexForIso(iso))] || [];
+  const current = mentorOverrideData[iso] || [];
+  // An empty override is a day off and always meaningful — unless the pattern
+  // is empty too, in which case it says nothing either.
+  if (current.length === pattern.length && current.every((t, i) => t === pattern[i])) {
+    delete mentorOverrideData[iso];
+  }
+}
+
+function shiftScheduleMonth(delta) {
+  let { year, month } = scheduleMonth;
+  month += delta;
+  if (month < 1) { month = 12; year -= 1; }
+  if (month > 12) { month = 1; year += 1; }
+  scheduleMonth = { year, month };
+  // The panel below the grid describes one date. Carrying a selection out of
+  // the month it belongs to leaves it captioned with a day nobody can see.
+  if (scheduleSelectedDate && !scheduleSelectedDate.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+    scheduleSelectedDate = null;
+  }
+  renderDateEditor();
+}
+
+function markRangeAway() {
+  const from = document.getElementById('away-from')?.value;
+  const to = document.getElementById('away-to')?.value;
+  if (!from || !to) return showToast('Pick both dates first.');
+  if (to < from) return showToast('The second date is before the first.');
+
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  const days = Math.round((end - start) / 86400000) + 1;
+  if (days > 180) return showToast('That is more than six months — mark it in shorter stretches.');
+
+  let count = 0;
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start.getTime() + i * 86400000);
+    const iso = isoFor(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+    mentorOverrideData[iso] = [];
+    count++;
+  }
+  renderScheduleEditor();
+  showToast(`${count} day${count === 1 ? '' : 's'} marked away — save to publish.`);
+}
+
+/**
+ * One listener for the whole editor.
+ *
+ * The grid repaints on every change, so handlers bound to its buttons would be
+ * thrown away and rebound constantly; delegation survives the repaint. It also
+ * keeps the markup free of the inline on* attributes that hold the CSP open.
+ */
+function wireScheduleEditor() {
+  const card = document.getElementById('portal-tab-schedule');
+  if (!card || card.dataset.wired) return;
+  card.dataset.wired = '1';
+
+  card.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-sched]');
+    if (!el) return;
+    const action = el.dataset.sched;
+    const iso = scheduleSelectedDate;
+
+    if (action === 'weekly-add') return addScheduleSlot();
+    if (action === 'weekly-remove') return removeScheduleSlot(el.dataset.day, el.dataset.time);
+    if (action === 'prev-month') return shiftScheduleMonth(-1);
+    if (action === 'next-month') return shiftScheduleMonth(1);
+    if (action === 'range-away') return markRangeAway();
+
+    if (action === 'pick-date') {
+      scheduleSelectedDate = el.dataset.date;
+      return renderDateEditor();
+    }
+
+    if (!iso) return;
+
+    if (action === 'date-add') {
+      const input = document.getElementById('date-slot-time');
+      const time = toCanonicalTime((input?.value || '').trim());
+      if (!time) return showToast('Enter a time like 17:30 or 5:30 PM.');
+      const list = beginOverride(iso);
+      if (list.includes(time)) return showToast(`${toDisplayTime(time)} is already on that date.`);
+      list.push(time);
+      list.sort();
+      tidyOverride(iso);
+      renderScheduleEditor();
+      return showToast(`Added ${toDisplayTime(time)} on ${toDisplayDate(iso)} — save to publish.`);
+    }
+
+    if (action === 'date-remove') {
+      const list = beginOverride(iso);
+      mentorOverrideData[iso] = list.filter(t => t !== el.dataset.time);
+      tidyOverride(iso);
+      renderScheduleEditor();
+      return;
+    }
+
+    if (action === 'date-away') {
+      mentorOverrideData[iso] = [];
+      tidyOverride(iso);
+      renderScheduleEditor();
+      return showToast(`${toDisplayDate(iso)} marked away — save to publish.`);
+    }
+
+    if (action === 'date-reset') {
+      delete mentorOverrideData[iso];
+      renderScheduleEditor();
+      return showToast(`${toDisplayDate(iso)} follows your weekly pattern again.`);
+    }
+  });
+
+  // Enter in either time field adds, rather than doing nothing.
+  card.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.id === 'new-slot-time') { e.preventDefault(); addScheduleSlot(); }
+    if (e.target.id === 'date-slot-time') { e.preventDefault(); card.querySelector('[data-sched="date-add"]')?.click(); }
+  });
+
+  document.getElementById('save-schedule-btn')?.addEventListener('click', saveMentorSchedule);
+}
 
 async function saveMentorSchedule() {
   const session = getMentorSession();
@@ -6379,12 +6726,18 @@ async function saveMentorSchedule() {
   if (btn) { btn.disabled = true; btn.innerText = 'saving...'; }
 
   try {
-    const updated = await updateMentorSchedule(session.mentorId, mentorScheduleData);
+    const updated = await updateMentorSchedule(session.mentorId, mentorScheduleData, mentorOverrideData);
 
     // Keep the in-memory mentor in step so the profile preview matches.
     const mentor = MENTORS.find(m => m.id === parseInt(session.mentorId));
-    if (mentor) mentor.weeklySchedule = updated.weeklySchedule;
+    if (mentor) {
+      mentor.weeklySchedule = updated.weeklySchedule;
+      mentor.scheduleOverrides = updated.scheduleOverrides || {};
+    }
     mentorScheduleData = normaliseScheduleClient(updated.weeklySchedule);
+    // Taken from the server's answer rather than kept locally: it prunes dates
+    // that have gone by, and the editor should show what is actually stored.
+    mentorOverrideData = { ...(updated.scheduleOverrides || {}) };
 
     renderScheduleEditor();
     showToast('Availability saved — students can book these slots now.');
@@ -6394,7 +6747,6 @@ async function saveMentorSchedule() {
     if (btn) { btn.disabled = false; btn.innerText = 'save availability'; }
   }
 }
-window.saveMentorSchedule = saveMentorSchedule;
 
 // ─── Links: mentors may add as many as they like ─────
 
