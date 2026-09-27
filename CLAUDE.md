@@ -133,6 +133,25 @@ Do not turn this into a plain text field, and do not add a separate
 student's name and meeting link, and an unproven address is also a way to squat
 one its real owner has not registered with yet.
 
+## One account home
+
+`/my-space` is the only account destination. A mentor is also a student — they
+book chats of their own — so it carries two role tabs, `activeSpaceTab`:
+`mentee` (what they booked, their freabies) and `mentor` (`renderMentorPanels`:
+availability, profile, products). Anything belonging to the person rather than
+to either role — the contact address, a legacy claim — sits outside the tabs,
+once.
+
+There used to be a separate mentor portal, and the split was its own bug: two
+"sessions" lists where neither name said whose, one contact address rendered in
+both places, and two navbar entries with nothing to tell them apart.
+`/mentor-dashboard` still resolves — bookmarks, the navbar and every "open my
+mentor dashboard" button use it — and redirects to the mentor tab.
+
+**A mentor sub-tab repaint must hold `activeSpaceTab`.** `switchMentorPortalTab`
+calls `renderPage`, so without setting it back to `mentor` a mentor editing
+their profile is dropped into their student view mid-edit.
+
 ## Availability
 
 A mentor has a **weekly pattern** (`weeklySchedule`, keyed by weekday) and

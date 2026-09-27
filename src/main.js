@@ -4520,7 +4520,6 @@ function renderFooter() {
           <a class="footer__link" href="/browse">browse seniors</a>
           <a class="footer__link" href="/resources">freabies &amp; docs</a>
           <a class="footer__link" href="/become-a-mentor">become a mentor</a>
-          <a class="footer__link" href="/mentor-dashboard" rel="nofollow">mentor portal</a>
           <a class="footer__link" href="/my-space" rel="nofollow">my space</a>
           <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
         </div>
@@ -5645,8 +5644,8 @@ function updateNavbarMentorStatus() {
       <a href="/mentor-dashboard" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor-dashboard')">
         <span class="dropdown-item-icon">📊</span>
         <div>
-          <div class="dropdown-item-title">mentor dashboard</div>
-          <div class="dropdown-item-desc">manage availability slots & products</div>
+          <div class="dropdown-item-title">my space · mentoring</div>
+          <div class="dropdown-item-desc">availability, profile & products</div>
         </div>
       </a>
       <a href="/mentor/${session.mentorId}" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor/${session.mentorId}')">
@@ -5801,6 +5800,8 @@ function initNoMentorProfile() {
 
 
 let activeDashboardTab = 'schedule';
+// Which role's half of my space is showing: 'mentee' or 'mentor'.
+let activeSpaceTab = 'mentee';
 let mentorScheduleData = null;
 // Dated exceptions being edited, the month the grid is showing, and the date
 // whose panel is open. Unsaved until "save availability".
@@ -5808,11 +5809,16 @@ let mentorOverrideData = null;
 let scheduleMonth = null;
 let scheduleSelectedDate = null;
 
-function renderMentorDashboard() {
+/**
+ * The mentor half of my space.
+ *
+ * Returns panels rather than a page: it is embedded under the "your mentoring"
+ * tab, so the standalone portal header and footer it used to carry would be a
+ * second page heading inside one that already has a heading.
+ */
+function renderMentorPanels() {
   const session = getMentorSession();
-  if (!session) {
-    return renderNoMentorProfile();
-  }
+  if (!session) return renderNoMentorProfile();
 
   const currentMentor = MENTORS.find(m => m.id === parseInt(session.mentorId)) || {
     id: session.mentorId,
@@ -5827,30 +5833,15 @@ function renderMentorDashboard() {
   return `
     <div class="mentor-portal-page">
       <div class="mentor-portal-header">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
-          <div>
-            <span class="doc-badge doc-badge--free" style="margin-bottom: 8px;">Mentor Account Portal</span>
-            <h1 style="font-size: 32px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">
-              Manage Your frea Profile & Schedule
-            </h1>
-            <p style="font-size: 14.5px; opacity: 0.75; margin: 0;">
-              Control your 1-on-1 call availability slots, edit your bio and top 3 achievements, and manage your freabies & playbooks.
-            </p>
-          </div>
-
-          <!-- Authenticated Mentor Account Header -->
-          <div style="background: #fff; border: 1.5px solid var(--color-charcoal); border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; box-shadow: 2px 2px 0 var(--color-charcoal);">
-            <div style="width: 42px; height: 42px; border-radius: 8px; overflow: hidden; background: #f3f4f6; flex-shrink: 0;">
-              ${getMentorAvatar(currentMentor.avatarId || currentMentor.id, 42)}
-            </div>
-            <div style="text-align: left;">
-              <div style="font-size: 14px; font-weight: 800; color: var(--color-charcoal);">${escapeHtml(currentMentor.name)}</div>
-              <div style="font-size: 11.5px; opacity: 0.65;">${escapeHtml(session.email)} · ${escapeHtml(currentMentor.university)}</div>
-            </div>
-            <button type="button" class="pill-btn pill-btn--subtle" style="padding: 4px 10px; font-size: 11.5px; margin-left: 6px;" onclick="window.mentorSignOut()" title="Sign out of your mentor portal">
-              Sign Out
-            </button>
-          </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px;">
+          <p style="font-size: 14px; opacity: 0.75; margin: 0; max-width: 520px;">
+            Your availability, your public profile, and the freabies and playbooks you publish.
+          </p>
+          <a class="auth-flow__link" style="font-size: 13.5px; font-weight: 700;"
+             href="/mentor/${currentMentor.id}"
+             onclick="event.preventDefault(); window.navigateTo('/mentor/${currentMentor.id}')">
+            view my live profile →
+          </a>
         </div>
 
         <!-- Portal Tabs Navigation -->
@@ -5958,26 +5949,6 @@ function renderMentorDashboard() {
           <p style="font-size: 13.5px; opacity: 0.7; margin-bottom: 20px;">
             Keep your achievements and fresher advice up-to-date.
           </p>
-
-          <!--
-            Outside the form below, deliberately. This is account-level rather
-            than profile content, and its own inputs have nothing to do with
-            saving a bio.
-          -->
-          <div style="padding: 14px 16px; margin-bottom: 22px; border: 1.5px dashed var(--color-cocoa-ink); border-radius: 12px;">
-            <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; margin-bottom: 6px;">
-              Where booking notices go
-            </div>
-            <div style="font-size: 15px; font-weight: 700;">
-              ${escapeHtml(verifiedEmail() || currentMentor.email || '')}
-              <button type="button" class="auth-flow__link" id="mp-change-email"
-                      style="font-size: 13px; font-weight: 600; margin-left: 8px;">change</button>
-            </div>
-            <div style="font-size: 12px; opacity: 0.6; margin-top: 4px;">
-              Bookings, cancellations and sign-in codes all arrive here.
-            </div>
-            <div id="mp-change-email-panel" style="display: none; margin-top: 10px; max-width: 460px;"></div>
-          </div>
 
           <form id="portal-profile-form" onsubmit="window.saveMentorProfile(event)">
             <div class="mentor-form-group">
@@ -6192,14 +6163,15 @@ function renderMentorDashboard() {
         </div>
       </div>
 
-      ${renderFooter()}
     </div>
   `;
 }
-window.renderMentorDashboard = renderMentorDashboard;
 
 function switchMentorPortalTab(tab) {
   activeDashboardTab = tab;
+  // The sub-tabs repaint the whole route, so the role tab has to be held or
+  // the mentor is dropped into their student view mid-edit.
+  activeSpaceTab = 'mentor';
   renderPage();
 }
 window.switchMentorPortalTab = switchMentorPortalTab;
@@ -6320,13 +6292,6 @@ function initMentorDashboard() {
   renderScheduleEditor();
   renderMentorLinksEditor(currentMentor);
 
-  wireContactEmailChange({
-    trigger: document.getElementById('mp-change-email'),
-    panel: document.getElementById('mp-change-email-panel'),
-    // The address is printed above the control, so repaint rather than leaving
-    // the old one on screen beside a "changed" toast.
-    onChanged: () => renderPage()
-  });
   renderPitchVideoControl('portal-pitch-container', currentMentor.pitchVideoUrl || '');
   renderMentorResourceList(currentMentor);
   loadMentorEarnings(currentMentor.id);
@@ -7399,40 +7364,74 @@ async function verifyLegacyClaimFromSpace() {
 window.requestLegacyClaimFromSpace = requestLegacyClaimFromSpace;
 window.verifyLegacyClaimFromSpace = verifyLegacyClaimFromSpace;
 
+/**
+ * One home for the whole account.
+ *
+ * A mentor is also a student — they book chats of their own — so both halves
+ * genuinely belong to them. They used to be two destinations, "my space" and a
+ * separate mentor portal, reached from two places in the navbar with nothing
+ * saying which was which: two lists of "sessions" where neither name said
+ * whose, and one contact address living in both. They are now two roles on one
+ * page, and the things that belong to the person rather than to either role —
+ * the address we write to, a legacy claim — sit outside the tabs, once.
+ */
 function renderMySpace() {
+  const mentor = mentorRoleAvailable();
+  if (!mentor && activeSpaceTab === 'mentor') activeSpaceTab = 'mentee';
+
   if (!hasUniversityIdentity()) {
     setTimeout(() => openVerificationModal({
       email: null,
       actionName: 'open your my space'
     }), 200);
-  } else {
+  } else if (activeSpaceTab === 'mentee') {
     setTimeout(loadMySpace, 30);
   }
+
+  const onMentor = mentor && activeSpaceTab === 'mentor';
 
   return `
     <div class="page-container" style="padding: 48px 20px 60px;">
       <span class="section__caption">your frea space</span>
       <h1 class="section__title" style="font-size: clamp(30px, 4vw, 44px); margin-bottom: 8px;">my space</h1>
-      <p style="font-size: 15px; opacity: 0.75; margin-bottom: 28px;">
-        Your mentoring sessions and every freabie or playbook you have obtained, ready to download again.
+      <p style="font-size: 15px; opacity: 0.75; margin-bottom: ${mentor ? '20px' : '28px'};">
+        ${mentor
+      ? 'Everything you have booked as a student, and everything you run as a mentor.'
+      : 'Your mentoring sessions and every freabie or playbook you have obtained, ready to download again.'}
       </p>
-      ${renderLegacyClaimCard()}
-      <div id="my-space-sessions">
-        ${hasUniversityIdentity()
-      ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
-      : `<div style="padding: 30px 0;">
-           <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
-           <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
-             <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
-           </button>
-         </div>`}
-      </div>
-      <div style="margin-top: 36px;">
-        <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">your freabies &amp; playbooks</h2>
-        <div id="my-space-vault-grid" class="docs-grid">
-          ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
+
+      ${mentor ? `
+        <div class="space-role-tabs" role="tablist">
+          <button type="button" class="space-role-tab ${!onMentor ? 'active' : ''}"
+                  data-space-tab="mentee" role="tab" aria-selected="${!onMentor}">
+            ${ICONS.calendar} chats you've booked
+          </button>
+          <button type="button" class="space-role-tab ${onMentor ? 'active' : ''}"
+                  data-space-tab="mentor" role="tab" aria-selected="${onMentor}">
+            ${ICONS.teacher} your mentoring
+          </button>
         </div>
-      </div>
+      ` : ''}
+
+      ${onMentor ? renderMentorPanels() : `
+        ${renderLegacyClaimCard()}
+        <div id="my-space-sessions">
+          ${hasUniversityIdentity()
+        ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
+        : `<div style="padding: 30px 0;">
+             <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
+             <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
+               <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
+             </button>
+           </div>`}
+        </div>
+        <div style="margin-top: 36px;">
+          <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0 0 12px;">your freabies &amp; playbooks</h2>
+          <div id="my-space-vault-grid" class="docs-grid">
+            ${hasUniversityIdentity() ? '<div style="opacity: 0.6; grid-column: 1 / -1; padding: 30px 0;">loading your products…</div>' : ''}
+          </div>
+        </div>
+      `}
 
       ${hasUniversityIdentity() ? `
         <div style="margin-top: 40px; padding-top: 28px; border-top: 1.5px dashed var(--color-cocoa-ink);">
@@ -7455,6 +7454,38 @@ function renderMySpace() {
   `;
 }
 window.renderMySpace = renderMySpace;
+
+/** Does this person have a mentor profile to show a mentor tab for? */
+function mentorRoleAvailable() {
+  return Boolean(hasUniversityIdentity() && getMentorSession()?.mentorId);
+}
+
+function switchSpaceTab(tab) {
+  activeSpaceTab = tab;
+  renderPage();
+}
+
+/**
+ * Wires whichever half is on screen.
+ *
+ * The mentor half is the old portal verbatim, so it keeps its own init — which
+ * also means its sub-tabs still repaint through renderPage, and that repaint
+ * has to land back on the mentor tab rather than dropping the person into
+ * their student view mid-edit.
+ */
+function initMySpace() {
+  document.querySelectorAll('[data-space-tab]').forEach(btn => {
+    btn.addEventListener('click', () => switchSpaceTab(btn.dataset.spaceTab));
+  });
+
+  wireContactEmailChange({
+    trigger: document.getElementById('ms-change-email'),
+    panel: document.getElementById('ms-change-email-panel'),
+    onChanged: () => renderPage()
+  });
+
+  if (mentorRoleAvailable() && activeSpaceTab === 'mentor') initMentorDashboard();
+}
 window.renderMySessions = renderMySpace;
 
 async function loadMySpace() {
@@ -7722,6 +7753,15 @@ function renderPage() {
     return;
   }
 
+  // The mentor portal is a tab of my space now. The route stays so bookmarks,
+  // the footer link and every "open my mentor dashboard" button still land
+  // somewhere — on the mentor half, which is what they meant.
+  if (path === '/mentor-dashboard') {
+    activeSpaceTab = 'mentor';
+    navigateTo('/my-space', { replace: true });
+    return;
+  }
+
   // The front door. A private route renders the sign-in page instead of
   // itself, so no page below has to remember to check — which is the failure
   // this replaces.
@@ -7792,13 +7832,8 @@ function renderPage() {
     }
   } else if (path === '/my-space') {
     app.innerHTML = renderMySpace();
-    wireContactEmailChange({
-      trigger: document.getElementById('ms-change-email'),
-      panel: document.getElementById('ms-change-email-panel'),
-      // The address is printed above the control, so repaint rather than
-      // leaving the old one on screen next to a "changed" toast.
-      onChanged: () => renderPage()
-    });
+    initMySpace();
+    if (document.getElementById('no-profile-apply')) initNoMentorProfile();
   } else if (path === '/checkout-complete') {
     app.innerHTML = renderCheckoutComplete(route);
   } else if (path === '/cancel') {
@@ -7806,12 +7841,6 @@ function renderPage() {
   } else if (path === '/admin') {
     app.innerHTML = renderAdminDashboard();
     initAdminDashboard();
-  } else if (path === '/mentor-dashboard') {
-    app.innerHTML = renderMentorDashboard();
-    // Signed in for certain by now — the router saw to that. The only fork
-    // left is whether they have a mentor profile at all.
-    if (document.getElementById('no-profile-apply')) initNoMentorProfile();
-    else initMentorDashboard();
   } else if (path.startsWith('/verify')) {
     app.innerHTML = renderEmailVerificationResult(route);
   } else if (path.startsWith('/mentor/')) {

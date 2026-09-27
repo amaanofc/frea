@@ -286,9 +286,12 @@ test('admin dashboard is gated behind sign-in', async () => {
   assert.doesNotMatch(text, /@[a-z.]+\.ac\.uk/i, 'no applicant emails should leak to a signed-out visitor');
 });
 
-test('mentor portal shows the sign-in screen when signed out', async () => {
+// The portal is a tab of my space now, not a page of its own. The route is
+// kept for bookmarks and old links, so signed out it has to land on the same
+// gate my space does rather than on a portal of its own.
+test('the old mentor portal route folds into my space', async () => {
   const text = await goto('#/mentor-dashboard');
-  assert.match(text, /sign in|mentor/i);
+  assert.match(text, /sign in to frea|open your my space/i);
 });
 
 test('my space is private and shows the sign-in gate when signed out', async () => {
