@@ -5,6 +5,13 @@
 import './style.css';
 import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS, getAllDocs, getDocById } from './data.js';
 import { getMentorAvatar } from './avatars.js';
+import {
+  SESSION_MINUTES,
+  slotsToWindows,
+  windowsToSlots,
+  isBookableWindow,
+  nextWindowAfter
+} from './schedule.js';
 import { initAnalytics, trackEvent } from './analytics.js';
 import {
   fetchMentors,
@@ -5808,6 +5815,8 @@ let mentorScheduleData = null;
 let mentorOverrideData = null;
 let scheduleMonth = null;
 let scheduleSelectedDate = null;
+// Which day's "copy to…" row is open, if any.
+let copyTargetsOpen = null;
 
 /**
  * The mentor half of my space.
@@ -5909,20 +5918,10 @@ function renderMentorPanels() {
           </div>
 
           <div class="sched-add-row">
-            <span style="font-weight: 700; font-size: 13.5px; color: var(--color-charcoal);">${ICONS.plus} Add to the pattern:</span>
-            <select id="new-slot-day" class="mentor-form-select" style="width: 140px; padding: 8px 12px;">
-              <option value="1">Monday</option>
-              <option value="2">Tuesday</option>
-              <option value="3">Wednesday</option>
-              <option value="4">Thursday</option>
-              <option value="5">Friday</option>
-              <option value="6">Saturday</option>
-              <option value="0">Sunday</option>
-            </select>
-            <input type="text" id="new-slot-time" class="mentor-form-input" style="width: 120px; padding: 8px 12px; text-align: center;" placeholder="e.g. 17:30" value="18:00">
-            <button type="button" class="pill-btn pill-btn--subtle" data-sched="weekly-add">
-              + Add slot
-            </button>
+            <span style="font-size: 13px; opacity: 0.75;">
+              Say when you're free and we'll offer ${SESSION_MINUTES}-minute chats inside it —
+              5:00pm to 7:00pm is six chats, and students pick one.
+            </span>
           </div>
 
           <div class="sched-section-head" style="margin-top: 30px;">
@@ -6337,6 +6336,12 @@ function effectiveSlotsFor(iso) {
   return (mentorScheduleData || {})[String(dayIndexForIso(iso))] || [];
 }
 
+/** How many chats a set of slots offers, for the count beside each day. */
+function describeRanges(slots) {
+  const n = (slots || []).length;
+  return `${n} chat${n === 1 ? '' : 's'}`;
+}
+
 function renderScheduleEditor() {
   const container = document.getElementById('portal-schedule-days-container');
   if (!container) return;
@@ -6346,24 +6351,67 @@ function renderScheduleEditor() {
 
   container.innerHTML = order.map(idx => {
     const slots = mentorScheduleData[String(idx)] || [];
+    const ranges = slotsToWindows(slots);
+    const on = ranges.length > 0;
+
     return `
-      <div class="schedule-day-row">
-        <div style="width: 120px; font-weight: 800; font-size: 14.5px; color: var(--color-charcoal);">${DAY_NAMES[idx]}</div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; flex: 1; align-items: center;">
-          ${slots.length > 0 ? slots.map(slot => `
-            <span class="schedule-slot-chip">
-              <span>${toDisplayTime(slot)}</span>
-              <button type="button" class="schedule-slot-remove" data-sched="weekly-remove"
-                      data-day="${idx}" data-time="${escapeHtml(slot)}" title="Remove slot">×</button>
-            </span>
-          `).join('') : '<span style="font-size: 12.5px; opacity: 0.5;">No availability set</span>'}
+      <div class="sched-day ${on ? '' : 'sched-day--off'}">
+        <label class="sched-day__toggle">
+          <input type="checkbox" data-sched="day-toggle" data-day="${idx}" ${on ? 'checked' : ''}>
+          <span class="sched-day__name">${DAY_NAMES[idx]}</span>
+        </label>
+
+        <div class="sched-day__ranges">
+          ${on ? ranges.map((r, i) => rangeRow(idx, i, r)).join('') : '<span class="sched-day__off-note">unavailable</span>'}
         </div>
+
+        ${on ? `
+          <div class="sched-day__actions">
+            <span class="sched-day__count">${describeRanges(windowsToSlots(ranges))}</span>
+            <button type="button" class="sched-icon-btn" data-sched="range-add" data-day="${idx}"
+                    title="Add another window on ${DAY_NAMES[idx]}">+</button>
+            <button type="button" class="sched-icon-btn" data-sched="copy-open" data-day="${idx}"
+                    title="Copy these hours to other days">copy</button>
+          </div>
+        ` : ''}
+
+        ${copyTargetsOpen === String(idx) ? `
+          <div class="sched-copy-row">
+            <span style="font-size: 12.5px; opacity: 0.7;">copy ${DAY_NAMES[idx]} to:</span>
+            ${order.filter(d => d !== idx).map(d => `
+              <button type="button" class="sched-copy-chip" data-sched="copy-to" data-day="${idx}" data-target="${d}">
+                ${DAY_SHORT[d]}
+              </button>
+            `).join('')}
+            <button type="button" class="sched-copy-chip sched-copy-chip--all" data-sched="copy-weekdays" data-day="${idx}">weekdays</button>
+          </div>
+        ` : ''}
       </div>
     `;
   }).join('');
 
   renderDateEditor();
   renderScheduleSummary();
+}
+
+/**
+ * One window of availability. Native time inputs rather than a typed string:
+ * they validate themselves, they bring up the right keyboard on a phone, and
+ * they make it obvious this is a start and an end — which research on these
+ * calendars says people miss when it is implied.
+ */
+function rangeRow(dayIdx, rangeIdx, range, scope = 'weekly') {
+  return `
+    <span class="sched-range">
+      <input type="time" class="sched-time" value="${escapeHtml(range.start)}" step="300"
+             data-sched="${scope}-range-start" data-day="${dayIdx}" data-index="${rangeIdx}" aria-label="Start time">
+      <span class="sched-range__dash">–</span>
+      <input type="time" class="sched-time" value="${escapeHtml(range.end)}" step="300"
+             data-sched="${scope}-range-end" data-day="${dayIdx}" data-index="${rangeIdx}" aria-label="End time">
+      <button type="button" class="schedule-slot-remove" data-sched="${scope}-range-remove"
+              data-day="${dayIdx}" data-index="${rangeIdx}" title="Remove this window">×</button>
+    </span>
+  `;
 }
 
 function renderScheduleSummary() {
@@ -6492,59 +6540,54 @@ function renderSelectedDatePanel() {
         <span class="sched-day-panel__state">${escapeHtml(state)}</span>
       </div>
 
+      <label class="sched-away-toggle">
+        <input type="checkbox" data-sched="date-away-toggle" ${overridden && slots.length === 0 ? 'checked' : ''}>
+        <span>Away all day</span>
+      </label>
+
       <div class="sched-day-panel__slots">
-        ${slots.length ? slots.map(t => `
-          <span class="schedule-slot-chip">
-            <span>${toDisplayTime(t)}</span>
-            <button type="button" class="schedule-slot-remove" data-sched="date-remove"
-                    data-time="${escapeHtml(t)}" title="Remove this time">×</button>
-          </span>
-        `).join('') : '<span style="font-size: 12.5px; opacity: 0.55;">Nothing on this date.</span>'}
+        ${slots.length
+      ? slotsToWindows(slots).map((r, i) => rangeRow(iso, i, r, 'date')).join('')
+      : '<span style="font-size: 12.5px; opacity: 0.55;">Nothing on this date.</span>'}
       </div>
 
       <div class="sched-day-panel__actions">
-        <input type="text" id="date-slot-time" class="mentor-form-input"
-               style="width: 118px; padding: 8px 12px; text-align: center;" placeholder="e.g. 17:30">
-        <button type="button" class="pill-btn pill-btn--subtle" data-sched="date-add">+ add time</button>
-        ${slots.length ? '<button type="button" class="pill-btn pill-btn--small" data-sched="date-away">mark away</button>' : ''}
+        <span class="sched-day__count">${describeRanges(slots)}</span>
+        <button type="button" class="pill-btn pill-btn--subtle" data-sched="date-range-add">+ add a window</button>
         ${overridden ? '<button type="button" class="pill-btn pill-btn--small" data-sched="date-reset">back to pattern</button>' : ''}
       </div>
     </div>
   `;
 }
 
-function removeScheduleSlot(dayIdx, slot) {
+/** Writes a day of the weekly pattern back as slots. */
+function setWeeklyRanges(dayIdx, ranges) {
   const key = String(dayIdx);
-  if (mentorScheduleData && mentorScheduleData[key]) {
-    mentorScheduleData[key] = mentorScheduleData[key].filter(s => s !== slot);
-    if (!mentorScheduleData[key].length) delete mentorScheduleData[key];
-    renderScheduleEditor();
-  }
+  const slots = windowsToSlots(ranges);
+  if (slots.length) mentorScheduleData[key] = slots;
+  else delete mentorScheduleData[key];
 }
 
-function addScheduleSlot() {
-  const dayIdx = document.getElementById('new-slot-day')?.value;
-  const timeInput = document.getElementById('new-slot-time');
-  const raw = timeInput ? timeInput.value.trim() : '';
+function weeklyRangesFor(dayIdx) {
+  return slotsToWindows(mentorScheduleData[String(dayIdx)] || []);
+}
 
-  const time = toCanonicalTime(raw);
-  if (!time) {
-    showToast('Enter a time like 17:30 or 5:30 PM.');
-    return;
+/**
+ * Applies an edited endpoint, or refuses it.
+ *
+ * A window that does not hold one whole session produces no slots at all, so
+ * without this an end time dragged before its start would silently delete the
+ * day rather than say anything.
+ */
+function editRange(ranges, index, field, value) {
+  const next = ranges.map(r => ({ ...r }));
+  if (!next[index]) return null;
+  next[index][field] = value;
+  if (!isBookableWindow(next[index])) {
+    showToast(`A window needs to be at least ${SESSION_MINUTES} minutes.`);
+    return null;
   }
-
-  const key = String(dayIdx);
-  if (!mentorScheduleData[key]) mentorScheduleData[key] = [];
-
-  if (mentorScheduleData[key].includes(time)) {
-    showToast(`${toDisplayTime(time)} is already set for ${DAY_NAMES[parseInt(key)]}.`);
-    return;
-  }
-
-  mentorScheduleData[key].push(time);
-  mentorScheduleData[key].sort();
-  renderScheduleEditor();
-  showToast(`Added ${toDisplayTime(time)} on ${DAY_NAMES[parseInt(key)]}.`);
+  return next;
 }
 
 /** Starts a date off from whatever it shows now, so editing never blanks it. */
@@ -6623,10 +6666,9 @@ function wireScheduleEditor() {
     const el = e.target.closest('[data-sched]');
     if (!el) return;
     const action = el.dataset.sched;
+    const day = el.dataset.day;
     const iso = scheduleSelectedDate;
 
-    if (action === 'weekly-add') return addScheduleSlot();
-    if (action === 'weekly-remove') return removeScheduleSlot(el.dataset.day, el.dataset.time);
     if (action === 'prev-month') return shiftScheduleMonth(-1);
     if (action === 'next-month') return shiftScheduleMonth(1);
     if (action === 'range-away') return markRangeAway();
@@ -6636,34 +6678,50 @@ function wireScheduleEditor() {
       return renderDateEditor();
     }
 
+    // ── The weekly pattern
+    if (action === 'range-add') {
+      const ranges = weeklyRangesFor(day);
+      setWeeklyRanges(day, [...ranges, nextWindowAfter(ranges)]);
+      return renderScheduleEditor();
+    }
+
+    if (action === 'weekly-range-remove') {
+      const ranges = weeklyRangesFor(day).filter((_, i) => i !== Number(el.dataset.index));
+      setWeeklyRanges(day, ranges);
+      return renderScheduleEditor();
+    }
+
+    if (action === 'copy-open') {
+      copyTargetsOpen = copyTargetsOpen === String(day) ? null : String(day);
+      return renderScheduleEditor();
+    }
+
+    if (action === 'copy-to' || action === 'copy-weekdays') {
+      const ranges = weeklyRangesFor(day);
+      const targets = action === 'copy-weekdays'
+        ? [1, 2, 3, 4, 5].filter(d => String(d) !== String(day))
+        : [Number(el.dataset.target)];
+      targets.forEach(t => setWeeklyRanges(t, ranges));
+      copyTargetsOpen = null;
+      renderScheduleEditor();
+      return showToast(`Copied ${DAY_NAMES[Number(day)]}'s hours to ${targets.length} day${targets.length === 1 ? '' : 's'}.`);
+    }
+
+    // ── One date
     if (!iso) return;
 
-    if (action === 'date-add') {
-      const input = document.getElementById('date-slot-time');
-      const time = toCanonicalTime((input?.value || '').trim());
-      if (!time) return showToast('Enter a time like 17:30 or 5:30 PM.');
-      const list = beginOverride(iso);
-      if (list.includes(time)) return showToast(`${toDisplayTime(time)} is already on that date.`);
-      list.push(time);
-      list.sort();
+    if (action === 'date-range-add') {
+      const ranges = slotsToWindows(beginOverride(iso));
+      mentorOverrideData[iso] = windowsToSlots([...ranges, nextWindowAfter(ranges)]);
       tidyOverride(iso);
-      renderScheduleEditor();
-      return showToast(`Added ${toDisplayTime(time)} on ${toDisplayDate(iso)} — save to publish.`);
+      return renderScheduleEditor();
     }
 
-    if (action === 'date-remove') {
-      const list = beginOverride(iso);
-      mentorOverrideData[iso] = list.filter(t => t !== el.dataset.time);
+    if (action === 'date-range-remove') {
+      const ranges = slotsToWindows(beginOverride(iso)).filter((_, i) => i !== Number(el.dataset.index));
+      mentorOverrideData[iso] = windowsToSlots(ranges);
       tidyOverride(iso);
-      renderScheduleEditor();
-      return;
-    }
-
-    if (action === 'date-away') {
-      mentorOverrideData[iso] = [];
-      tidyOverride(iso);
-      renderScheduleEditor();
-      return showToast(`${toDisplayDate(iso)} marked away — save to publish.`);
+      return renderScheduleEditor();
     }
 
     if (action === 'date-reset') {
@@ -6673,11 +6731,49 @@ function wireScheduleEditor() {
     }
   });
 
-  // Enter in either time field adds, rather than doing nothing.
-  card.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    if (e.target.id === 'new-slot-time') { e.preventDefault(); addScheduleSlot(); }
-    if (e.target.id === 'date-slot-time') { e.preventDefault(); card.querySelector('[data-sched="date-add"]')?.click(); }
+  card.addEventListener('change', (e) => {
+    const el = e.target.closest('[data-sched]');
+    if (!el) return;
+    const action = el.dataset.sched;
+    const day = el.dataset.day;
+    const index = Number(el.dataset.index);
+    const iso = scheduleSelectedDate;
+
+    if (action === 'day-toggle') {
+      // Turning a day on offers a window to adjust rather than an empty row
+      // with nothing to press.
+      setWeeklyRanges(day, el.checked ? [nextWindowAfter([])] : []);
+      return renderScheduleEditor();
+    }
+
+    if (action === 'weekly-range-start' || action === 'weekly-range-end') {
+      const field = action.endsWith('start') ? 'start' : 'end';
+      const next = editRange(weeklyRangesFor(day), index, field, el.value);
+      if (!next) return renderScheduleEditor();
+      setWeeklyRanges(day, next);
+      return renderScheduleEditor();
+    }
+
+    if (!iso) return;
+
+    if (action === 'date-away-toggle') {
+      if (el.checked) mentorOverrideData[iso] = [];
+      else mentorOverrideData[iso] = [...((mentorScheduleData || {})[String(dayIndexForIso(iso))] || [])];
+      tidyOverride(iso);
+      renderScheduleEditor();
+      return showToast(el.checked
+        ? `${toDisplayDate(iso)} marked away — save to publish.`
+        : `${toDisplayDate(iso)} is open again.`);
+    }
+
+    if (action === 'date-range-start' || action === 'date-range-end') {
+      const field = action.endsWith('start') ? 'start' : 'end';
+      const next = editRange(slotsToWindows(beginOverride(iso)), index, field, el.value);
+      if (!next) return renderScheduleEditor();
+      mentorOverrideData[iso] = windowsToSlots(next);
+      tidyOverride(iso);
+      return renderScheduleEditor();
+    }
   });
 
   document.getElementById('save-schedule-btn')?.addEventListener('click', saveMentorSchedule);

@@ -148,6 +148,13 @@ both places, and two navbar entries with nothing to tell them apart.
 `/mentor-dashboard` still resolves — bookmarks and old links use it — and
 redirects to the mentor tab.
 
+**The availability editor speaks windows; the store speaks slots.** A mentor
+sets "Monday 17:00–19:00" and `src/schedule.js` expands it to the six starts
+the booking engine already reads, rebuilding windows from contiguous runs when
+the editor reopens. Nothing on the server changed for this. Asking a mentor to
+type every twenty-minute start is what made the old editor unusable, so do not
+reintroduce a control that adds one slot at a time.
+
 **A mentor sub-tab repaint must hold `activeSpaceTab`.** `switchMentorPortalTab`
 calls `renderPage`, so without setting it back to `mentor` a mentor editing
 their profile is dropped into their student view mid-edit.
