@@ -148,6 +148,14 @@ both places, and two navbar entries with nothing to tell them apart.
 `/mentor-dashboard` still resolves — bookmarks and old links use it — and
 redirects to the mentor tab.
 
+**One mentor profile form.** `mentorProfileFields({ mode, mentor })` renders it
+for signup and for editing, prefilled when editing, and `initMentorProfileFields`
+seeds the links and pitch controls. The portal used to have a shorter copy that
+could only reach the bio, three achievements and the tip, so a mentor could not
+fix their degree, year, photo or LinkedIn anywhere. Ids are shared because only
+one of the two is ever on screen — the signup page shows a signpost, not a
+form, once you have a profile.
+
 **The availability editor speaks windows; the store speaks slots.** A mentor
 sets "Monday 17:00–19:00" and `src/schedule.js` expands it to the six starts
 the booking engine already reads, rebuilding windows from contiguous runs when

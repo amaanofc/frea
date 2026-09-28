@@ -1063,6 +1063,217 @@ function renderProfile(mentorId) {
 
 // ─── PAGE: Become a Mentor ─────
 
+/**
+ * The mentor profile form, used to create one and to edit it.
+ *
+ * There were two: this one, and a shorter one in the portal that could only
+ * reach the bio, the three achievements and the tip. A mentor who wanted to
+ * fix their degree, their year, their photo or their LinkedIn had nowhere to
+ * do it, and the two would have drifted further apart with every field added
+ * to either. One renderer, prefilled when editing, and they cannot.
+ *
+ * Ids are shared because only one of these is ever on screen at a time — the
+ * signup page shows a signpost, not a form, once you already have a profile —
+ * so both submit handlers read the same fields.
+ */
+function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
+  const editing = mode === 'edit';
+  const value = (v) => escapeHtml(v || '');
+  const years = ['1st year', '2nd year', '3rd year', '4th year (MEng)', "master's student", 'recent grad'];
+  const yearLabels = {
+    '4th year (MEng)': '4th year (MEng / MSci)',
+    "master's student": "Master's student",
+    'recent grad': 'Recent graduate'
+  };
+  const currentYear = mentor.year || '2nd year';
+  const avatarId = parseInt(mentor.avatarId) || 1;
+  const colour = mentor.topTipColor || 'yellow';
+  const tip = mentor.topTip || '';
+
+  return `
+    <div class="mentor-form-row">
+      <div class="mentor-form-group">
+        <label class="mentor-form-label">Full Name <span>*</span></label>
+        <input type="text" class="mentor-form-input" id="bm-name" required
+               value="${value(mentor.name)}" placeholder="e.g. Alex Morgan">
+      </div>
+
+      <div class="mentor-form-group">
+        <label class="mentor-form-label">UK University</label>
+        <!-- Not a choice. Your institution is whoever vouched for you at
+             sign-in; letting people pick it would let a Manchester
+             student wear an Oxford badge marked "verified". -->
+        <div class="mentor-form-static" id="bm-uni-display">
+          ${ICONS.shieldTick} <strong>${escapeHtml(verifiedInstitution() || mentor.university || 'confirmed at sign-in')}</strong>
+        </div>
+        <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Taken from your university sign-in — this is what makes the verified badge mean something.</span>
+      </div>
+    </div>
+
+    <div class="mentor-form-row">
+      <div class="mentor-form-group">
+        <label class="mentor-form-label">Degree / Course <span>*</span></label>
+        <input type="text" class="mentor-form-input" id="bm-major" required
+               value="${value(mentor.major)}" placeholder="e.g. MEng Computing or BSc Economics">
+      </div>
+
+      <div class="mentor-form-group">
+        <label class="mentor-form-label">Year of Study <span>*</span></label>
+        <select class="mentor-form-select" id="bm-year" required>
+          ${years.map(y => `
+            <option value="${escapeHtml(y)}" ${y === currentYear ? 'selected' : ''}>${escapeHtml(yearLabels[y] || y)}</option>
+          `).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">Bio / Profile Headline</label>
+      <textarea class="mentor-form-textarea" id="bm-bio" rows="2"
+                placeholder="e.g. Happy to chat about course survival, applications and student life.">${value(mentor.bio)}</textarea>
+    </div>
+
+    <!-- Profile Picture / Illustrated Avatar Selection -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">Profile Picture <span>(choose an illustrated avatar or upload your own photo)</span></label>
+      <div class="profile-pic-selector">
+        <div class="profile-pic-preview-wrap">
+          <div class="profile-pic-preview" id="bm-photo-preview">
+            ${mentor.photoUrl
+      ? `<img src="${escapeHtml(mentor.photoUrl)}" alt="" style="width: 72px; height: 72px; object-fit: cover;">`
+      : getMentorAvatar(avatarId, 72)}
+          </div>
+          <div class="profile-pic-preview-meta">
+            <span id="bm-avatar-status" style="font-weight: 700; font-size: 14px; color: var(--color-charcoal); display: block;">${mentor.photoUrl ? 'Your uploaded photo' : `Illustrated Avatar #${avatarId}`}</span>
+            <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-top: 2px;">Appears on your mentor card, profile &amp; calendar</span>
+          </div>
+        </div>
+
+        <div class="profile-pic-controls">
+          <div class="profile-pic-upload-action">
+            <label class="pill-btn pill-btn--small" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+              <span>${ICONS.camera}</span>
+              <span>Upload your own photo</span>
+              <input type="file" id="bm-photo-input" accept="image/*" style="display: none;" onchange="handleMentorPhotoUpload(event)">
+            </label>
+            <button type="button" id="bm-remove-photo-btn" class="pill-btn pill-btn--small" style="display: ${mentor.photoUrl ? 'inline-flex' : 'none'}; background: #fee2e2; border-color: #ef4444; color: #b91c1c;" onclick="removeMentorUploadedPhoto()">${ICONS.close} Remove custom photo</button>
+          </div>
+
+          <div style="margin-top: 14px;">
+            <span style="font-size: 12.5px; font-weight: 700; color: var(--color-charcoal); opacity: 0.75; display: block; margin-bottom: 8px;">Or pick from our handcrafted avatars (both genders):</span>
+            <div class="avatar-preset-grid" id="bm-avatar-presets">
+              ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(id => `
+                <button type="button" class="avatar-preset-btn ${id === avatarId && !mentor.photoUrl ? 'active' : ''}" data-avatar-id="${id}" onclick="selectMentorPresetAvatar(${id})" title="Avatar ${id}">
+                  ${getMentorAvatar(id, 40)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+      <input type="hidden" id="bm-selected-avatar-id" value="${avatarId}">
+      <input type="hidden" id="bm-photo-data" value="${value(mentor.photoUrl)}">
+    </div>
+
+    <!-- LinkedIn Verification URL -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">LinkedIn Profile URL <span>(strongly encouraged · unlocks verified badge)</span></label>
+      <input type="url" class="mentor-form-input" id="bm-linkedin"
+             value="${value(mentor.linkedin)}" placeholder="https://www.linkedin.com/in/yourprofile">
+      <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Adding your LinkedIn profile unlocks the "LinkedIn verified" trust badge on your profile.</span>
+    </div>
+
+    <!-- Any number of further links -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">Your Other Links <span>(optional · portfolio, GitHub, Substack — add as many as you like)</span></label>
+      <div id="bm-links-container"></div>
+      <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px; margin-top: 8px;" onclick="window.addSignupLink()">
+        ${ICONS.plus} add a link
+      </button>
+    </div>
+
+    <!-- 90-second pitch video: record in-app or upload -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">90-Second Pitch Video <span>(optional · record here or upload a file)</span></label>
+      <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-bottom: 10px; line-height: 1.5;">
+        Profiles with a pitch get booked more. Say who you are, what you study, and what you can help with.
+        ${editing ? '' : 'You can always add this later from your portal.'}
+      </span>
+      <div id="bm-pitch-container"></div>
+    </div>
+
+    <!-- Achievements Selection (Top 3 Free-Text Inputs) -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label">Your Top 3 Achievements <span>* (what are you most proud of? e.g. internships, offers, awards, ranks)</span></label>
+      <span style="font-size: 12px; opacity: 0.65; display: block; margin-bottom: 8px;">These appear as badges directly on your mentor profile card.</span>
+      <div class="mentor-achievements-inputs" id="bm-achievements">
+        ${[0, 1, 2].map(i => `
+          <div class="mentor-achieve-field">
+            <span class="mentor-achieve-num">${i + 1}</span>
+            <input type="text" class="mentor-form-input" id="bm-achieve-${i + 1}" ${i === 0 ? 'required' : ''}
+                   value="${value(mentor.achievements?.[i])}"
+                   placeholder="${['e.g. Incoming Software Engineer @ Stripe London', 'e.g. Founded YC S23 backed dev tools startup', "e.g. 1st Class Honours (Rank 1 / Dean's List)"][i]}"
+                   maxlength="75" oninput="window.updateLiveAchievements()">
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Live Post-It Note Preview -->
+    <div class="mentor-form-group">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+        <label class="mentor-form-label" style="margin-bottom: 0;">Your Top Tip for Freshers <span>* (appears on your post-it note!)</span></label>
+        <span id="bm-tip-counter" style="font-size: 12px; font-weight: 600; color: var(--color-cocoa-ink); opacity: 0.6;">${tip.length} / 140</span>
+      </div>
+      <div class="live-postit-preview-wrap">
+        <div>
+          <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required maxlength="140" placeholder="e.g. Give your best tip here..." oninput="updateLivePostit(this.value)">${value(tip)}</textarea>
+          <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="font-size: 13px; font-weight: 600;">Post-It Color:</span>
+            ${['yellow', 'mint', 'blush', 'sky'].map(c => `
+              <label><input type="radio" name="postit-color" value="${c}" ${c === colour ? 'checked' : ''} onchange="setLivePostitColor('${c}')"> ${c[0].toUpperCase()}${c.slice(1)}</label>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Real-time Live Preview -->
+        <div>
+          <div class="live-postit-preview live-postit-preview--${escapeHtml(colour)}" id="live-postit-card">
+            <div class="live-postit-preview__pin"></div>
+            <div class="live-postit-preview__text" id="live-postit-text">
+              ${tip ? `“${escapeHtml(tip)}”` : '“Give your best tip here...”'}
+            </div>
+            <span class="live-postit-preview__author" id="live-postit-author">— ${escapeHtml((mentor.name || 'you').split(' ')[0].toLowerCase())} @ frea</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Wires the shared form's live bits, in whichever page is showing it.
+ *
+ * Links and the pitch recorder are populated rather than rendered inline, so
+ * they need seeding from the mentor when editing — otherwise opening the
+ * editor would show an empty list and saving would wipe what was there.
+ */
+function initMentorProfileFields(mentor = null) {
+  if (!document.getElementById('bm-links-container')) return;
+
+  if (mentor) {
+    // LinkedIn has its own field above, so it is not repeated in the list.
+    signupLinksData = (mentor.links || [])
+      .filter(l => l && l.url && !/linkedin\.com/i.test(l.url))
+      .map(l => ({ label: l.label || '', url: l.url }));
+  }
+
+  renderSignupLinks();
+  renderPitchVideoControl('bm-pitch-container', mentor?.pitchVideoUrl || '');
+  setLivePostitColor(document.querySelector('input[name="postit-color"]:checked')?.value || 'yellow');
+  updateLiveAchievements();
+}
+
 function renderBecomeMentor() {
   trackEvent('become_mentor_page_view');
 
@@ -1154,82 +1365,7 @@ function renderBecomeMentor() {
       ` : `
       <div class="mentor-form-card">
         <form id="become-mentor-form" onsubmit="handleBecomeMentorSubmit(event)">
-          <div class="mentor-form-row">
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Full Name <span>*</span></label>
-              <input type="text" class="mentor-form-input" id="bm-name" required placeholder="e.g. Alex Morgan">
-            </div>
-
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">UK University</label>
-              <!-- Not a choice. Your institution is whoever vouched for you at
-                   sign-in; letting people pick it would let a Manchester
-                   student wear an Oxford badge marked "verified". -->
-              <div class="mentor-form-static" id="bm-uni-display">
-                ${ICONS.shieldTick} <strong>${escapeHtml(verifiedInstitution() || 'confirmed at sign-in')}</strong>
-              </div>
-              <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Taken from your university sign-in — this is what makes the verified badge mean something.</span>
-            </div>
-          </div>
-
-          <div class="mentor-form-row">
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Degree / Course <span>*</span></label>
-              <input type="text" class="mentor-form-input" id="bm-major" required placeholder="e.g. MEng Computing or BSc Economics">
-            </div>
-
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Year of Study <span>*</span></label>
-              <select class="mentor-form-select" id="bm-year" required>
-                <option value="1st year">1st year</option>
-                <option value="2nd year" selected>2nd year</option>
-                <option value="3rd year">3rd year</option>
-                <option value="4th year (MEng)">4th year (MEng / MSci)</option>
-                <option value="master's student">Master's student</option>
-                <option value="recent grad">Recent graduate</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Profile Picture / Illustrated Avatar Selection -->
-          <div class="mentor-form-group">
-            <label class="mentor-form-label">Profile Picture <span>(choose an illustrated avatar or upload your own photo)</span></label>
-            <div class="profile-pic-selector">
-              <div class="profile-pic-preview-wrap">
-                <div class="profile-pic-preview" id="bm-photo-preview">
-                  ${getMentorAvatar(1, 72)}
-                </div>
-                <div class="profile-pic-preview-meta">
-                  <span id="bm-avatar-status" style="font-weight: 700; font-size: 14px; color: var(--color-charcoal); display: block;">Illustrated Avatar #1</span>
-                  <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-top: 2px;">Appears on your mentor card, profile & calendar</span>
-                </div>
-              </div>
-
-              <div class="profile-pic-controls">
-                <div class="profile-pic-upload-action">
-                  <label class="pill-btn pill-btn--small" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                    <span>${ICONS.camera}</span>
-                    <span>Upload your own photo</span>
-                    <input type="file" id="bm-photo-input" accept="image/*" style="display: none;" onchange="handleMentorPhotoUpload(event)">
-                  </label>
-                  <button type="button" id="bm-remove-photo-btn" class="pill-btn pill-btn--small" style="display: none; background: #fee2e2; border-color: #ef4444; color: #b91c1c;" onclick="removeMentorUploadedPhoto()">${ICONS.close} Remove custom photo</button>
-                </div>
-
-                <div style="margin-top: 14px;">
-                  <span style="font-size: 12.5px; font-weight: 700; color: var(--color-charcoal); opacity: 0.75; display: block; margin-bottom: 8px;">Or pick from our handcrafted avatars (both genders):</span>
-                  <div class="avatar-preset-grid" id="bm-avatar-presets">
-                    ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(id => `
-                      <button type="button" class="avatar-preset-btn ${id === 1 ? 'active' : ''}" data-avatar-id="${id}" onclick="selectMentorPresetAvatar(${id})" title="Avatar ${id}">
-                        ${getMentorAvatar(id, 40)}
-                      </button>
-                    `).join('')}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <input type="hidden" id="bm-selected-avatar-id" value="1">
-            <input type="hidden" id="bm-photo-data" value="">
-          </div>
+          ${mentorProfileFields({ mode: 'create' })}
 
           <!--
             Not asked for again, because it was already proven.
@@ -1256,92 +1392,6 @@ function renderBecomeMentor() {
             <div id="bm-change-email-panel" style="display: none; margin-top: 10px;"></div>
           </div>
 
-          <!-- LinkedIn Verification URL -->
-          <div class="mentor-form-group">
-            <label class="mentor-form-label">LinkedIn Profile URL <span>(strongly encouraged · unlocks verified badge)</span></label>
-            <input type="url" class="mentor-form-input" id="bm-linkedin" placeholder="https://www.linkedin.com/in/yourprofile">
-            <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">Adding your LinkedIn profile unlocks the "LinkedIn verified" trust badge on your profile.</span>
-          </div>
-
-          <!-- Any number of further links -->
-          <div class="mentor-form-group">
-            <label class="mentor-form-label">Your Other Links <span>(optional · portfolio, GitHub, Substack — add as many as you like)</span></label>
-            <div id="bm-links-container"></div>
-            <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px; margin-top: 8px;" onclick="window.addSignupLink()">
-              ${ICONS.plus} add a link
-            </button>
-          </div>
-
-          <!-- 90-second pitch video: record in-app or upload -->
-          <div class="mentor-form-group">
-            <label class="mentor-form-label">90-Second Pitch Video <span>(optional · record here or upload a file)</span></label>
-            <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-bottom: 10px; line-height: 1.5;">
-              Profiles with a pitch get booked more. Say who you are, what you study, and what you can help with.
-              You can always add this later from your portal.
-            </span>
-            <div id="signup-pitch-container"></div>
-          </div>
-
-          <!-- Instant Onboarding Notice (No Interview Required) -->
-          <div class="mentor-form-group">
-            <div style="background: #f0fdf4; border: 1.5px solid #22c55e; border-radius: 12px; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start;">
-              <span style="color: #16a34a; display: inline-flex; align-items: center; margin-top: 2px;">${ICONS.shieldTick}</span>
-              <div style="font-size: 13.5px; line-height: 1.5; color: #15803d;">
-                <strong>Instant Onboarding · Zero Interviews:</strong> We don't require gatekept committee interviews. Simply sign in through your university and add your LinkedIn, and your profile & booking calendar go live immediately across the platform!
-              </div>
-            </div>
-          </div>
-
-          <!-- Achievements Selection (Top 3 Free-Text Inputs) -->
-          <div class="mentor-form-group">
-            <label class="mentor-form-label">Your Top 3 Achievements <span>* (what are you most proud of? e.g. internships, offers, awards, ranks)</span></label>
-            <span style="font-size: 12px; opacity: 0.65; display: block; margin-bottom: 8px;">These appear as badges directly on your mentor profile card.</span>
-            <div class="mentor-achievements-inputs" id="bm-achievements">
-              <div class="mentor-achieve-field">
-                <span class="mentor-achieve-num">1</span>
-                <input type="text" class="mentor-form-input" id="bm-achieve-1" required placeholder="e.g. Incoming Software Engineer @ Stripe London" maxlength="75" oninput="window.updateLiveAchievements()">
-              </div>
-              <div class="mentor-achieve-field">
-                <span class="mentor-achieve-num">2</span>
-                <input type="text" class="mentor-form-input" id="bm-achieve-2" placeholder="e.g. Founded YC S23 backed dev tools startup" maxlength="75" oninput="window.updateLiveAchievements()">
-              </div>
-              <div class="mentor-achieve-field">
-                <span class="mentor-achieve-num">3</span>
-                <input type="text" class="mentor-form-input" id="bm-achieve-3" placeholder="e.g. 1st Class Honours (Rank 1 / Dean's List)" maxlength="75" oninput="window.updateLiveAchievements()">
-              </div>
-            </div>
-          </div>
-
-          <!-- Live Post-It Note Preview -->
-          <div class="mentor-form-group">
-            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-              <label class="mentor-form-label" style="margin-bottom: 0;">Your Top Tip for Freshers <span>* (appears on your post-it note!)</span></label>
-              <span id="bm-tip-counter" style="font-size: 12px; font-weight: 600; color: var(--color-cocoa-ink); opacity: 0.6;">0 / 140</span>
-            </div>
-            <div class="live-postit-preview-wrap">
-              <div>
-                <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required maxlength="140" placeholder="e.g. Give your best tip here..." oninput="updateLivePostit(this.value)"></textarea>
-                <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
-                  <span style="font-size: 13px; font-weight: 600;">Post-It Color:</span>
-                  <label><input type="radio" name="postit-color" value="yellow" checked onchange="setLivePostitColor('yellow')"> Yellow</label>
-                  <label><input type="radio" name="postit-color" value="mint" onchange="setLivePostitColor('mint')"> Mint</label>
-                  <label><input type="radio" name="postit-color" value="blush" onchange="setLivePostitColor('blush')"> Blush</label>
-                  <label><input type="radio" name="postit-color" value="sky" onchange="setLivePostitColor('sky')"> Sky</label>
-                </div>
-              </div>
-
-              <!-- Real-time Live Preview -->
-              <div>
-                <div class="live-postit-preview" id="live-postit-card">
-                  <div class="live-postit-preview__pin"></div>
-                  <div class="live-postit-preview__text" id="live-postit-text">
-                    “Give your best tip here...”
-                  </div>
-                  <span class="live-postit-preview__author" id="live-postit-author">— you @ frea</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <!-- Optional First Resource / Freabie Publication -->
           <div class="mentor-form-group">
@@ -2166,7 +2216,7 @@ function savePitchVideo() {
       if (mentor) mentor.pitchVideoUrl = json.videoUrl;
 
       discardPitchTake();
-      renderPitchVideoControl('portal-pitch-container', json.videoUrl);
+      renderPitchVideoControl('bm-pitch-container', json.videoUrl);
     } else {
       if (progress) progress.hidden = true;
       if (saveBtn) saveBtn.disabled = false;
@@ -2204,7 +2254,7 @@ async function removePitchVideo() {
     const mentor = resolveSessionMentor();
     if (mentor) mentor.pitchVideoUrl = '';
 
-    renderPitchVideoControl('portal-pitch-container', '');
+    renderPitchVideoControl('bm-pitch-container', '');
     showToast('Pitch video removed.');
   } catch (err) {
     showToast(err.message || 'Could not remove the video.');
@@ -3239,6 +3289,10 @@ async function handleBecomeMentorSubmit(e) {
         name,
         degree: major,
         year,
+        // The form asks for a bio now that it is the same form the mentor
+        // edits later; without sending it the server falls back to its
+        // generated one and the answer is quietly dropped.
+        bio: document.getElementById('bm-bio')?.value.trim() || '',
         email,
         linkedin,
         photoUrl,
@@ -5747,7 +5801,7 @@ async function mentorSignOut() {
   mentorScheduleData = null;
   mentorOverrideData = null;
   scheduleSelectedDate = null;
-  mentorLinksData = null;
+  signupLinksData = [];
   setUnlockedDocIds([]);
   showToast('Signed out.');
   updateNavbarMentorStatus();
@@ -5950,53 +6004,7 @@ function renderMentorPanels() {
           </p>
 
           <form id="portal-profile-form" onsubmit="window.saveMentorProfile(event)">
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Bio / Profile Headline</label>
-              <textarea class="mentor-form-textarea" id="mp-bio" rows="2" required>${currentMentor.bio || ''}</textarea>
-            </div>
-
-            <!-- Top 3 Achievements Inputs -->
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Your Top 3 Achievements <span>*</span></label>
-              <span style="font-size: 12px; opacity: 0.65; display: block; margin-bottom: 8px;">These appear as badges directly on your mentor profile.</span>
-              <div class="mentor-achievements-inputs">
-                <div class="mentor-achieve-field">
-                  <span class="mentor-achieve-num">1</span>
-                  <input type="text" class="mentor-form-input" id="mp-achieve-1" value="${currentMentor.achievements?.[0] || ''}" required placeholder="e.g. Incoming Software Engineer @ Stripe" maxlength="75">
-                </div>
-                <div class="mentor-achieve-field">
-                  <span class="mentor-achieve-num">2</span>
-                  <input type="text" class="mentor-form-input" id="mp-achieve-2" value="${currentMentor.achievements?.[1] || ''}" placeholder="e.g. Founded YC backed startup" maxlength="75">
-                </div>
-                <div class="mentor-achieve-field">
-                  <span class="mentor-achieve-num">3</span>
-                  <input type="text" class="mentor-form-input" id="mp-achieve-3" value="${currentMentor.achievements?.[2] || ''}" placeholder="e.g. 1st Class Honours (Rank 1)" maxlength="75">
-                </div>
-              </div>
-            </div>
-
-            <!-- Top Tip & Post-it Color -->
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Top Tip for Freshers (Post-It Note)</label>
-              <textarea class="mentor-form-textarea" id="mp-toptip" rows="2" maxlength="140" required>${currentMentor.topTip || ''}</textarea>
-              <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 13px; font-weight: 600;">Post-It Color:</span>
-                <label><input type="radio" name="mp-postit-color" value="yellow" ${currentMentor.topTipColor === 'yellow' || !currentMentor.topTipColor ? 'checked' : ''}> Yellow</label>
-                <label><input type="radio" name="mp-postit-color" value="mint" ${currentMentor.topTipColor === 'mint' ? 'checked' : ''}> Mint</label>
-                <label><input type="radio" name="mp-postit-color" value="blush" ${currentMentor.topTipColor === 'blush' ? 'checked' : ''}> Blush</label>
-                <label><input type="radio" name="mp-postit-color" value="sky" ${currentMentor.topTipColor === 'sky' ? 'checked' : ''}> Sky</label>
-              </div>
-            </div>
-
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">90-Second Pitch Video <span>(optional — record here or upload)</span></label>
-              <div id="portal-pitch-container"></div>
-            </div>
-
-            <div class="mentor-form-group">
-              <label class="mentor-form-label">Your Links <span>(LinkedIn, GitHub, portfolio, Substack — add as many as you like)</span></label>
-              <div id="portal-links-container"></div>
-            </div>
+            ${mentorProfileFields({ mode: 'edit', mentor: currentMentor })}
 
             <div style="margin-top: 24px;">
               <button type="submit" class="pill-btn pill-btn--animated">
@@ -6289,9 +6297,7 @@ function initMentorDashboard() {
 
   wireScheduleEditor();
   renderScheduleEditor();
-  renderMentorLinksEditor(currentMentor);
-
-  renderPitchVideoControl('portal-pitch-container', currentMentor.pitchVideoUrl || '');
+  initMentorProfileFields(currentMentor);
   renderMentorResourceList(currentMentor);
   loadMentorEarnings(currentMentor.id);
   loadMentorDiary(currentMentor.id);
@@ -6811,59 +6817,6 @@ async function saveMentorSchedule() {
 
 // ─── Links: mentors may add as many as they like ─────
 
-let mentorLinksData = null;
-
-function renderMentorLinksEditor(mentor) {
-  const container = document.getElementById('portal-links-container');
-  if (!container) return;
-
-  if (!mentorLinksData) {
-    mentorLinksData = Array.isArray(mentor.links) && mentor.links.length
-      ? mentor.links.map(l => ({ ...l }))
-      : [mentor.linkedin ? { label: 'LinkedIn', url: mentor.linkedin } : null].filter(Boolean);
-  }
-
-  container.innerHTML = `
-    ${mentorLinksData.length === 0
-      ? '<div style="font-size: 13px; opacity: 0.55; padding: 4px 0 10px;">No links yet. Add your LinkedIn, GitHub, portfolio, Substack — as many as you want.</div>'
-      : mentorLinksData.map((link, i) => `
-        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
-          <input type="text" class="mentor-form-input" style="width: 150px; padding: 8px 12px; font-size: 13px;"
-                 value="${escapeHtml(link.label || '')}" placeholder="Label"
-                 oninput="window.updateMentorLink(${i}, 'label', this.value)">
-          <input type="url" class="mentor-form-input" style="flex: 1; min-width: 220px; padding: 8px 12px; font-size: 13px;"
-                 value="${escapeHtml(link.url || '')}" placeholder="https://…"
-                 oninput="window.updateMentorLink(${i}, 'url', this.value)">
-          <button type="button" class="schedule-slot-remove" style="font-size: 18px;" title="Remove link"
-                  onclick="window.removeMentorLink(${i})">×</button>
-        </div>
-      `).join('')}
-    <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px; margin-top: 4px;" onclick="window.addMentorLink()">
-      ${ICONS.plus} add another link
-    </button>
-  `;
-}
-
-function addMentorLink() {
-  if (!mentorLinksData) mentorLinksData = [];
-  mentorLinksData.push({ label: '', url: '' });
-  const mentor = resolveSessionMentor();
-  if (mentor) renderMentorLinksEditor(mentor);
-}
-window.addMentorLink = addMentorLink;
-
-function updateMentorLink(index, field, value) {
-  if (mentorLinksData && mentorLinksData[index]) mentorLinksData[index][field] = value;
-}
-window.updateMentorLink = updateMentorLink;
-
-function removeMentorLink(index) {
-  if (!mentorLinksData) return;
-  mentorLinksData.splice(index, 1);
-  const mentor = resolveSessionMentor();
-  if (mentor) renderMentorLinksEditor(mentor);
-}
-window.removeMentorLink = removeMentorLink;
 
 // ─── Published resources ─────
 
@@ -7119,28 +7072,31 @@ async function saveMentorProfile(e) {
     showToast('Please sign in to your mentor account first.');
     return;
   }
-  const bio = document.getElementById('mp-bio')?.value.trim();
-  const a1 = document.getElementById('mp-achieve-1')?.value.trim();
-  const a2 = document.getElementById('mp-achieve-2')?.value.trim();
-  const a3 = document.getElementById('mp-achieve-3')?.value.trim();
-  const achievements = [a1, a2, a3].filter(Boolean);
-  const topTip = document.getElementById('mp-toptip')?.value.trim();
-  const colorInput = document.querySelector('input[name="mp-postit-color"]:checked');
-  const topTipColor = colorInput ? colorInput.value : 'yellow';
+  // The same fields the signup form writes — it is the same form.
+  const read = (id) => document.getElementById(id)?.value.trim() || '';
+  const achievements = [read('bm-achieve-1'), read('bm-achieve-2'), read('bm-achieve-3')].filter(Boolean);
+  const colorInput = document.querySelector('input[name="postit-color"]:checked');
   // Uploaded separately via /api/upload/pitch-video — never sent from this form,
   // or saving the profile would wipe a video the mentor just recorded.
 
-  // Any number of links; the server validates and labels them.
-  const links = (mentorLinksData || []).filter(l => l && l.url && l.url.trim());
-  const linkedinLink = links.find(l => /linkedin\.com/i.test(l.url));
+  const linkedin = read('bm-linkedin');
+  const links = [
+    ...(linkedin ? [{ label: 'LinkedIn', url: linkedin }] : []),
+    ...(signupLinksData || []).filter(l => l && l.url && l.url.trim())
+  ];
 
   const profileData = {
-    bio,
+    name: read('bm-name'),
+    major: read('bm-major'),
+    year: document.getElementById('bm-year')?.value,
+    bio: read('bm-bio'),
+    photoUrl: read('bm-photo-data'),
+    avatarId: parseInt(document.getElementById('bm-selected-avatar-id')?.value) || 1,
     achievements,
-    topTip,
-    topTipColor,
+    topTip: read('bm-toptip'),
+    topTipColor: colorInput ? colorInput.value : 'yellow',
     links,
-    linkedin: linkedinLink ? linkedinLink.url : ''
+    linkedin
   };
 
   const btn = e.target?.querySelector('button[type="submit"]');
@@ -7149,7 +7105,12 @@ async function saveMentorProfile(e) {
   try {
     const updated = await updateMentorProfile(currentMentor.id, profileData);
     Object.assign(currentMentor, {
+      name: updated.name,
+      major: updated.major,
+      year: updated.year,
       bio: updated.bio,
+      photoUrl: updated.photoUrl,
+      avatarId: updated.avatarId,
       achievements: updated.achievements,
       topTip: updated.topTip,
       topTipColor: updated.topTipColor,
@@ -7157,8 +7118,7 @@ async function saveMentorProfile(e) {
       links: updated.links,
       linkedin: updated.linkedin
     });
-    mentorLinksData = (updated.links || []).map(l => ({ ...l }));
-    renderMentorLinksEditor(currentMentor);
+    initMentorProfileFields(currentMentor);
     showToast('Profile saved and live on your public page.');
   } catch (err) {
     showToast(err.message || 'Could not save your profile.');
@@ -7925,8 +7885,7 @@ function renderPage() {
         });
       });
     } else {
-      renderSignupLinks();
-      renderPitchVideoControl('signup-pitch-container', '');
+      initMentorProfileFields();
       wireContactEmailChange({
         trigger: document.getElementById('bm-change-email'),
         panel: document.getElementById('bm-change-email-panel'),
