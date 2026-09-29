@@ -88,6 +88,21 @@ export const ICONS = {
     <path d="M22 8V15"/>
   </svg>`,
 
+  // Backpack / Student
+  backpack: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 12C4 9.51 6.01 7.5 8.5 7.5H15.5C17.99 7.5 20 9.51 20 12V17.5C20 19.99 17.99 22 15.5 22H8.5C6.01 22 4 19.99 4 17.5V12Z"/>
+    <path d="M8.5 7.5V6C8.5 4.07 10.07 2.5 12 2.5C13.93 2.5 15.5 4.07 15.5 6V7.5"/>
+    <path d="M8 22V16.5C8 15.4 8.9 14.5 10 14.5H14C15.1 14.5 16 15.4 16 16.5V22"/>
+    <path d="M10.75 18.5H13.25"/>
+  </svg>`,
+
+  // Document Upload
+  documentUpload: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 17V11L11 13M9 11L7 13"/>
+    <path d="M22 10V15C22 20 20 22 15 22H9C4 22 2 20 2 15V9C2 4 4 2 9 2H14"/>
+    <path d="M22 10H18C15 10 14 9 14 6V2L22 10Z"/>
+  </svg>`,
+
   // Arrow Right
   arrowRight: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 12H20M20 12L14 6M20 12L14 18"/>

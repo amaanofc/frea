@@ -1613,8 +1613,8 @@ function renderPayoutCard(status) {
           </div>
           <div class="payout-card__sub">
             ${started
-              ? 'Stripe still needs a few details before money can reach you.'
-              : `Set up payouts to price your work. Takes a couple of minutes, and you keep ${payoutPercent()}% of every sale.`}
+      ? 'Stripe still needs a few details before money can reach you.'
+      : `Set up payouts to price your work. Takes a couple of minutes, and you keep ${payoutPercent()}% of every sale.`}
           </div>
         </div>
       </div>
@@ -1993,7 +1993,7 @@ async function startPitchRecording() {
   if (live) {
     live.srcObject = pitchStream;
     live.muted = true;
-    await live.play().catch(() => {});
+    await live.play().catch(() => { });
   }
 
   if (startBtn) startBtn.hidden = true;
@@ -5541,8 +5541,8 @@ async function renderAdminApplicationsList() {
           <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; margin-bottom: 6px;">Achievements</div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             ${achievementsList.length > 0
-              ? achievementsList.map(a => achievementSticker(a)).join('')
-              : '<span style="font-size: 13px; opacity: 0.6;">None specified</span>'}
+        ? achievementsList.map(a => achievementSticker(a)).join('')
+        : '<span style="font-size: 13px; opacity: 0.6;">None specified</span>'}
           </div>
         </div>
 
@@ -7460,11 +7460,11 @@ function renderMySpace() {
         <div class="space-role-tabs" role="tablist">
           <button type="button" class="space-role-tab ${!onMentor ? 'active' : ''}"
                   data-space-tab="mentee" role="tab" aria-selected="${!onMentor}">
-            ${ICONS.calendar} chats you've booked
+            ${ICONS.backpack} student space
           </button>
           <button type="button" class="space-role-tab ${onMentor ? 'active' : ''}"
                   data-space-tab="mentor" role="tab" aria-selected="${onMentor}">
-            ${ICONS.teacher} your mentoring
+            ${ICONS.teacher} mentor space
           </button>
         </div>
       ` : ''}
