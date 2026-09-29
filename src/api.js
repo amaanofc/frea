@@ -374,6 +374,22 @@ export async function uploadDocument(file) {
   return request('/upload/document', { method: 'POST', formData });
 }
 
+/**
+ * Sends a profile photo as multipart and returns the path it was stored at.
+ * The server downscales and re-encodes it, so what comes back is never what
+ * went up — which is why the caller takes the URL from the response rather
+ * than assuming one.
+ */
+export async function uploadMentorPhoto(file) {
+  const formData = new FormData();
+  formData.append('photo', file);
+  return request('/upload/mentor-photo', { method: 'POST', formData });
+}
+
+export async function removeMentorPhoto() {
+  return request('/upload/mentor-photo', { method: 'DELETE' });
+}
+
 function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

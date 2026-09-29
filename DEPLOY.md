@@ -424,19 +424,27 @@ helmet — the set is small and every value was chosen deliberately.
 HSTS is only sent when `req.secure`, so local http development is unaffected
 and no one pins `localhost` to https for a year.
 
-**Two known weaknesses, both structural, both still open:**
+`script-src` is `'self'` — no `'unsafe-inline'`. It used to carry it because
+the front end wired behaviour with 149 `onclick=` attributes; those are gone,
+replaced by `data-action` and one delegated listener per event type. The
+practical consequence for anyone editing the front end: **an inline `on*=`
+handler now silently does nothing** rather than failing review.
+`npm run test:photo` asserts none have come back.
 
-1. `script-src` carries `'unsafe-inline'`. The front end builds markup as HTML
-   strings and wires behaviour with `onclick=` attributes — 177 of them in
-   `src/main.js` — so removing it blanks the app. That costs most of CSP's XSS
-   protection. Moving those to `addEventListener` and tightening `script-src`
-   to `'self'` is the highest-value change left; the rest of the policy does
-   not depend on it. Best done alongside a front-end rework rather than before.
-2. The session bearer token lives in `localStorage` (`src/api.js`), so any
-   successful XSS is account takeover rather than a defacement. An httpOnly
-   cookie would blunt that, but cookies are sent automatically, so it means
-   adding CSRF protection at the same time — the current header-based scheme is
-   immune to CSRF by construction. Do it as one deliberate change, not a swap.
+`style-src` still carries `'unsafe-inline'`, and will: the app sets `style=`
+attributes throughout. That is a far smaller surface than inline script.
+
+`frame-src` is an allow-list of `youtube-nocookie.com`, `loom.com` and
+`drive.google.com` — the three hosts `renderPitchVideoEmbed` can build an
+iframe for. It was `'none'`, so a mentor who linked their pitch on any of them
+got a blank box with no error anywhere.
+
+**One known weakness, structural, still open:** the session bearer token lives
+in `localStorage` (`src/api.js`), so any successful XSS is account takeover
+rather than a defacement. An httpOnly cookie would blunt that, but cookies are
+sent automatically, so it means adding CSRF protection at the same time — the
+current header-based scheme is immune to CSRF by construction. Do it as one
+deliberate change, not a swap.
 
 ### Rules that are easy to break by accident
 
@@ -444,11 +452,18 @@ and no one pins `localhost` to https for a year.
   element content and quoted attributes; `jsArg` when the value lands inside a
   JS string in an attribute (`onclick="fn(${jsArg(x)})"`). `escapeHtml` alone
   is wrong there — it renders `'` as `&#39;`, the HTML parser turns that back
-  into `'` before the JS is parsed, and the literal reopens.
+  into `'` before the JS is parsed, and the literal reopens. Both live in
+  `src/escape.js`; do not make a local copy of either. `avatars.js` had no
+  escaper at all and interpolated a mentor-supplied URL straight into an
+  `<img src>` — that was a live stored XSS on the browse page.
+- **Behaviour is wired with `data-action`, never an inline handler.** See the
+  CSP note above: `script-src 'self'` means an inline one fails silently.
 - **Uploads are named after their owner** — `doc-<mentorId>-…`,
-  `pitch-<mentorId>-…` — and the server checks that prefix before publishing a
-  resource or deleting a file. The stored `fileName`/`pitchVideoUrl` come back
-  from the client, so they are untrusted even though they live in our record.
+  `pitch-<mentorId>-…`, `photo-<mentorId>-…` — and the server checks that
+  prefix before publishing a resource, serving a profile or deleting a file.
+  The stored `fileName`/`pitchVideoUrl`/`photoUrl` come back from the client,
+  so they are untrusted even though they live in our record. Matching the
+  *shape* of the name is not the check; the id in it has to be theirs.
 - **Emails escape with `esc()` in `server/email.js`.** Mail leaves frea's
   domain with valid SPF and DKIM; injected markup there is a phishing tool.
 
@@ -481,16 +496,32 @@ At the defaults that is five days of history.
 
 ### Getting a copy off the box
 
-Rotation does not survive losing the volume. For that the copy has to leave,
-and the download route is the way:
+Rotation does not survive losing the volume. For that the copy has to leave —
+and it has to include the uploads, not just the database:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $TOKEN"      https://joinfrea.com/api/admin/backup -o frea-$(date +%F).json
+curl -fsS -H "Authorization: Bearer $TOKEN"      https://joinfrea.com/api/admin/archive -o frea-$(date +%F).zip
 ```
+
+That is `data.json` plus the whole `uploads/` tree — digital products, pitch
+videos and profile photos — with a `MANIFEST.txt` recording what was in it.
+
+**Use this one, not `/api/admin/backup`.** The database on its own is not a
+backup of this platform. A student who paid £10.50 for a playbook has an order,
+an entitlement and a resource row, and none of that is worth anything without
+the PDF those rows point at. Restore `data.json` alone after losing the volume
+and every download 404s, permanently, for someone who has already paid you.
+`/api/admin/backup` still returns the database by itself, which is useful for
+looking at, and useless for rebuilding.
 
 `$TOKEN` is an admin session token — sign in with an address in `ADMIN_EMAILS`.
 Run it from anywhere that runs on a schedule: your machine, a GitHub Action, a
-cron box. **The file contains live session tokens. Treat it as a credential.**
+cron box. **The archive contains live session tokens. Treat it as a
+credential.**
+
+The local rotation stays database-only on purpose: it guards against a logical
+mistake, where every file is still on disk and copying them all every six hours
+would fill the volume it exists to protect.
 
 Two more admin routes: `GET /api/admin/backups` lists what is on the volume,
 `POST /api/admin/backups` takes one immediately — worth doing by hand before
@@ -498,15 +529,25 @@ anything irreversible, a schema change or a `reset:launch`.
 
 ### Restoring
 
-A snapshot is the database, unmodified. There is no format to decode:
+A local snapshot is the database, unmodified. There is no format to decode:
 
 ```bash
 railway run cp /data/backups/data-<stamp>.json /data/data.json
 ```
 
+From an archive, the uploads come back too — and must, or every paid download
+is a 404:
+
+```bash
+unzip frea-2026-09-29.zip -d restore/
+railway run cp restore/data.json /data/data.json
+railway run cp -r restore/uploads/. /data/uploads/
+```
+
 Then restart. Everyone is signed out — sessions live in that file, and a
 restored one predates their current tokens — but nothing else is lost.
-`npm run test:backup` covers this path, restore included.
+`npm run test:backup` covers the database path and `npm run test:integrity`
+covers the archive.
 
 ---
 

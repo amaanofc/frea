@@ -1292,13 +1292,38 @@ body {
   aspect-ratio: 1 / 1;
 }
 
-.mentor-avatar-svg,
 .mentor-avatar-img {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
   border-radius: inherit;
+}
+
+/*
+ * The fallback for a mentor with no photo: their initials, in the display
+ * serif the rest of the site sets names in, on a tint drawn from the same
+ * four post-it colours as their card. Fills whatever box it is dropped into
+ * and inherits its corners, so one rule covers the 32px doc-card avatar and
+ * the 180px profile one. The font-size comes in inline, scaled off the box.
+ */
+.mentor-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  /* Set inline from the size the renderer was given. A rule below can still
+     override it, which the profile frame needs when it shrinks on a phone. */
+  font-size: var(--avatar-initials-size, 1em);
+  /* The cap height sits high in Fraunces; nudge it back onto the centre. */
+  line-height: 1;
+  padding-top: 0.04em;
+  user-select: none;
 }
 
 .mentor-card__identity {
@@ -2661,8 +2686,7 @@ body {
   background: #ffffff;
 }
 
-.profile-pic-preview img,
-.profile-pic-preview svg {
+.profile-pic-preview img {
   width: 100%;
   height: 100%;
   display: block;
@@ -2679,44 +2703,6 @@ body {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.avatar-preset-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.avatar-preset-btn {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 10px;
-  border: 2px solid rgba(23, 23, 23, 0.18);
-  background: #ffffff;
-  cursor: pointer;
-  overflow: hidden;
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar-preset-btn:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-marker-orange);
-}
-
-.avatar-preset-btn.active {
-  border-color: var(--color-marker-orange);
-  box-shadow: 0 0 0 2px var(--color-marker-orange);
-  transform: scale(1.05);
-}
-
-.avatar-preset-btn svg {
-  width: 100%;
-  height: 100%;
-  display: block;
 }
 
 /* ─────────────────────────────────────────────
@@ -3130,6 +3116,12 @@ body {
     width: 96px;
     height: 96px;
     font-size: 32px;
+  }
+
+  /* The renderer sizes initials for the 180px desktop frame. Beaten here
+     rather than inline, so the shrunk frame gets initials that fit it. */
+  .profile__avatar-frame .mentor-initials {
+    font-size: 36px;
   }
 
   .frea-cal {

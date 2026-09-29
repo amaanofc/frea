@@ -27,6 +27,7 @@ export const DATA_DIR = process.env.DATA_DIR
 export const DB_FILE = path.join(DATA_DIR, 'data.json');
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads', 'digital_products');
 export const VIDEO_DIR = path.join(DATA_DIR, 'uploads', 'pitch_videos');
+export const PHOTO_DIR = path.join(DATA_DIR, 'uploads', 'mentor_photos');
 
 /** Ships with the code and is never written to. */
 export const SEED_FILE = path.join(__dirname, 'data.seed.json');
@@ -35,7 +36,7 @@ export const DIST_DIR = path.join(__dirname, '..', 'dist');
 
 /** Creates the writable tree. Called once at startup. */
 export function ensureDataDirs() {
-  for (const dir of [DATA_DIR, UPLOADS_DIR, VIDEO_DIR]) {
+  for (const dir of [DATA_DIR, UPLOADS_DIR, VIDEO_DIR, PHOTO_DIR]) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
 
@@ -52,5 +53,5 @@ export function ensureDataDirs() {
     );
   }
 
-  return { DATA_DIR, DB_FILE, UPLOADS_DIR, VIDEO_DIR };
+  return { DATA_DIR, DB_FILE, UPLOADS_DIR, VIDEO_DIR, PHOTO_DIR };
 }

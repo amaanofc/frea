@@ -11,8 +11,10 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
+import sharp from 'sharp';
+import JSZip from 'jszip';
 
-import { UPLOADS_DIR, VIDEO_DIR, DIST_DIR, DATA_DIR, DB_FILE, ensureDataDirs } from './paths.js';
+import { UPLOADS_DIR, VIDEO_DIR, PHOTO_DIR, DIST_DIR, DATA_DIR, DB_FILE, ensureDataDirs } from './paths.js';
 
 import {
   loadDb,
@@ -39,6 +41,7 @@ import {
   isEmailVerified,
   getMentorApplications,
   updateMentorProfile,
+  saveDb,
   updateMentorSchedule,
   getAllResources,
   getResourceById,
@@ -134,7 +137,40 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.set('trust proxy', 1);
-app.use(cors());
+
+/**
+ * Cross-origin access, restricted to the origins that actually serve this app.
+ *
+ * It was wide open. The session token travels in an Authorization header
+ * rather than a cookie, so this was never a CSRF hole — the browser does not
+ * attach the token for a third-party page. What an open policy did allow was
+ * any site on the internet reading our API's responses from a visitor's
+ * browser, and scripting the whole public surface from a page we do not
+ * control.
+ *
+ * Requests with no Origin header — curl, the smoke test, server-to-server, and
+ * Stripe's webhook — are unaffected: CORS is a browser mechanism and those are
+ * not browsers. Same-origin requests from the app itself carry an Origin that
+ * matches, and in any case never consult this.
+ */
+const allowedOrigins = new Set(
+  [
+    process.env.PUBLIC_BASE_URL,
+    // Apex and www both serve the app; the Studid return path depends on it.
+    process.env.PUBLIC_BASE_URL?.replace('://www.', '://'),
+    process.env.PUBLIC_BASE_URL?.replace('://', '://www.'),
+    // Vite's dev server, which is a different origin from the API in dev.
+    process.env.NODE_ENV !== 'production' ? 'http://localhost:5173' : null,
+    process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:5173' : null
+  ].filter(Boolean).map(o => o.replace(/\/$/, ''))
+);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin.replace(/\/$/, ''))) return callback(null, true);
+    callback(null, false);
+  }
+}));
 
 // ─── Security headers ───────────────────────────────────
 //
@@ -159,13 +195,14 @@ app.use((req, res, next) => {
 
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    // 'unsafe-inline' is load-bearing, not laziness: the front end renders its
-    // markup as HTML strings and wires behaviour with onclick= attributes —
-    // 177 of them across src/main.js. Dropping it blanks the whole app. It
-    // costs most of CSP's XSS protection, so moving those to addEventListener
-    // and tightening this to 'self' is worth doing. Everything else here is
-    // already at full strength and does not depend on that work.
-    "script-src 'self' 'unsafe-inline'",
+    // No 'unsafe-inline'. There are no inline event handlers left: behaviour
+    // is wired by data-action and dispatched from one delegated listener per
+    // event type. This is the directive that matters most here — the front end
+    // renders markup as HTML strings and session tokens live in localStorage,
+    // so an injected script is account takeover rather than a defacement.
+    // Adding an onclick= attribute anywhere in new markup silently breaks that
+    // element under this policy, which is the intended pressure.
+    "script-src 'self'",
     // React sets style attributes, and the Google Fonts stylesheet is remote.
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
@@ -176,7 +213,13 @@ app.use((req, res, next) => {
     "connect-src 'self'",
     // Checkout is reached by navigation, so Stripe needs no frame or form entry.
     "frame-ancestors 'none'",
-    "frame-src 'none'",
+    // A mentor may link their two-minute pitch on YouTube, Loom or Drive
+    // instead of uploading one, and renderPitchVideoEmbed builds an iframe for
+    // each. This was 'none', so every one of those was a silently blank box —
+    // no error on the page, nothing in the network tab, just nothing. Listed
+    // host by host rather than opened up: these three are the only ones the
+    // embed helper can produce a URL for.
+    "frame-src https://www.youtube-nocookie.com https://www.loom.com https://drive.google.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'"
@@ -200,6 +243,16 @@ ensureDataDirs();
 // watch, so gating them behind a session would break the browse experience.
 // Served read-only with a long cache, since filenames are content-unique.
 app.use('/uploads/pitch_videos', express.static(VIDEO_DIR, {
+  maxAge: '30d',
+  immutable: true,
+  index: false,
+  dotfiles: 'deny'
+}));
+
+// Profile photos are public for the same reason: they are on every mentor card
+// in browse. Filenames carry a timestamp and eight random bytes, so a replaced
+// photo is a new URL and the long cache never serves a stale face.
+app.use('/uploads/mentor_photos', express.static(PHOTO_DIR, {
   maxAge: '30d',
   immutable: true,
   index: false,
@@ -304,6 +357,81 @@ const uploadVideo = multer({
     cb(new Error('That file is not a supported video. Use MP4, WebM or MOV — or record one here instead.'));
   }
 });
+
+// ─── Profile photo uploads ──────────────────────────────
+//
+// Photos used to be read in the browser as base64 and posted inside the JSON
+// body. That put a multi-MB string in the mentor record, and therefore in
+// every browse response for every visitor — and it could not work anyway:
+// base64 inflates by a third, so anything over about 1.4MB hit the 2MB JSON
+// cap and came back as "request entity too large". A phone photo is 2–4MB, so
+// in practice the upload failed for almost everyone.
+//
+// Now it is a real file, like pitch videos and documents: multipart in, sharp
+// downscales it to a square 512px WebP, and the record holds a short path.
+const MAX_PHOTO_BYTES = 12 * 1024 * 1024;
+const PHOTO_EDGE = 512;
+
+// Held in memory rather than written first: sharp reads the buffer, and the
+// only file that ever lands on the volume is the one we produced ourselves.
+const uploadPhoto = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PHOTO_BYTES },
+  fileFilter: (req, file, cb) => {
+    const mime = (file.mimetype || '').toLowerCase().split(';')[0].trim();
+    if (mime.startsWith('image/') && mime !== 'image/svg+xml') return cb(null, true);
+    cb(new Error('That file is not an image. Use a JPEG, PNG, WebP or HEIC photo.'));
+  }
+});
+
+/**
+ * Resolves a mentor's stored photoUrl to a file we are allowed to delete.
+ *
+ * Same reasoning as ownPitchVideoPath: PHOTO_DIR holds every mentor's photo
+ * and the filenames are public, so confinement to the directory is not enough
+ * — the name must be one THIS mentor's upload minted.
+ */
+function ownMentorPhotoPath(mentorId, url) {
+  const name = path.basename(String(url || ''));
+  if (!/^photo-\d+-\d+-[0-9a-f]{8}\.webp$/.test(name)) return null;
+  if (name.split('-')[1] !== String(Number(mentorId))) return null;
+
+  const full = path.join(PHOTO_DIR, name);
+  return full.startsWith(PHOTO_DIR) ? full : null;
+}
+
+/**
+ * Deletes the photo a mentor is replacing or removing.
+ *
+ * Retried, and awaited by the caller rather than done inline, because on
+ * Windows an unlink fails with EBUSY while any other handle is open on the
+ * file — and express.static will have just served this one to whoever was
+ * looking at the profile. One failed attempt leaves the file behind for good,
+ * and the volume it fills is the one data.json is written to.
+ *
+ * Asynchronous with a growing wait: a synchronous retry long enough to outlast
+ * the lock would block every other request on this process for the duration,
+ * to do housekeeping nobody is waiting on.
+ */
+async function discardMentorPhoto(mentorId, url) {
+  const stale = ownMentorPhotoPath(mentorId, url);
+  if (!stale) return;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      await fs.promises.unlink(stale);
+      return;
+    } catch (err) {
+      if (err.code === 'ENOENT') return;
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(err.code)) {
+        console.warn('[upload] could not delete mentor photo:', err.message);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 20 * (attempt + 1)));
+    }
+  }
+  console.warn('[upload] mentor photo still locked, leaving behind:', path.basename(stale));
+}
 
 /**
  * Checks the actual file header. This is the real gate: a renamed executable
@@ -1144,12 +1272,13 @@ function safeMentorPayload(mentor, { includeEmail = false } = {}) {
     topTipColor: source.topTipColor,
     achievements: Array.isArray(source.achievements) ? source.achievements : [],
     helpsWith: Array.isArray(source.helpsWith) ? source.helpsWith : [],
+    // Derived in the data layer from the bookings themselves, never a stored
+    // counter — see countCompletedCalls in server/db.js.
     callsCompleted: Number(source.callsCompleted) || 0,
     linkedin: source.linkedin || '',
     links: Array.isArray(source.links) ? source.links : [],
     pitchVideoUrl: source.pitchVideoUrl || '',
     photoUrl: source.photoUrl || '',
-    avatarId: source.avatarId || 1,
     interviewRequired: Boolean(source.interviewRequired),
     status: source.status || 'active',
     weeklySchedule: source.weeklySchedule || {},
@@ -1557,6 +1686,78 @@ app.delete('/api/upload/pitch-video', requireMentor,
   updateMentorProfile(req.session.mentorId, { pitchVideoUrl: '' });
   res.json({ success: true });
 });
+
+/**
+ * Profile photo upload. Re-encodes rather than storing what arrived: a photo
+ * off a phone is several megabytes of JPEG at 4000px, and it renders at 180px
+ * at the very largest. Re-encoding also means the bytes we serve were produced
+ * by sharp, so a file that merely claims to be an image cannot be served back
+ * to a visitor as something else.
+ */
+app.post('/api/upload/mentor-photo', requireMentor,
+  rateLimit({ max: 10, windowMs: 60_000, key: byEmail }), (req, res) => {
+  uploadPhoto.single('photo')(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          error: 'That image is over 12MB. Please choose a smaller one.',
+          tooLarge: true
+        });
+      }
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    if (err) return res.status(400).json({ success: false, error: err.message });
+    if (!req.file) return res.status(400).json({ success: false, error: 'No photo was uploaded.' });
+
+    const mentorId = req.session.mentorId;
+    const filename = `photo-${mentorId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.webp`;
+    const target = path.join(PHOTO_DIR, filename);
+
+    try {
+      await sharp(req.file.buffer)
+        // Orientation lives in EXIF on most phone photos; without this a
+        // portrait shot arrives on its side. rotate() applies it, and the
+        // metadata is dropped on write, which also strips any GPS tag the
+        // camera attached — that should not be on a public profile.
+        .rotate()
+        .resize(PHOTO_EDGE, PHOTO_EDGE, { fit: 'cover', position: 'attention' })
+        .webp({ quality: 82 })
+        .toFile(target);
+    } catch (e) {
+      console.warn('[upload] could not process mentor photo:', e.message);
+      return res.status(400).json({
+        success: false,
+        error: 'That image could not be read. Try a JPEG or PNG.'
+      });
+    }
+
+    const photoUrl = `/uploads/mentor_photos/${filename}`;
+
+    // Reclaim the photo this one replaces, for the same reason re-recording a
+    // pitch video does: the volume this fills is the one data.json lives on.
+    const previous = getMentorById(mentorId)?.photoUrl;
+    if (previous && previous !== photoUrl) await discardMentorPhoto(mentorId, previous);
+
+    let mentor = null;
+    try {
+      mentor = updateMentorProfile(mentorId, { photoUrl });
+    } catch (e) {
+      console.warn('[upload] could not attach mentor photo:', e.message);
+    }
+
+    res.json({ success: true, photoUrl, attached: Boolean(mentor) });
+  });
+});
+
+/** Removes a mentor's photo, file and all. They fall back to their initials. */
+app.delete('/api/upload/mentor-photo', requireMentor,
+  rateLimit({ max: 12, windowMs: 60_000, key: byEmail }), wrap(async (req, res) => {
+  const mentorId = req.session.mentorId;
+  await discardMentorPhoto(mentorId, getMentorById(mentorId)?.photoUrl || '');
+  updateMentorProfile(mentorId, { photoUrl: '' });
+  res.json({ success: true });
+}));
 
 app.post('/api/upload/document', requireMentor,
   rateLimit({ max: 12, windowMs: 60_000, key: byEmail }), (req, res, next) => {
@@ -2091,6 +2292,11 @@ app.post('/api/admin/backups', requireAdmin, (req, res) => {
  *
  * It contains everything, session tokens included, so it is admin-only and
  * must be treated as a credential once downloaded.
+ *
+ * This is the database ONLY. For a copy that could actually rebuild the
+ * platform after losing the volume, use /api/admin/archive — the records here
+ * point at files that live beside them, and restoring one without the other
+ * gives you every order and entitlement with nothing to download.
  */
 app.get('/api/admin/backup', requireAdmin, (req, res) => {
   if (!fs.existsSync(DB_FILE)) {
@@ -2101,6 +2307,79 @@ app.get('/api/admin/backup', requireAdmin, (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="frea-backup-${stamp}.json"`);
   fs.createReadStream(DB_FILE).pipe(res);
 });
+
+/**
+ * Everything the platform needs to be rebuilt: the database AND the uploads.
+ *
+ * The database on its own is not a backup of this platform. A student who paid
+ * £10.50 for a playbook has an order, an entitlement and a resource row — and
+ * none of that is worth anything without the PDF those rows point at. Same for
+ * every pitch video and profile photo. Restore data.json alone after losing the
+ * volume and every download 404s, permanently, for someone who has paid.
+ *
+ * The local rotation in backup.js stays database-only on purpose: it guards
+ * against a logical mistake, where the files are all still on disk and copying
+ * them every six hours would just fill the volume it is trying to protect.
+ * This route is for the other risk — the volume itself going away — which is
+ * the one that needs the copy to leave the box.
+ */
+app.get('/api/admin/archive', requireAdmin, wrap(async (req, res) => {
+  if (!fs.existsSync(DB_FILE)) {
+    return res.status(404).json({ success: false, error: 'No database file yet.' });
+  }
+
+  const zip = new JSZip();
+  zip.file('data.json', fs.readFileSync(DB_FILE));
+
+  let files = 0;
+  let bytes = 0;
+  for (const [label, dir] of [
+    ['digital_products', UPLOADS_DIR],
+    ['pitch_videos', VIDEO_DIR],
+    ['mentor_photos', PHOTO_DIR]
+  ]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (name.startsWith('.')) continue;
+      const full = path.join(dir, name);
+      try {
+        const stat = fs.statSync(full);
+        if (!stat.isFile()) continue;
+        zip.file(`uploads/${label}/${name}`, fs.readFileSync(full));
+        files += 1;
+        bytes += stat.size;
+      } catch (err) {
+        console.warn(`[archive] skipped ${label}/${name}: ${err.message}`);
+      }
+    }
+  }
+
+  // A manifest, so whoever opens this months from now can tell at a glance
+  // whether it is complete rather than inferring it from the file count.
+  zip.file('MANIFEST.txt', [
+    `frea archive`,
+    `taken: ${new Date().toISOString()}`,
+    `database: data.json (${fs.statSync(DB_FILE).size} bytes)`,
+    `uploads: ${files} file(s), ${bytes} bytes`,
+    ``,
+    `Restore: copy data.json to $DATA_DIR/data.json and the uploads/ tree to`,
+    `$DATA_DIR/uploads/, then restart. Everyone is signed out — sessions live`,
+    `in data.json and a restored one predates their current tokens.`,
+    ``,
+    `This file contains live session tokens. Treat it as a credential.`
+  ].join('\n'));
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="frea-archive-${stamp}.zip"`);
+
+  zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true, compression: 'DEFLATE' })
+    .pipe(res)
+    .on('error', (err) => {
+      console.error('[archive] stream failed:', err.message);
+      res.destroy(err);
+    });
+}));
 
 app.get('/api/admin/reports', requireAdmin, (req, res) => {
   res.json({ success: true, data: getReports() });
@@ -2262,27 +2541,58 @@ async function seedDemoContentOnFirstBoot(freshDatabase) {
 // no resource pointing at it yet.
 const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Everything the volume holds, and how to tell what is still in use.
+ *
+ * All three directories, not just documents. A pitch video whose upload
+ * succeeded but whose attach failed, and a photo whose delete lost a race with
+ * a reader holding the file open, both leave a file nothing points at — and
+ * videos are by far the largest things here, so leaving them out was leaving
+ * out the ones that matter most.
+ */
+function sweepableUploadDirs() {
+  const db = loadDb();
+  const mentors = db.mentors || [];
+  const referencedPaths = (values) => new Set(
+    values.filter(Boolean).map(v => path.basename(String(v).replace(/\\/g, '/')))
+  );
+
+  return [
+    { label: 'documents', dir: UPLOADS_DIR, referenced: new Set(getReferencedUploadNames()) },
+    { label: 'pitch videos', dir: VIDEO_DIR, referenced: referencedPaths(mentors.map(m => m.pitchVideoUrl)) },
+    { label: 'photos', dir: PHOTO_DIR, referenced: referencedPaths(mentors.map(m => m.photoUrl)) }
+  ];
+}
+
 function sweepOrphanedUploads() {
   try {
-    const referenced = new Set(getReferencedUploadNames());
     const now = Date.now();
     let removed = 0;
 
-    for (const name of fs.readdirSync(UPLOADS_DIR)) {
-      if (name.startsWith('.') || referenced.has(name)) continue;
-      const full = path.join(UPLOADS_DIR, name);
-      if (!full.startsWith(UPLOADS_DIR)) continue;
-      try {
-        const stat = fs.statSync(full);
-        if (!stat.isFile() || now - stat.mtimeMs < UPLOAD_GRACE_MS) continue;
-        fs.unlinkSync(full);
-        removed += 1;
-      } catch (_) { /* a file that vanished under us is already handled */ }
+    for (const { label, dir, referenced } of sweepableUploadDirs()) {
+      if (!fs.existsSync(dir)) continue;
+      let removedHere = 0;
+
+      for (const name of fs.readdirSync(dir)) {
+        if (name.startsWith('.') || referenced.has(name)) continue;
+        const full = path.join(dir, name);
+        if (!full.startsWith(dir)) continue;
+        try {
+          const stat = fs.statSync(full);
+          if (!stat.isFile() || now - stat.mtimeMs < UPLOAD_GRACE_MS) continue;
+          fs.unlinkSync(full);
+          removedHere += 1;
+        } catch (_) { /* a file that vanished under us is already handled */ }
+      }
+
+      if (removedHere) console.log(`[uploads] reclaimed ${removedHere} unreferenced ${label} file(s)`);
+      removed += removedHere;
     }
 
-    if (removed) console.log(`[uploads] reclaimed ${removed} unreferenced file(s)`);
+    return removed;
   } catch (err) {
     console.warn('[uploads] sweep failed:', err.message);
+    return 0;
   }
 }
 
@@ -2305,11 +2615,50 @@ const databaseExistedAtBoot = fs.existsSync(DB_FILE);
  * finish late — which is to say it looked like a flaky test and was in fact the
  * first few seconds after every deploy.
  */
+/**
+ * Moves photos that were stored inline as base64 out into real files.
+ *
+ * `safePhotoUrl` only accepts a path this server minted, so without this pass
+ * every mentor who had uploaded a photo under the old scheme would silently
+ * lose it on their next profile save. Runs once: after it, no record holds a
+ * data: URI, and the loop finds nothing on subsequent boots.
+ *
+ * A photo that cannot be decoded is cleared rather than left in place — an
+ * un-renderable data: URI is not worth carrying, and the mentor falls back to
+ * their initials, which is a perfectly good card.
+ */
+async function migrateInlineMentorPhotos() {
+  const db = loadDb();
+  const inline = db.mentors.filter(m => String(m.photoUrl || '').startsWith('data:'));
+  if (!inline.length) return;
+
+  console.log(`[frea backend] migrating ${inline.length} inline profile photo(s) to files`);
+
+  for (const mentor of inline) {
+    const base64 = String(mentor.photoUrl).split(',')[1] || '';
+    const filename = `photo-${mentor.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.webp`;
+    try {
+      await sharp(Buffer.from(base64, 'base64'))
+        .rotate()
+        .resize(PHOTO_EDGE, PHOTO_EDGE, { fit: 'cover', position: 'attention' })
+        .webp({ quality: 82 })
+        .toFile(path.join(PHOTO_DIR, filename));
+      mentor.photoUrl = `/uploads/mentor_photos/${filename}`;
+    } catch (e) {
+      console.warn(`[frea backend] mentor ${mentor.id}: could not convert photo (${e.message}); clearing it`);
+      mentor.photoUrl = '';
+    }
+  }
+
+  saveDb(db);
+}
+
 async function boot() {
   // Touch the database so it exists, then fill in demo content if this is the
   // very first boot on a fresh volume.
   loadDb();
   await seedDemoContentOnFirstBoot(!databaseExistedAtBoot);
+  await migrateInlineMentorPhotos();
   // The seed writer is deliberately standalone; reload once so the backup and
   // the first request observe the same canonical schema.
   loadDb();

@@ -75,3 +75,68 @@ All six suites green — **223 checks, 0 failures**.
 - **Stripe deprecated Accounts v1 mid-build.** The API refused `type: 'express'`
   outright. Rebuilt on Accounts v2 and verified live.
 - **Atomic writes fail on Windows** when a reader holds `data.json` — now retries.
+
+---
+
+## Phase 5 — production readiness (29 September 2026)
+
+Found by auditing for launch rather than from a bug report.
+
+### Security
+
+- [x] 30. Stored XSS: `photoUrl` reached an `<img src>` unescaped and unsanitised
+- [x] 31. `safePhotoUrl` checks the owner in the filename, not just its shape
+- [x] 32. `achievements` sanitised on the apply path, as it already was on edit
+- [x] 33. Escapers moved to `src/escape.js` — one copy, not two
+- [x] 34. All 149 inline handlers → `data-action`; `script-src` tightened to `'self'`
+- [x] 35. CORS restricted to the origins that serve the app
+
+### Storage
+
+- [x] 36. Profile photos are files on the volume, downscaled to 512px WebP —
+      they were base64 in the record, and too large to post at all
+- [x] 37. Boot migration converts existing inline photos
+- [x] 38. Orphan sweep covers pitch videos and photos, not just documents
+- [x] 39. `/api/admin/archive` — database **and** uploads, the copy you restore from
+
+### Records
+
+- [x] 40. Resource attribution follows the mentor's profile instead of freezing
+- [x] 41. `callsCompleted` derived from bookings that actually happened
+- [x] 42. Meeting rooms named with 16 random bytes, not the booking id
+- [x] 43. No invented numbers: landing count, hero sample card
+
+### Forms
+
+- [x] 44. One publish form, not two — the signup copy had no "What's Inside"
+- [x] 45. `helpsWith` editable; it drives search and had no field anywhere
+- [x] 46. Dropped the dead-end validation on the read-only contact address
+- [x] 47. Illustrated avatars replaced by initials (the picker never worked)
+
+### Consistency
+
+- [x] 48. Emoji replaced with icons from the existing set
+- [x] 49. Internal links go to the mentor tab directly, not via the redirect
+- [x] 50. One name for the mentor space across navbar, buttons and page title
+- [x] 51. Heading case, ampersand escaping and placeholder wording normalised
+- [x] 52. 40 dead `window.*` exports removed
+- [x] 53. Profile avatar shrinks on a phone again (inline style beat the media query)
+
+## Result
+
+**520 checks, 0 failures**, across twelve suites — `npm run test:all`.
+
+Two new suites: `test:photo` (45) for the photo pipeline, the initials avatars
+and the tightened CSP; `test:integrity` (42) for records, forms, backups and
+site-wide consistency.
+
+### Still open, deliberately
+
+- **Stripe is on test keys.** Not a code change — see `DEPLOY.md` §8. Account
+  activation has a review period, so it needs starting before it is needed.
+- **Session tokens live in `localStorage`.** Moving to an httpOnly cookie means
+  adding CSRF protection in the same change, since the current header scheme is
+  CSRF-immune by construction. One deliberate change, not a swap.
+- **The JSON store.** Migration triggers are written down in `DEPLOY.md`; the
+  binding one is that a second instance is impossible, so deploys are not
+  zero-downtime.

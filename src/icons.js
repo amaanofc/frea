@@ -103,6 +103,45 @@ export const ICONS = {
     <path d="M22 10H18C15 10 14 9 14 6V2L22 10Z"/>
   </svg>`,
 
+  // Key / Sign in
+  key: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="16.5" cy="7.5" r="4.5"/>
+    <path d="M13.3 10.7L3 21V22H6V20H8V18H10L13.3 10.7Z"/>
+    <path d="M18.5 6H18.51" stroke-width="2.2"/>
+  </svg>`,
+
+  // Sign out / Door
+  signOut: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 3H6C4.34 3 3 4.34 3 6V18C3 19.66 4.34 21 6 21H9"/>
+    <path d="M16 8L21 12L16 16"/>
+    <path d="M21 12H9"/>
+  </svg>`,
+
+  // User / Person
+  user: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="7.5" r="4"/>
+    <path d="M4 20.5C4 16.91 7.58 14 12 14C16.42 14 20 16.91 20 20.5"/>
+  </svg>`,
+
+  // Chart / Dashboard
+  chart: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3V19C3 20.1 3.9 21 5 21H21"/>
+    <path d="M7 15L11 10.5L14 13L20 6"/>
+  </svg>`,
+
+  // Warning / Caution
+  warning: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.29 3.86L1.82 18C1.47 18.6 1.47 19.34 1.81 19.95C2.16 20.55 2.8 20.93 3.5 20.94H20.5C21.2 20.93 21.84 20.55 22.19 19.95C22.53 19.34 22.53 18.6 22.18 18L13.71 3.86C13.36 3.27 12.72 2.91 12 2.91C11.28 2.91 10.64 3.27 10.29 3.86Z"/>
+    <path d="M12 9V13.5"/>
+    <path d="M12 17H12.01" stroke-width="2.2"/>
+  </svg>`,
+
+  // Location pin / Campus
+  pin: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 22C12 22 20 16 20 10C20 5.58 16.42 2 12 2C7.58 2 4 5.58 4 10C4 16 12 22 12 22Z"/>
+    <circle cx="12" cy="10" r="3"/>
+  </svg>`,
+
   // Arrow Right
   arrowRight: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 12H20M20 12L14 6M20 12L14 18"/>

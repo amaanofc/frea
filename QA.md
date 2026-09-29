@@ -154,8 +154,26 @@ In a **second browser**, with a different `.ac.uk` address:
 - [ ] Typing an email auto-detects the university
 - [ ] Top-tip preview updates live as you type, and enforces 140 characters
 - [ ] Post-it colour picker changes the preview
-- [ ] Avatar picker works; photo upload shows a preview
 - [ ] "add a link" adds rows; a bare `linkedin.com/in/you` is accepted and normalised
+
+**Profile picture — the one path automated tests cannot reach:**
+
+- [ ] Before uploading anything, the preview shows **your initials**, and they
+      update as you type your name
+- [ ] **On a real phone**, upload a photo straight from the camera roll
+- [ ] A **portrait** shot comes back upright, not on its side (EXIF rotation)
+- [ ] An **iPhone HEIC** photo is either accepted or refused with a readable
+      message — never a silent failure. iOS usually transcodes to JPEG on
+      upload, so this is the case worth confirming on the device itself
+- [ ] A photo over 12MB is refused with a clear message
+- [ ] "Remove photo" puts the initials back, and the mentor card agrees
+- [ ] Upload, then save the profile — **the photo survives the save**
+
+**What you can help with:**
+
+- [ ] The field is prefilled with your existing tags, comma separated
+- [ ] Editing them changes the "what you can ask me about" list on your profile
+- [ ] A tag you added is findable from the browse search box
 
 **Pitch video — both paths:**
 
@@ -269,6 +287,15 @@ After deploying, with a **real** email address:
 - [ ] `joinfrea.com/sitemap.xml` lists real URLs on the real domain
 - [ ] Stripe webhook shows deliveries succeeding in the Dashboard
 - [ ] Deploy again → **your test data is still there** *(proves the volume works)*
+
+**The backup you would actually restore from:**
+
+- [ ] `curl -H "Authorization: Bearer $TOKEN" .../api/admin/archive -o out.zip`
+      returns a zip, not JSON
+- [ ] It contains `data.json`, `uploads/digital_products/`, and `MANIFEST.txt`
+- [ ] Unzip it and open a PDF from `uploads/digital_products/` — **a backup you
+      have not opened is a backup you do not have**
+- [ ] Schedule it somewhere that is not this box
 
 ---
 

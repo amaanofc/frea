@@ -4,6 +4,14 @@
 **Scope:** every issue from the first audit, plus Stripe payments at a 5% platform fee
 **Status:** ✅ build clean · **135 automated checks passing** · ready to ship behind config
 
+> **This report is a point-in-time record of the September audit, kept for the
+> reasoning it captures. It is not the current state.** Two later passes —
+> university sign-in and one account home, then production readiness on
+> 29 September 2026 — changed a good deal of what is described below,
+> including the mentor portal (now a tab of my space), the illustrated avatars
+> (gone), and the CSP (no longer needs `'unsafe-inline'`). `tasklist.md` has
+> the current list and `CLAUDE.md` the invariants that hold today.
+
 ---
 
 ## 1. What changed, in one paragraph

@@ -76,8 +76,11 @@ export function metaForRoute(path, context = {}) {
       description: 'Your mentoring sessions and obtained freabies and playbooks.',
       noindex: true
     },
+    // Named for the tab it lands on. It was "Mentor portal", which is what
+    // this used to be a separate page for — three surfaces called the same
+    // destination three different things.
     '/mentor-dashboard': {
-      title: 'Mentor portal · frea',
+      title: 'Mentor space · frea',
       description: 'Manage your availability, profile, resources and payouts.',
       noindex: true
     },

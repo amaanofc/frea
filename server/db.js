@@ -329,6 +329,9 @@ function migrate(db) {
     // been here a year is not carrying last November's days off.
     m.scheduleOverrides = normaliseOverrides(m.scheduleOverrides, { keepFrom: todayCanonical() });
     delete m.schedule;
+    // The illustrated avatars are gone; a mentor is their photo or their
+    // initials. Nothing reads this any more.
+    delete m.avatarId;
 
     if (!Array.isArray(m.links)) {
       const links = [];
@@ -336,7 +339,10 @@ function migrate(db) {
       if (m.website) links.push({ label: 'Website', url: m.website });
       m.links = links;
     }
-    if (typeof m.callsCompleted !== 'number') m.callsCompleted = 0;
+    // Derived from the bookings on every read now (countCompletedCalls), so
+    // the stored counter is not a second, drifting answer to the same
+    // question — and the seeded demo figures are not presented as real ones.
+    delete m.callsCompleted;
     if (typeof m.payoutsEnabled !== 'boolean') m.payoutsEnabled = false;
   });
 
@@ -816,7 +822,7 @@ export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, d
     displayDate: toDisplayDate(canonicalDate),
     displayTime: toDisplayTime(canonicalTime),
     timezone: ukTimezoneLabel(canonicalDate),
-    meetingUrl: meetingUrlFor(id),
+    meetingUrl: meetingUrlFor(),
     cancelToken: crypto.randomBytes(16).toString('hex'),
     topTip: mentor.topTip,
     status: 'confirmed',
@@ -825,7 +831,6 @@ export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, d
 
   db.bookings.push(booking);
   db.stats.totalBookings += 1;
-  mentor.callsCompleted += 1;
 
   saveDb(db);
 
@@ -838,9 +843,36 @@ export function createBooking({ mentorId, studentEmail, studentAuthIdentifier, d
  * moment it is sent — unlike the random meet.google.com codes this used to mint,
  * which pointed at nothing.
  */
-function meetingUrlFor(bookingId) {
-  const room = `frea-${bookingId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  return `https://meet.jit.si/${room}`;
+/**
+ * The room a booking's call happens in.
+ *
+ * The name is random rather than derived from the booking id. A Jitsi room is
+ * open to anyone who knows its name and has no password, and the id is a
+ * timestamp plus three random bytes — which, for a room whose start time is
+ * known, is a small enough space to be worth not relying on. Sixteen bytes is
+ * not. The URL is stored on the booking, so existing calls keep theirs.
+ */
+function meetingUrlFor() {
+  return `https://meet.jit.si/frea-${crypto.randomBytes(16).toString('hex')}`;
+}
+
+/**
+ * Calls that have actually happened: not cancelled, and the slot has passed.
+ *
+ * Derived rather than counted. `mentor.callsCompleted` was incremented when a
+ * booking was *made* and decremented on cancellation, so a mentor with one
+ * session booked for next month advertised "1 chats completed" on their public
+ * card today — a number about a conversation that had not happened yet, on the
+ * page a student uses to decide whether to trust them. A derived count also
+ * cannot drift out of step with the bookings it claims to describe.
+ */
+export function countCompletedCalls(db, mentorId) {
+  const id = parseInt(mentorId, 10);
+  return (db.bookings || []).filter(b =>
+    b.mentorId === id
+    && b.status !== 'cancelled'
+    && isSlotPast(b.date, b.time)
+  ).length;
 }
 
 /** Cancel a booking. Either party may cancel; the token proves it's theirs. */
@@ -875,7 +907,8 @@ export function cancelBooking({ bookingId, email, authIdentifier = null, mentorI
   booking.cancelledAt = new Date().toISOString();
   booking.cancelledBy = isAdmin ? 'admin' : (isMentor ? 'mentor' : 'student');
 
-  if (mentor && mentor.callsCompleted > 0) mentor.callsCompleted -= 1;
+  // No callsCompleted to decrement: it is derived from the bookings themselves
+  // now, and a cancelled one stops counting the moment its status changes.
   if (db.stats.totalBookings > 0) db.stats.totalBookings -= 1;
 
   saveDb(db);
@@ -1003,9 +1036,9 @@ export function createMentorApplication(appData) {
     if (appData.year) mentor.year = cleanText(appData.year, 40);
     if (appData.topTip) mentor.topTip = cleanText(appData.topTip, 140);
     if (appData.topTipColor || appData.postitColor) mentor.topTipColor = safePostitColor(appData.topTipColor || appData.postitColor);
-    if (appData.achievements) mentor.achievements = appData.achievements;
-    if (appData.photoUrl) mentor.photoUrl = appData.photoUrl;
-    if (appData.avatarId) mentor.avatarId = appData.avatarId;
+    if (appData.achievements) mentor.achievements = cleanAchievements(appData.achievements);
+    if (appData.helpsWith) mentor.helpsWith = cleanHelpsWith(appData.helpsWith);
+    if (appData.photoUrl) mentor.photoUrl = safePhotoUrl(appData.photoUrl, mentor.id);
     if (appData.pitchVideoUrl) mentor.pitchVideoUrl = safeVideoUrl(appData.pitchVideoUrl);
     if (appData.linkedin) mentor.linkedin = sanitiseUrl(appData.linkedin) || '';
     if (appData.links) mentor.links = sanitiseLinks(appData.links);
@@ -1029,8 +1062,17 @@ export function createMentorApplication(appData) {
       bio: cleanText(appData.bio, 1200) || ('Senior student at ' + verifiedUniversity + '. Happy to chat about course survival, applications, and student life.'),
       topTip: cleanText(appData.topTip, 140) || 'Reach out to older students early and test your revision methods!',
       topTipColor: safePostitColor(postitColor),
-      achievements: appData.achievements && appData.achievements.length > 0 ? appData.achievements : ['verified-mentor'],
-      helpsWith: [cleanText(appData.major || appData.degree, 40) || 'academics', 'exam tips', 'cv roast', 'applications'],
+      achievements: cleanAchievements(appData.achievements).length
+        ? cleanAchievements(appData.achievements)
+        : ['verified-mentor'],
+      // What a student can ask about. The form asks for this now, so honour
+      // the answer; the derived list is only a starting point for a mentor who
+      // left it blank. It was always derived, which meant every mentor carried
+      // the same three generic tags — and these feed the search box and the
+      // goal filter, so identical tags make the filters useless.
+      helpsWith: cleanHelpsWith(appData.helpsWith).length
+        ? cleanHelpsWith(appData.helpsWith)
+        : [cleanText(appData.major || appData.degree, 40) || 'academics', 'exam tips', 'cv roast', 'applications'],
       rating: 5.0,
       callsCompleted: 0,
       linkedin: sanitiseUrl(appData.linkedin) || '',
@@ -1040,8 +1082,7 @@ export function createMentorApplication(appData) {
           : [appData.linkedin, appData.website].filter(Boolean)
       ),
       pitchVideoUrl: safeVideoUrl(appData.pitchVideoUrl),
-      photoUrl: appData.photoUrl || '',
-      avatarId: appData.avatarId || 1,
+      photoUrl: safePhotoUrl(appData.photoUrl, nextId),
       interviewRequired: false,
       status: 'active',
       weeklySchedule: normaliseSchedule(
@@ -1330,11 +1371,9 @@ export function updateMentorProfile(id, updates) {
       .map(a => cleanText(a, 75)).filter(Boolean).slice(0, 3);
   }
   if (updates.helpsWith && Array.isArray(updates.helpsWith)) {
-    mentor.helpsWith = updates.helpsWith
-      .map(h => cleanText(h, 40)).filter(Boolean).slice(0, 12);
+    mentor.helpsWith = cleanHelpsWith(updates.helpsWith);
   }
-  if (updates.photoUrl !== undefined) mentor.photoUrl = updates.photoUrl;
-  if (updates.avatarId !== undefined) mentor.avatarId = parseInt(updates.avatarId) || 1;
+  if (updates.photoUrl !== undefined) mentor.photoUrl = safePhotoUrl(updates.photoUrl, mentor.id);
   if (updates.color) mentor.color = updates.color;
   if (updates.pitchVideoUrl !== undefined) mentor.pitchVideoUrl = safeVideoUrl(updates.pitchVideoUrl);
 
@@ -1395,6 +1434,53 @@ function safeVideoUrl(value) {
     return raw;
   }
   return sanitiseUrl(raw) || '';
+}
+
+/**
+ * Achievements are mentor-supplied strings rendered on the public card.
+ *
+ * `updateMentorProfile` has always cleaned them; the application path stored
+ * the array as it arrived, so the same field was sanitised on one route and
+ * raw on the other. Same caps as the edit path, so a profile cannot gain
+ * anything by being created rather than edited.
+ */
+function cleanAchievements(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(a => cleanText(a, 75)).filter(Boolean).slice(0, 3);
+}
+
+/** Same caps as the edit path, so neither route is the lenient one. */
+function cleanHelpsWith(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(h => cleanText(h, 40)).filter(Boolean).slice(0, 12);
+}
+
+/**
+ * A profile photo is only ever a file this server wrote.
+ *
+ * The field arrives from the client on every profile save, so it is untrusted
+ * even though it lives in our own record — and it is interpolated into an
+ * `<img src>`, which is exactly the sink the escaping rule exists for. An
+ * allow-list of our own minted filenames is the narrowest thing that works:
+ * no data: URI (those used to be stored inline, which is what made a multi-MB
+ * blob part of every browse response), and no remote host, so a mentor cannot
+ * point a public card at a tracking pixel or a URL that loads something else
+ * tomorrow.
+ *
+ * Shape is `photo-<mentorId>-<timestamp>-<8 hex>.webp`, mirroring the pitch
+ * video and document names — and, like those, the owner in the name is
+ * checked, not merely present. Shape alone would let one mentor point their
+ * card at another's photo: harmless-looking, but it is someone else's face on
+ * a profile that is not theirs, and the same laxness on the delete path is how
+ * one mentor removes another's file.
+ */
+export function safePhotoUrl(value, mentorId) {
+  const raw = (value == null ? '' : String(value)).trim();
+  if (!raw) return '';
+
+  const match = /^\/uploads\/mentor_photos\/photo-(\d+)-\d+-[0-9a-f]{8}\.webp$/.exec(raw);
+  if (!match) return '';
+  return match[1] === String(Number(mentorId)) ? raw : '';
 }
 
 function sanitiseUrl(value) {
@@ -1470,11 +1556,30 @@ function currentVersionFor(resource, db) {
   return (db.resourceVersions || []).find(v => v.id === resource.currentVersionId) || null;
 }
 
+/**
+ * A resource as the rest of the world sees it.
+ *
+ * The mentor's name, university and degree are re-read from the mentor record
+ * rather than trusted from the copy stored on the resource. They were written
+ * once at publish time and never refreshed, so a mentor who corrected their
+ * degree, changed their name, or had their institution re-derived kept the old
+ * attribution on every document they had already published — on the resources
+ * hub, in the preview modal, and on the Stripe line item a student sees at
+ * checkout.
+ *
+ * The stored copy stays as the fallback: an archived resource whose mentor has
+ * since been removed still has to render as something.
+ */
 function resourceView(resource, db) {
   const current = currentVersionFor(resource, db);
   const { fileName, fileUrl, ...rest } = resource;
+  const mentor = (db.mentors || []).find(m => m.id === resource.mentorId);
+
   return {
     ...rest,
+    mentorName: mentor?.name || rest.mentorName,
+    mentorUniversity: mentor?.university || rest.mentorUniversity,
+    mentorMajor: mentor?.major || rest.mentorMajor,
     currentVersionId: current?.id || resource.currentVersionId || null,
     versionNumber: current?.versionNumber || 1
   };
@@ -1491,6 +1596,7 @@ function withMentorResources(mentor, db, options = {}) {
   if (!mentor) return null;
   return {
     ...mentor,
+    callsCompleted: countCompletedCalls(db, mentor.id),
     docs: resourcesForMentor(db, mentor.id, options)
   };
 }

@@ -4,6 +4,7 @@
 
 import './style.css';
 import { MENTORS, ACHIEVEMENTS, SUBJECTS, YEAR_FILTERS, SUBJECT_MAP, UK_UNIVERSITIES, TESTIMONIALS, FAQ_ITEMS, getAllDocs, getDocById } from './data.js';
+import { escapeHtml } from './escape.js';
 import { getMentorAvatar } from './avatars.js';
 import {
   SESSION_MINUTES,
@@ -25,6 +26,8 @@ import {
   submitMentorApplication,
   fetchStats,
   uploadDocument,
+  uploadMentorPhoto,
+  removeMentorPhoto,
   sendEmailVerification,
   verifyEmailCode,
   startContactEmailChange,
@@ -64,6 +67,19 @@ import {
   verifyLegacyClaim,
 } from './api.js';
 import { ICONS } from './icons.js';
+
+/**
+ * The same icon at a different size.
+ *
+ * Every entry in ICONS carries its own width and height, which is right for
+ * the inline-with-text case they are almost always used in. A few places want
+ * one as a standalone mark — a confirmation screen, an empty state — and
+ * scaling with CSS would need a wrapper rule per site. This rewrites the two
+ * attributes instead; the viewBox does the rest.
+ */
+function largeIcon(svg, size) {
+  return String(svg).replace(/width="\d+(?:\.\d+)?" height="\d+(?:\.\d+)?"/, `width="${size}" height="${size}"`);
+}
 import { applyRouteMeta } from './seo.js';
 
 // ─── Canonical time helpers (mirror of server/time.js) ─────
@@ -115,24 +131,221 @@ function toLongDisplayDate(iso) {
   return `${DAY_NAMES[dt.getUTCDay()]} ${d} ${longMonths[m - 1]} ${y}`;
 }
 
-/**
- * A value destined for a JS string literal inside an HTML attribute, e.g.
- * onclick="fn(${jsArg(name)})". Both escapes are required and the order
- * matters — escapeHtml on its own renders ' as &#39;, which the HTML parser
- * decodes back to ' before the JS is parsed, reopening the literal.
- * Returns its own quotes; do not add more.
- */
-function jsArg(value) {
-  return escapeHtml(JSON.stringify(String(value == null ? '' : value)));
+window.escapeHtml = escapeHtml;
+// ─── Event delegation ───────────────────────────────────
+//
+// Behaviour is wired by `data-action` and dispatched from one listener per
+// event type, not by `onclick=` attributes in the markup.
+//
+// Delegation rather than addEventListener on each element, because this app
+// renders by assigning innerHTML: every repaint throws away the nodes, so
+// anything bound to them would have to be re-bound on every render, and the
+// one render that forgot would be a dead button. These listeners are on
+// `document` and are registered once, so markup produced at any point is live
+// the moment it lands.
+//
+// The reason this matters more than tidiness: inline handlers are the only
+// thing that required `script-src 'unsafe-inline'`, and that directive is what
+// stopped the CSP defending against the XSS bugs in the security invariants.
+// Session tokens live in localStorage, so an XSS here is account takeover.
+//
+// Arguments travel as data attributes, which also retires jsArg() at these
+// sites — there is no JS string literal inside an HTML attribute any more, so
+// the escaping hazard it exists for cannot arise.
+
+const ACTION_ATTRIBUTE = {
+  click: 'data-action',
+  input: 'data-input-action',
+  change: 'data-change-action',
+  submit: 'data-submit-action'
+};
+
+const ACTIONS = { click: {}, input: {}, change: {}, submit: {} };
+
+/** Registers handlers for one event type. `fn(element, event)`. */
+function registerActions(type, map) {
+  Object.assign(ACTIONS[type], map);
 }
 
-function escapeHtml(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+for (const [type, attribute] of Object.entries(ACTION_ATTRIBUTE)) {
+  document.addEventListener(type, (event) => {
+    // The nearest element carrying an action wins, and nothing above it runs.
+    // That is what the old `event.stopPropagation()` calls were for: a "book a
+    // chat" button sits inside a mentor card that is itself clickable.
+    const el = event.target.closest?.(`[${attribute}]`);
+    if (!el) return;
+
+    const name = el.getAttribute(attribute);
+    const handler = ACTIONS[type][name];
+    if (!handler) {
+      console.warn(`[actions] no ${type} handler registered for "${name}"`);
+      return;
+    }
+    handler(el, event);
+  });
 }
-window.escapeHtml = escapeHtml;
-window.jsArg = jsArg;
+
+/** Reads a numeric data attribute, for the many handlers keyed on an id. */
+function dataInt(el, key) {
+  const n = parseInt(el.dataset[key], 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+// The handful that appear on nearly every page. Everything else is registered
+// beside the feature it belongs to.
+registerActions('click', {
+  navigate: (el, event) => {
+    event.preventDefault();
+    navigateTo(el.dataset.href);
+  },
+  // Navigating out of an open modal, and out of the navbar's mentor menu.
+  // Both used to be a second statement in the same onclick attribute.
+  'navigate-close': (el, event) => {
+    event.preventDefault();
+    closeModal();
+    navigateTo(el.dataset.href);
+  },
+  'navigate-menu': (el, event) => {
+    event.preventDefault();
+    closeMentorsDropdown();
+    navigateTo(el.dataset.href);
+  },
+  // The mentor half of my space. /mentor-dashboard still resolves and still
+  // redirects here, because bookmarks and old links point at it — but the
+  // app's own navigation should not take a redirect to reach its own page,
+  // and going straight to /my-space without this would land on the student
+  // tab, which is not what "my mentor dashboard" means.
+  'navigate-mentor-space': (el, event) => {
+    event.preventDefault();
+    closeMentorsDropdown();
+    openMentorSpace();
+  },
+  'close-modal': () => closeModal(),
+  // Claims the click so the clickable ancestor does not also act on it. The
+  // element's own default — following a link — still happens.
+  stop: () => {}
+});
+
+// Actions that take nothing from the element they are on. Wrapped in arrows
+// rather than referenced directly so the dispatcher's (element, event)
+// arguments are not passed on as if they were the function's own.
+registerActions('click', Object.fromEntries([
+  ['addSignupLink', () => addSignupLink()],
+  ['beginPayoutOnboarding', () => beginPayoutOnboarding()],
+  ['clearAllFilters', () => clearAllFilters()],
+  ['clearResourcesSearch', () => clearResourcesSearch()],
+  ['discardPitchTake', () => discardPitchTake()],
+  ['initAdminDashboard', () => initAdminDashboard()],
+  ['openSuggestionModal', () => openSuggestionModal()],
+  ['removePitchVideo', () => removePitchVideo()],
+  ['replacePitchVideo', () => replacePitchVideo()],
+  ['requestLegacyClaimFromSpace', () => requestLegacyClaimFromSpace()],
+  ['resetResourcesFilters', () => resetResourcesFilters()],
+  ['retakePitch', () => retakePitch()],
+  ['savePitchVideo', () => savePitchVideo()],
+  ['skipStudentPreferences', () => skipStudentPreferences()],
+  ['startPitchRecording', () => startPitchRecording()],
+  ['togglePitchRecording', () => togglePitchRecording()],
+  ['verifyLegacyClaimFromSpace', () => verifyLegacyClaimFromSpace()]
+]));
+
+registerActions('input', {
+  filterMentors: () => filterMentors(),
+  updateLiveAchievements: () => updateLiveAchievements()
+});
+
+// Actions whose whole argument is one value carried on the element. These were
+// `onclick="fn('${id}')"` — a JS string literal inside an HTML attribute, the
+// construction jsArg() exists to make safe. As a data attribute the value is
+// just text, so escapeHtml is the whole of the requirement.
+registerActions('click', Object.fromEntries([
+  ['addBookingToCalendar', el => addBookingToCalendar(el.dataset.arg)],
+  ['cancelMySession', el => cancelMySession(el.dataset.arg)],
+  ['deleteMentorResource', el => deleteMentorResource(el.dataset.arg)],
+  ['downloadBookingInvite', el => downloadBookingInvite(el.dataset.arg)],
+  ['downloadDoc', el => downloadDoc(el.dataset.arg)],
+  ['editResourcePrice', el => editResourcePrice(el.dataset.arg)],
+  ['markReportResolved', el => markReportResolved(el.dataset.arg)],
+  ['mentorCancelBooking', el => mentorCancelBooking(el.dataset.arg)],
+  ['openDocCheckoutModal', el => openDocCheckoutModal(el.dataset.arg)],
+  ['openDocPreviewModal', el => openDocPreviewModal(el.dataset.arg)],
+  ['processDocCheckout', el => processDocCheckout(el.dataset.arg)],
+  ['setResourcesSubjectFilter', el => setResourcesSubjectFilter(el.dataset.arg)],
+  ['setResourcesTypeFilter', el => setResourcesTypeFilter(el.dataset.arg)],
+  ['setResourcesUniFilter', el => setResourcesUniFilter(el.dataset.arg)],
+  ['switchMentorPortalTab', el => switchMentorPortalTab(el.dataset.arg)],
+  ['switchPitchTab', el => switchPitchTab(el.dataset.arg)]
+]));
+
+// Everything else: an id or a label off the element, or the element's own
+// value. `this` inside an inline handler was the element, which is what the
+// dispatcher passes as the first argument, so the handlers themselves did not
+// have to change.
+registerActions('click', Object.fromEntries([
+  ['toggleFaq', el => toggleFaq(dataInt(el, 'arg'))],
+  ['toggleMentorStar', el => toggleMentorStar(dataInt(el, 'arg'))],
+  ['removeSignupLink', el => removeSignupLink(dataInt(el, 'arg'))],
+  ['openBookingModal', el => openBookingModal(dataInt(el, 'arg'))],
+  ['confirmBooking', el => confirmBooking(dataInt(el, 'arg'))],
+  ['navigateMonth', el => navigateMonth(dataInt(el, 'arg'))],
+  ['loadPayoutStatus', () => loadPayoutStatus(true)],
+  ['openPreferencesModal', () => openPreferencesModal(true)],
+  ['setFilter', el => setFilter(el.dataset.field, el.dataset.arg)],
+  ['filterProfileDocs', el => filterProfileDocs(el.dataset.arg, dataInt(el, 'mentor'))],
+  ['selectSuggestionType', el => selectSuggestionType(el, el.dataset.arg)],
+  ['selectPrefSubject', el => selectPrefSubject(el, el.dataset.arg)],
+  ['selectCalendarMonthCell', el => selectCalendarMonthCell(el.dataset.arg)],
+  ['selectMonthSlotChip', el => selectMonthSlotChip(el.dataset.time, el.dataset.date, el.dataset.display)],
+  ['openReportModal', el => openReportModal(el.dataset.targetType, el.dataset.targetId, el.dataset.label)],
+  // The three verification prompts differed only in the sentence shown, so the
+  // sentence is the argument and the null email is the rule: passing an address
+  // that does not match the session reads as "this belongs to someone else"
+  // and reopens verification.
+  ['verify', el => openVerificationModal({ email: null, actionName: el.dataset.arg })],
+  ['toggleMentorsDropdown', (el, event) => toggleMentorsDropdown(event)],
+  ['mentorSignOut', () => mentorSignOut()],
+  ['studentSignOut', () => studentSignOut()],
+  ['reload', () => window.location.reload()],
+  ['dismiss-toast', el => el.closest('.frea-toast')?.classList.remove('show')],
+  ['scroll-to-faq', () => {
+    const list = document.querySelector('.faq__list');
+    if (list) window.scrollTo({ top: list.offsetTop - 100, behavior: 'smooth' });
+  }],
+  // These two were already delegated, each from its own container with its own
+  // "have I wired this yet" flag. They are the same mechanism as everything
+  // above, so they use the same one.
+  ['download-resource-version', el => downloadDocVersion(
+    el.dataset.resourceId, el.dataset.versionId, el.dataset.title || 'frea-resource'
+  )],
+  ['publish-resource-version', el => publishNewResourceVersion(el.dataset.resourceId)]
+]));
+
+registerActions('change', {
+  setLivePostitColor: el => setLivePostitColor(el.dataset.arg),
+  setFilter: el => setFilter(el.dataset.field, el.value),
+  setResourcesUniFilter: el => setResourcesUniFilter(el.value),
+  handlePitchFile: (el, event) => handlePitchFile(event),
+  toggleDocPriceField: el => toggleDocPriceField(el.value, el.dataset.target),
+  handleDocumentFileSelect: (el, event) =>
+    handleDocumentFileSelect(event, el.dataset.preview, el.dataset.nameTarget, el.dataset.formatTarget)
+});
+
+registerActions('input', {
+  updateLivePostit: el => updateLivePostit(el.value),
+  handleResourcesSearch: el => handleResourcesSearch(el.value),
+  updatePayoutPreview: el => updatePayoutPreview(el.id, el.dataset.target),
+  updateSignupLink: el => updateSignupLink(dataInt(el, 'index'), el.dataset.field, el.value)
+});
+
+registerActions('submit', {
+  handleBecomeMentorSubmit: (el, event) => handleBecomeMentorSubmit(event),
+  saveStudentPreferences: (el, event) => saveStudentPreferences(event),
+  saveMentorProfile: (el, event) => saveMentorProfile(event),
+  publishDashboardResource: (el, event) => publishDashboardResource(event),
+  handleSuggestionSubmit: (el, event) => handleSuggestionSubmit(event),
+  handleReportSubmit: (el, event) =>
+    handleReportSubmit(event, el.dataset.targetType, el.dataset.targetId)
+});
 
 // ─── Live Questions Ticker (100% Authentic UK Student Queries) ─────
 
@@ -285,7 +498,7 @@ function renderPitchVideoEmbed(url) {
 
 function mentorCard(mentor) {
   return `
-    <div class="mentor-card" data-mentor-id="${mentor.id}" onclick="window.navigateTo('/mentor/${mentor.id}')">
+    <div class="mentor-card" data-mentor-id="${mentor.id}" data-action="navigate" data-href="/mentor/${mentor.id}">
       <div class="mentor-card__tape"></div>
       <div class="mentor-card__header">
         <div class="mentor-card__avatar">
@@ -295,7 +508,7 @@ function mentorCard(mentor) {
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
             <div class="mentor-card__name"><a href="/mentor/${mentor.id}" class="mentor-card__name-link">${escapeHtml(mentor.name)}</a></div>
             ${mentor.linkedin ? `
-              <a href="${escapeHtml(mentor.linkedin)}" target="_blank" rel="noopener noreferrer" class="mentor-card__linkedin" onclick="event.stopPropagation()" title="View verified LinkedIn">
+              <a href="${escapeHtml(mentor.linkedin)}" target="_blank" rel="noopener noreferrer" class="mentor-card__linkedin" data-action="stop" title="View verified LinkedIn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.2a1.64 1.64 0 0 0-1.66 1.64 1.63 1.63 0 0 0 1.66 1.63 1.63 1.63 0 0 0 1.65-1.63A1.64 1.64 0 0 0 7.83 6.2Z"/></svg>
               </a>
             ` : ''}
@@ -328,7 +541,7 @@ function mentorCard(mentor) {
           <span style="opacity: 0.65; margin: 0 2px;">·</span>
           <span>${mentor.callsCompleted} chats</span>
         </div>
-        <button class="pill-btn pill-btn--small" onclick="event.stopPropagation(); window.navigateTo('/mentor/${mentor.id}')">book a chat</button>
+        <button class="pill-btn pill-btn--small" data-action="navigate" data-href="/mentor/${mentor.id}">book a chat</button>
       </div>
     </div>
   `;
@@ -376,13 +589,13 @@ function renderLanding() {
             </p>
             <div class="hero__cta-group">
               <div style="display: flex; gap: 14px; flex-wrap: wrap;">
-                <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+                <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/browse">
                   <span class="pill-btn__inner">
                     <span>find your senior mentor</span>
                     <span class="pill-btn__arrow">→</span>
                   </span>
                 </button>
-                <button class="pill-btn pill-btn--subtle pill-btn--animated-subtle" onclick="window.navigateTo('/become-a-mentor')">
+                <button class="pill-btn pill-btn--subtle pill-btn--animated-subtle" data-action="navigate" data-href="/become-a-mentor">
                   <span class="pill-btn__inner">
                     <span>become a mentor</span>
                     <span style="display: inline-flex; align-items: center;">${ICONS.teacher}</span>
@@ -413,7 +626,7 @@ function renderLanding() {
                 </div>
                 <div class="hero__pass-body">
                   <div class="hero__pass-avatar">
-                    ${getMentorAvatar(1, 72)}
+                    ${getMentorAvatar({ name: 'Aanya Sharma' }, 72)}
                   </div>
                   <div class="hero__pass-info">
                     <div class="hero__pass-name">Aanya Sharma</div>
@@ -428,7 +641,13 @@ function renderLanding() {
                   “happy to roast your tech CV, do mock technical screens, or chat about getting into YC as an undergrad.”
                 </div>
                 <div class="hero__pass-footer">
-                  <span style="color: var(--color-marker-orange); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">${ICONS.star} 4.9 (47 chats)</span>
+                  <!--
+                    This carried an invented rating and chat count. A rating
+                    out of five appears nowhere else in the product — real
+                    cards show stars given and chats completed — and a sample
+                    card in the hero is still the first thing a student reads.
+                  -->
+                  <span style="color: var(--color-marker-orange); font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">${ICONS.star} 20-min video chats</span>
                   <span style="opacity: 0.75; font-size: 12px; font-weight: 600; color: #16a34a; display: inline-flex; align-items: center; gap: 4px;">${ICONS.tickCircle} 100% free sessions</span>
                 </div>
               </div>
@@ -496,9 +715,15 @@ function renderLanding() {
           ${MENTORS.slice(0, 6).map(m => mentorCard(m)).join('')}
         </div>
         <div style="text-align: center; margin-top: 48px;" class="reveal">
-          <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+          <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/browse">
             <span class="pill-btn__inner">
-              <span>explore all 12 seniors</span>
+              <!--
+                Counted, not typed. This said "all 12 seniors" — the number of
+                mentors that shipped in the seed — so it was wrong the moment
+                the thirteenth signed up, and wrong in the direction that makes
+                the platform look smaller than it is.
+              -->
+              <span>explore all ${MENTORS.length} seniors</span>
               <span class="pill-btn__arrow">→</span>
             </span>
           </button>
@@ -598,7 +823,7 @@ function renderLanding() {
         <div class="faq__list" style="margin-top: 40px;">
           ${FAQ_ITEMS.map((item, i) => `
             <div class="faq-item reveal" data-faq="${i}">
-              <div class="faq-item__question" onclick="toggleFaq(${i})">
+              <div class="faq-item__question" data-action="toggleFaq" data-arg="${i}">
                 <span>${item.question}</span>
                 <span class="faq-item__icon">+</span>
               </div>
@@ -631,10 +856,10 @@ function renderBrowse() {
           <div class="filter-hub__top-bar">
             <div class="filter-hub__search-box">
               <svg class="filter-hub__search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" class="filter-hub__search-input" id="mentor-search" placeholder="search by name, company, degree, or keyword..." oninput="filterMentors()">
+              <input type="text" class="filter-hub__search-input" id="mentor-search" placeholder="search by name, company, degree, or keyword..." data-input-action="filterMentors">
             </div>
 
-            <select class="filter-hub__uni-select" id="uni-filter-select" onchange="setFilter('university', this.value)">
+            <select class="filter-hub__uni-select" id="uni-filter-select" data-change-action="setFilter" data-field="university">
               ${UK_UNIVERSITIES.map(u => `
                 <option value="${u === 'All UK Universities' ? 'all' : u}" ${activeUniversity === (u === 'All UK Universities' ? 'all' : u) ? 'selected' : ''}>${u}</option>
               `).join('')}
@@ -649,11 +874,11 @@ function renderBrowse() {
           <div class="filter-hub__row">
             <div class="filter-hub__label-bar">
               <span class="filter-hub__label">I need help with:</span>
-              <button class="filter-hub__clear-btn" onclick="clearAllFilters()">reset filters</button>
+              <button class="filter-hub__clear-btn" data-action="clearAllFilters">reset filters</button>
             </div>
             <div class="filter-hub__pills" id="goal-filters">
               ${GOAL_FILTERS.map(g => `
-                <span class="filter-pill ${g.id === 'all' ? 'active' : ''}" data-filter="goal" data-value="${g.id}" onclick="setFilter('goal', '${g.id}')">${g.label}</span>
+                <span class="filter-pill ${g.id === 'all' ? 'active' : ''}" data-filter="goal" data-value="${g.id}" data-action="setFilter" data-field="goal" data-arg="${escapeHtml(g.id)}">${g.label}</span>
               `).join('')}
             </div>
           </div>
@@ -665,7 +890,7 @@ function renderBrowse() {
             </div>
             <div class="filter-hub__pills" id="subject-filters">
               ${SUBJECTS.map(s => `
-                <span class="filter-pill filter-pill--compact ${s === 'all' ? 'active' : ''}" data-filter="subject" data-value="${s}" onclick="setFilter('subject', '${s}')">${s}</span>
+                <span class="filter-pill filter-pill--compact ${s === 'all' ? 'active' : ''}" data-filter="subject" data-value="${s}" data-action="setFilter" data-field="subject" data-arg="${escapeHtml(s)}">${s}</span>
               `).join('')}
             </div>
           </div>
@@ -677,7 +902,7 @@ function renderBrowse() {
             </div>
             <div class="filter-hub__pills" id="year-filters">
               ${YEAR_FILTERS.map(y => `
-                <span class="filter-pill filter-pill--compact ${y === 'all years' ? 'active' : ''}" data-filter="year" data-value="${y}" onclick="setFilter('year', '${y}')">${y}</span>
+                <span class="filter-pill filter-pill--compact ${y === 'all years' ? 'active' : ''}" data-filter="year" data-value="${y}" data-action="setFilter" data-field="year" data-arg="${escapeHtml(y)}">${y}</span>
               `).join('')}
             </div>
           </div>
@@ -694,7 +919,7 @@ function renderBrowse() {
             <div class="empty-state__text">no seniors match that specific combination</div>
             <div class="empty-state__hint">try resetting your university or goal filter</div>
             <div style="margin-top: 18px;">
-              <button class="pill-btn pill-btn--small" onclick="clearAllFilters()">reset all filters</button>
+              <button class="pill-btn pill-btn--small" data-action="clearAllFilters">reset all filters</button>
             </div>
           </div>
         </div>
@@ -730,8 +955,6 @@ function setUnlockedDocIds(ids) {
   unlockedDocIds = Array.isArray(ids) ? [...ids] : [];
 }
 
-window.isDocUnlocked = isDocUnlocked;
-
 // ─── Render Doc Card Component (Notebook Style) ─────
 
 function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
@@ -752,7 +975,11 @@ function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
   const authorUni = doc.mentorUniversity || (mentor ? mentor.university : '');
   const authorMajor = doc.mentorMajor || (mentor ? mentor.major : '');
   const mentorId = doc.mentorId || (mentor ? mentor.id : 1);
-  const tapeRotation = ((parseInt(String(doc.id).replace(/\D/g, '')) || 1) % 5) - 2;
+  const author = {
+    name: authorName,
+    photoUrl: doc.mentorPhotoUrl || (mentor ? mentor.photoUrl : null)
+  };
+  const tapeRotation =((parseInt(String(doc.id).replace(/\D/g, '')) || 1) % 5) - 2;
 
   let actionBtnHtml = '';
   if (mySpaceProduct) {
@@ -769,21 +996,21 @@ function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
     `).join('');
   } else if (isUnlocked) {
     actionBtnHtml = `
-      <button type="button" class="doc-btn doc-btn--unlocked" onclick="window.downloadDoc('${doc.id}')" title="Download to device" aria-label="Download guide">
+      <button type="button" class="doc-btn doc-btn--unlocked" data-action="downloadDoc" data-arg="${escapeHtml(doc.id)}" title="Download to device" aria-label="Download guide">
         ${ICONS.download}
         <span>download</span>
       </button>
     `;
   } else if (!isPaid) {
     actionBtnHtml = `
-      <button type="button" class="doc-btn doc-btn--free" onclick="window.downloadDoc('${doc.id}')" title="Get free freabie" aria-label="Get freabie">
+      <button type="button" class="doc-btn doc-btn--free" data-action="downloadDoc" data-arg="${escapeHtml(doc.id)}" title="Get free freabie" aria-label="Get freabie">
         ${ICONS.documentDownload}
         <span>get freabie</span>
       </button>
     `;
   } else {
     actionBtnHtml = `
-      <button type="button" class="doc-btn doc-btn--paid" onclick="window.openDocCheckoutModal('${doc.id}')" title="Unlock full playbook" aria-label="Unlock for £${doc.price.toFixed(2)}">
+      <button type="button" class="doc-btn doc-btn--paid" data-action="openDocCheckoutModal" data-arg="${escapeHtml(doc.id)}" title="Unlock full playbook" aria-label="Unlock for £${doc.price.toFixed(2)}">
         ${ICONS.unlock}
         <span>unlock £${doc.price.toFixed(2)}</span>
       </button>
@@ -803,13 +1030,13 @@ function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
       </div>
 
       <div class="doc-card__main">
-        <h4 class="doc-card__title" onclick="window.openDocPreviewModal('${doc.id}')">${escapeHtml(doc.title)}</h4>
+        <h4 class="doc-card__title" data-action="openDocPreviewModal" data-arg="${escapeHtml(doc.id)}">${escapeHtml(doc.title)}</h4>
         <p class="doc-card__subtitle">${escapeHtml(doc.subtitle)}</p>
 
         ${showAuthor ? `
-          <div class="doc-card__author" onclick="window.navigateTo('/mentor/${mentorId}')" title="View ${escapeHtml(authorName)}'s full profile">
+          <div class="doc-card__author" data-action="navigate" data-href="/mentor/${mentorId}" title="View ${escapeHtml(authorName)}'s full profile">
             <div class="doc-card__author-avatar">
-              ${getMentorAvatar(mentorId, 32)}
+              ${getMentorAvatar(author, 28)}
             </div>
             <div class="doc-card__author-info">
               <span class="doc-card__author-name">${escapeHtml(authorName)}</span>
@@ -836,7 +1063,7 @@ function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
         </div>
         <div class="doc-card__actions">
           ${mySpaceProduct ? '' : `
-            <button type="button" class="doc-btn doc-btn--preview" onclick="window.openDocPreviewModal('${doc.id}')" aria-label="Preview document ${escapeHtml(doc.title)}">
+            <button type="button" class="doc-btn doc-btn--preview" data-action="openDocPreviewModal" data-arg="${escapeHtml(doc.id)}" aria-label="Preview document ${escapeHtml(doc.title)}">
               ${ICONS.eye}
               <span>preview</span>
             </button>
@@ -847,8 +1074,6 @@ function renderDocCard(doc, mentor = null, showAuthor = false, options = {}) {
     </div>
   `;
 }
-window.renderDocCard = renderDocCard;
-
 function renderMySpaceProductCard(product) {
   return renderDocCard({
     ...product,
@@ -858,24 +1083,6 @@ function renderMySpaceProductCard(product) {
     pages: product.pages || 'Self-contained document'
   }, null, false, { mySpaceProduct: product });
 }
-
-function initMySpaceVault() {
-  const root = document.getElementById('my-space-vault-grid');
-  if (!root || root.dataset.versionActionsWired === 'true') return;
-  root.dataset.versionActionsWired = 'true';
-  root.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-action="download-resource-version"]');
-    if (!button) return;
-    downloadDocVersion(
-      button.dataset.resourceId,
-      button.dataset.versionId,
-      button.dataset.title || 'frea-resource'
-    );
-  });
-}
-
-window.renderMySpaceProductCard = renderMySpaceProductCard;
-window.initMySpaceVault = initMySpaceVault;
 
 // ─── PAGE: Mentor Profile (With Interactive Week Calendar) ─────
 
@@ -909,7 +1116,7 @@ function renderProfile(mentorId) {
     return `<div class="page-view page-container" style="padding-top: 120px; text-align: center;">
       <h2 class="section__title">mentor not found</h2>
       <p style="margin-top: 12px;">
-        <a class="profile-back" onclick="window.navigateTo('/browse')">← back to mentors</a>
+        <a class="profile-back" data-action="navigate" data-href="/browse">← back to mentors</a>
       </p>
     </div>`;
   }
@@ -927,10 +1134,16 @@ function renderProfile(mentorId) {
   return `
     <div class="page-view">
       <div class="page-container profile-page">
-        <a class="profile-back" onclick="window.navigateTo('/browse')">← back to all mentors</a>
+        <a class="profile-back" data-action="navigate" data-href="/browse">← back to all mentors</a>
 
         <div class="profile__header">
-          <div class="profile__avatar-frame" style="position: relative; overflow: hidden; box-shadow: 4px 6px 0px var(--color-charcoal); width: 180px; height: 180px; border-radius: 16px; border: 2.5px solid var(--color-charcoal);">
+          <!--
+            Size, radius and border come from .profile__avatar-frame, which
+            also shrinks it to 96px on a phone. They were repeated inline here,
+            and an inline style beats a media query — so the frame stayed 180px
+            wide on a 390px screen however the stylesheet was written.
+          -->
+          <div class="profile__avatar-frame" style="position: relative; overflow: hidden; box-shadow: 4px 6px 0px var(--color-charcoal);">
             ${getMentorAvatar(mentor, 180)}
             <div class="sticker" style="position: absolute; top: -14px; right: -14px; transform: rotate(12deg);">${stickerDecoration('sparkle', 28)}</div>
             <div class="sticker" style="position: absolute; bottom: -10px; left: -10px; transform: rotate(-10deg);">${stickerDecoration('star', 24)}</div>
@@ -966,7 +1179,7 @@ function renderProfile(mentorId) {
             <div class="profile__rating">
               <button type="button" id="mentor-star-btn"
                       class="mentor-star-btn${mentor.youStarred ? ' mentor-star-btn--on' : ''}"
-                      onclick="window.toggleMentorStar(${Number(mentor.id)})"
+                      data-action="toggleMentorStar" data-arg="${Number(mentor.id)}"
                       title="${mentor.youStarred ? 'Remove your star' : 'Star this mentor'}">
                 ${ICONS.star}
                 <span id="mentor-star-count">${mentor.stars || 0}</span>
@@ -1028,9 +1241,9 @@ function renderProfile(mentorId) {
 
             <!-- Filter tabs: All, Free Freabies, Paid Playbooks -->
             <div class="doc-filter-group" id="profile-doc-filters">
-              <button class="doc-filter-btn active" data-filter="all" onclick="window.filterProfileDocs('all', ${mentor.id})">all (${(mentor.docs || []).length})</button>
-              <button class="doc-filter-btn" data-filter="free" onclick="window.filterProfileDocs('free', ${mentor.id})"><span style="display:inline-flex;align-items:center;gap:5px;">${ICONS.gift} freabies (${(mentor.docs || []).filter(d => d.type === 'free').length})</span></button>
-              <button class="doc-filter-btn" data-filter="paid" onclick="window.filterProfileDocs('paid', ${mentor.id})"><span style="display:inline-flex;align-items:center;gap:5px;">${ICONS.flash} playbooks (${(mentor.docs || []).filter(d => d.type === 'paid').length})</span></button>
+              <button class="doc-filter-btn active" data-filter="all" data-action="filterProfileDocs" data-arg="all" data-mentor="${mentor.id}">all (${(mentor.docs || []).length})</button>
+              <button class="doc-filter-btn" data-filter="free" data-action="filterProfileDocs" data-arg="free" data-mentor="${mentor.id}"><span style="display:inline-flex;align-items:center;gap:5px;">${ICONS.gift} freabies (${(mentor.docs || []).filter(d => d.type === 'free').length})</span></button>
+              <button class="doc-filter-btn" data-filter="paid" data-action="filterProfileDocs" data-arg="paid" data-mentor="${mentor.id}"><span style="display:inline-flex;align-items:center;gap:5px;">${ICONS.flash} playbooks (${(mentor.docs || []).filter(d => d.type === 'paid').length})</span></button>
             </div>
           </div>
 
@@ -1044,7 +1257,7 @@ function renderProfile(mentorId) {
 
         <!-- Interactive Clean Vanilla Month Calendar -->
         <div class="profile__section">
-          <h3 class="profile__section-title">pick a date & time</h3>
+          <h3 class="profile__section-title">pick a date &amp; time</h3>
           <span class="handwritten" style="font-size: 20px; display: block; margin-bottom: 16px;">all sessions are 20-min video calls · 100% free · select an orange day, then choose your time</span>
 
           <div id="profile-calendar-root" class="frea-cal-root">
@@ -1062,6 +1275,153 @@ function renderProfile(mentorId) {
 }
 
 // ─── PAGE: Become a Mentor ─────
+
+/**
+ * Every category a resource can be filed under. One list, because it was
+ * written out twice — and two copies of a dropdown drift into two different
+ * taxonomies, which then split the resources hub's own filter.
+ */
+const RESOURCE_CATEGORIES = [
+  'Tech & Coding',
+  'Economics & Finance',
+  'Engineering',
+  'Law',
+  'Medicine & Life Sciences',
+  'Maths & Statistics',
+  'Interview Prep & CVs',
+  'Exam Bibles & Revision',
+  'Productivity & Systems',
+  'General'
+];
+
+/**
+ * The comma-separated "what you can help with" field, as a clean list.
+ *
+ * Capped at 12 to match the server, which caps it too — a field with no limit
+ * on one side and a silent truncation on the other is a mentor wondering where
+ * their last few tags went.
+ */
+function readHelpsWith() {
+  return (document.getElementById('bm-helps-with')?.value || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+/**
+ * The publish form, rendered for both places a mentor can publish from: the
+ * signup page (where a first resource is optional) and the products tab of
+ * their space.
+ *
+ * It was two near-identical copies, and they had already drifted: the signup
+ * copy had no "What's Inside" fields at all, so a mentor who published during
+ * signup could never give students the three lines they read before
+ * downloading — and nothing in the app let them add those afterwards either,
+ * because the edit form only reaches the title, subtitle, category and price.
+ * The labels and every placeholder differed too.
+ *
+ * Same reasoning as mentorProfileFields: one definition, an id prefix per
+ * instance, so a field cannot exist on one and not the other.
+ *
+ * @param {string} prefix - Id prefix; fields are `${prefix}-title` and so on.
+ * @param {boolean} required - Whether the title and file are mandatory. They
+ *   are on the standalone form and are not during signup, where the whole
+ *   block is optional.
+ */
+function resourceFormFields({ prefix, required = true }) {
+  const req = required ? ' *' : '';
+  const mark = required ? 'required' : '';
+
+  return `
+    <div class="mentor-form-row" style="margin-bottom: 12px;">
+      <div class="mentor-form-group" style="flex: 2; margin-bottom: 0;">
+        <label class="mentor-form-label" style="font-size: 12.5px;" for="${prefix}-title">Resource Title${req}</label>
+        <input type="text" class="mentor-form-input" id="${prefix}-title" ${mark}
+               maxlength="120" placeholder="e.g. 1st Year Exam Survival Bible or Tech CV Template">
+      </div>
+      <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
+        <label class="mentor-form-label" style="font-size: 12.5px;" for="${prefix}-type">Pricing Model</label>
+        <select class="mentor-form-select" id="${prefix}-type"
+                data-change-action="toggleDocPriceField" data-target="${prefix}-price-wrap">
+          <option value="free">Freabie (free)</option>
+          <option value="paid">Playbook (paid)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mentor-form-row" style="margin-bottom: 12px;">
+      <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
+        <label class="mentor-form-label" style="font-size: 12.5px;" for="${prefix}-category">Category Tag</label>
+        <select class="mentor-form-select" id="${prefix}-category">
+          ${RESOURCE_CATEGORIES.map(c => `
+            <option value="${escapeHtml(c)}">${escapeHtml(c === 'General' ? 'General / Other' : c)}</option>
+          `).join('')}
+        </select>
+      </div>
+      <div class="mentor-form-group" id="${prefix}-price-wrap" style="flex: 1; display: none; margin-bottom: 0;">
+        <label class="mentor-form-label" style="font-size: 12.5px;" for="${prefix}-price">Price (£ GBP)</label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <span style="position: absolute; left: 12px; font-weight: 800; color: var(--color-charcoal);">£</span>
+          <input type="number" class="mentor-form-input" id="${prefix}-price" min="1" max="100" step="0.01"
+                 value="4.99" disabled style="padding-left: 26px;"
+                 data-input-action="updatePayoutPreview" data-target="${prefix}-payout">
+        </div>
+        <div id="${prefix}-payout" style="font-size: 12.5px; margin-top: 6px; line-height: 1.5;"></div>
+      </div>
+    </div>
+
+    <div class="mentor-form-group" style="margin-bottom: 14px;">
+      <label class="mentor-form-label" style="font-size: 12.5px;" for="${prefix}-desc">Short Subtitle <span>(the one line students see on the card)</span></label>
+      <input type="text" class="mentor-form-input" id="${prefix}-desc" maxlength="300"
+             placeholder="e.g. Annotated lecture walkthroughs and the past-paper pitfalls solved">
+    </div>
+
+    <div class="mentor-form-group" style="margin-bottom: 14px;">
+      <label class="mentor-form-label" style="font-size: 12.5px;">What's Inside <span>(optional · up to 3 lines students see before downloading)</span></label>
+      <input type="text" class="mentor-form-input" id="${prefix}-bullet-1" maxlength="160"
+             placeholder="e.g. The exact bullet formula that gets past ATS screens" style="margin-bottom: 6px;">
+      <input type="text" class="mentor-form-input" id="${prefix}-bullet-2" maxlength="160"
+             placeholder="e.g. Six phrases recruiters skim past, and what to write instead" style="margin-bottom: 6px;">
+      <input type="text" class="mentor-form-input" id="${prefix}-bullet-3" maxlength="160"
+             placeholder="e.g. A worked before-and-after on a real first-year CV">
+    </div>
+
+    <div class="mentor-form-group" style="margin-bottom: 0;">
+      <label class="mentor-form-label" style="font-size: 12.5px;">Upload Document${req} <span>(PDF, Markdown .md, LaTeX .tex or PowerPoint .pptx · max 10MB)</span></label>
+      <div class="file-dropzone" id="${prefix}-dropzone">
+        <input type="file" id="${prefix}-file" accept=".pdf,.md,.tex,.pptx" ${mark}
+               data-change-action="handleDocumentFileSelect"
+               data-preview="${prefix}-file-preview" data-name-target="${prefix}-uploaded-file"
+               data-format-target="${prefix}-uploaded-format">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <span style="color: var(--color-marker-orange);">${ICONS.documentDownload}</span>
+          <div style="font-size: 13.5px; font-weight: 700; color: var(--color-charcoal);">Click to browse or drop your document here</div>
+          <span style="font-size: 11.5px; opacity: 0.65;">Accepts PDF, Markdown, LaTeX, PowerPoint (up to 10MB)</span>
+        </div>
+      </div>
+      <div id="${prefix}-file-preview" style="display: none;"></div>
+      <input type="hidden" id="${prefix}-uploaded-file" value="">
+      <input type="hidden" id="${prefix}-uploaded-format" value="">
+    </div>
+  `;
+}
+
+/** Reads one instance of the publish form into the shape the API takes. */
+function readResourceForm(prefix) {
+  const read = (suffix) => document.getElementById(`${prefix}-${suffix}`)?.value.trim() || '';
+  const type = read('type') || 'free';
+  return {
+    title: read('title'),
+    subtitle: read('desc'),
+    type,
+    price: type === 'paid' ? parseFloat(read('price')) || 0 : 0,
+    category: read('category') || 'General',
+    fileName: read('uploaded-file'),
+    format: read('uploaded-format') || 'PDF',
+    previewBullets: [read('bullet-1'), read('bullet-2'), read('bullet-3')].filter(Boolean)
+  };
+}
 
 /**
  * The mentor profile form, used to create one and to edit it.
@@ -1086,7 +1446,6 @@ function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
     'recent grad': 'Recent graduate'
   };
   const currentYear = mentor.year || '2nd year';
-  const avatarId = parseInt(mentor.avatarId) || 1;
   const colour = mentor.topTipColor || 'yellow';
   const tip = mentor.topTip || '';
 
@@ -1133,45 +1492,38 @@ function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
                 placeholder="e.g. Happy to chat about course survival, applications and student life.">${value(mentor.bio)}</textarea>
     </div>
 
-    <!-- Profile Picture / Illustrated Avatar Selection -->
+    <!--
+      Photo, or your initials. There is no third option: the illustrated
+      avatars this replaced were assigned by database id rather than by the
+      one you picked, and ran out after twelve.
+    -->
     <div class="mentor-form-group">
-      <label class="mentor-form-label">Profile Picture <span>(choose an illustrated avatar or upload your own photo)</span></label>
+      <label class="mentor-form-label">Profile Picture <span>(optional — your initials are shown until you add one)</span></label>
       <div class="profile-pic-selector">
         <div class="profile-pic-preview-wrap">
           <div class="profile-pic-preview" id="bm-photo-preview">
-            ${mentor.photoUrl
-      ? `<img src="${escapeHtml(mentor.photoUrl)}" alt="" style="width: 72px; height: 72px; object-fit: cover;">`
-      : getMentorAvatar(avatarId, 72)}
+            ${getMentorAvatar(mentor, 72)}
           </div>
           <div class="profile-pic-preview-meta">
-            <span id="bm-avatar-status" style="font-weight: 700; font-size: 14px; color: var(--color-charcoal); display: block;">${mentor.photoUrl ? 'Your uploaded photo' : `Illustrated Avatar #${avatarId}`}</span>
+            <span id="bm-avatar-status" style="font-weight: 700; font-size: 14px; color: var(--color-charcoal); display: block;">${mentor.photoUrl ? 'Your photo' : 'Your initials'}</span>
             <span style="font-size: 12.5px; opacity: 0.65; display: block; margin-top: 2px;">Appears on your mentor card, profile &amp; calendar</span>
           </div>
         </div>
 
         <div class="profile-pic-controls">
           <div class="profile-pic-upload-action">
-            <label class="pill-btn pill-btn--small" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+            <label class="pill-btn pill-btn--small" id="bm-photo-label" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
               <span>${ICONS.camera}</span>
-              <span>Upload your own photo</span>
-              <input type="file" id="bm-photo-input" accept="image/*" style="display: none;" onchange="handleMentorPhotoUpload(event)">
+              <span id="bm-photo-label-text">${mentor.photoUrl ? 'Replace photo' : 'Upload a photo'}</span>
+              <input type="file" id="bm-photo-input" accept="image/*" style="display: none;">
             </label>
-            <button type="button" id="bm-remove-photo-btn" class="pill-btn pill-btn--small" style="display: ${mentor.photoUrl ? 'inline-flex' : 'none'}; background: #fee2e2; border-color: #ef4444; color: #b91c1c;" onclick="removeMentorUploadedPhoto()">${ICONS.close} Remove custom photo</button>
+            <button type="button" id="bm-remove-photo-btn" class="pill-btn pill-btn--small" style="display: ${mentor.photoUrl ? 'inline-flex' : 'none'}; background: #fee2e2; border-color: #ef4444; color: #b91c1c;">${ICONS.close} Remove photo</button>
           </div>
-
-          <div style="margin-top: 14px;">
-            <span style="font-size: 12.5px; font-weight: 700; color: var(--color-charcoal); opacity: 0.75; display: block; margin-bottom: 8px;">Or pick from our handcrafted avatars (both genders):</span>
-            <div class="avatar-preset-grid" id="bm-avatar-presets">
-              ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(id => `
-                <button type="button" class="avatar-preset-btn ${id === avatarId && !mentor.photoUrl ? 'active' : ''}" data-avatar-id="${id}" onclick="selectMentorPresetAvatar(${id})" title="Avatar ${id}">
-                  ${getMentorAvatar(id, 40)}
-                </button>
-              `).join('')}
-            </div>
-          </div>
+          <span id="bm-photo-hint" style="font-size: 12.5px; opacity: 0.65; display: block; margin-top: 10px;">
+            A clear photo of your face works best. Anything up to 12MB — we resize it for you.
+          </span>
         </div>
       </div>
-      <input type="hidden" id="bm-selected-avatar-id" value="${avatarId}">
       <input type="hidden" id="bm-photo-data" value="${value(mentor.photoUrl)}">
     </div>
 
@@ -1187,7 +1539,7 @@ function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
     <div class="mentor-form-group">
       <label class="mentor-form-label">Your Other Links <span>(optional · portfolio, GitHub, Substack — add as many as you like)</span></label>
       <div id="bm-links-container"></div>
-      <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px; margin-top: 8px;" onclick="window.addSignupLink()">
+      <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px; margin-top: 8px;" data-action="addSignupLink">
         ${ICONS.plus} add a link
       </button>
     </div>
@@ -1213,10 +1565,27 @@ function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
             <input type="text" class="mentor-form-input" id="bm-achieve-${i + 1}" ${i === 0 ? 'required' : ''}
                    value="${value(mentor.achievements?.[i])}"
                    placeholder="${['e.g. Incoming Software Engineer @ Stripe London', 'e.g. Founded YC S23 backed dev tools startup', "e.g. 1st Class Honours (Rank 1 / Dean's List)"][i]}"
-                   maxlength="75" oninput="window.updateLiveAchievements()">
+                   maxlength="75" data-input-action="updateLiveAchievements">
           </div>
         `).join('')}
       </div>
+    </div>
+
+    <!--
+      What students can ask about. This drives the "what you can ask me about"
+      section of the profile AND both the search box and the goal filter on
+      browse, but it had no field anywhere: it was set once at signup to the
+      mentor's degree plus three fixed strings, so every mentor carried the
+      same generic tags and could never correct them.
+    -->
+    <div class="mentor-form-group">
+      <label class="mentor-form-label" for="bm-helps-with">What You Can Help With <span>(comma separated · these are what students search on)</span></label>
+      <input type="text" class="mentor-form-input" id="bm-helps-with" maxlength="240"
+             value="${value((mentor.helpsWith || []).join(', '))}"
+             placeholder="e.g. exam technique, spring week applications, switching degrees, cv roast">
+      <span style="font-size: 12px; opacity: 0.6; display: block; margin-top: 4px;">
+        Up to 12. Shown on your profile under "what you can ask me about".
+      </span>
     </div>
 
     <!-- Live Post-It Note Preview -->
@@ -1227,11 +1596,11 @@ function mentorProfileFields({ mode = 'create', mentor = {} } = {}) {
       </div>
       <div class="live-postit-preview-wrap">
         <div>
-          <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required maxlength="140" placeholder="e.g. Give your best tip here..." oninput="updateLivePostit(this.value)">${value(tip)}</textarea>
+          <textarea class="mentor-form-textarea" id="bm-toptip" rows="3" required maxlength="140" placeholder="e.g. Give your best tip here..." data-input-action="updateLivePostit">${value(tip)}</textarea>
           <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span style="font-size: 13px; font-weight: 600;">Post-It Color:</span>
             ${['yellow', 'mint', 'blush', 'sky'].map(c => `
-              <label><input type="radio" name="postit-color" value="${c}" ${c === colour ? 'checked' : ''} onchange="setLivePostitColor('${c}')"> ${c[0].toUpperCase()}${c.slice(1)}</label>
+              <label><input type="radio" name="postit-color" value="${c}" ${c === colour ? 'checked' : ''} data-change-action="setLivePostitColor" data-arg="${escapeHtml(c)}"> ${c[0].toUpperCase()}${c.slice(1)}</label>
             `).join('')}
           </div>
         </div>
@@ -1272,6 +1641,21 @@ function initMentorProfileFields(mentor = null) {
   renderPitchVideoControl('bm-pitch-container', mentor?.pitchVideoUrl || '');
   setLivePostitColor(document.querySelector('input[name="postit-color"]:checked')?.value || 'yellow');
   updateLiveAchievements();
+
+  document.getElementById('bm-photo-input')
+    ?.addEventListener('change', handleMentorPhotoUpload);
+  document.getElementById('bm-remove-photo-btn')
+    ?.addEventListener('click', removeMentorUploadedPhoto);
+
+  // Initials are derived from the name field, so the preview should follow it
+  // while the form is still being filled in — otherwise someone signing up
+  // watches a "?" sit there while they type their own name.
+  const nameInput = document.getElementById('bm-name');
+  nameInput?.addEventListener('input', () => {
+    if (document.getElementById('bm-photo-data')?.value || pendingMentorPhoto) return;
+    setPhotoPreviewMarkup(initialsPreviewMarkup(), 'Your initials');
+  });
+  if (!mentor?.photoUrl) setPhotoPreviewMarkup(initialsPreviewMarkup(), 'Your initials');
 }
 
 function renderBecomeMentor() {
@@ -1292,7 +1676,7 @@ function renderBecomeMentor() {
   if (liveMentorId) {
     return `
       <div class="page-view page-container become-mentor">
-        <a class="profile-back" onclick="window.navigateTo('/')">← back to home</a>
+        <a class="profile-back" data-action="navigate" data-href="/">← back to home</a>
 
         <div class="become-mentor__header">
           <h1 class="become-mentor__title">you're already a senior mentor</h1>
@@ -1315,7 +1699,7 @@ function renderBecomeMentor() {
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
             <button type="button" class="pill-btn pill-btn--dark pill-btn--animated" id="bm-existing-dashboard">
               <span class="pill-btn__inner">
-                <span>open my mentor dashboard</span>
+                <span>open my mentor space</span>
                 <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
               </span>
             </button>
@@ -1332,7 +1716,7 @@ function renderBecomeMentor() {
 
   return `
     <div class="page-view page-container become-mentor">
-      <a class="profile-back" onclick="window.navigateTo('/')">← back to home</a>
+      <a class="profile-back" data-action="navigate" data-href="/">← back to home</a>
 
       <div class="become-mentor__header">
         <h1 class="become-mentor__title">become a senior mentor</h1>
@@ -1341,7 +1725,7 @@ function renderBecomeMentor() {
         </p>
         <div class="become-mentor__verification-banner">
           <span>${ICONS.shieldTick}</span>
-          <span>Open to all 2nd+ years, master's students & recent grads — verified through your <strong>university login</strong></span>
+          <span>Open to all 2nd+ years, master's students &amp; recent grads — verified through your <strong>university login</strong></span>
         </div>
       </div>
 
@@ -1364,7 +1748,7 @@ function renderBecomeMentor() {
         </div>
       ` : `
       <div class="mentor-form-card">
-        <form id="become-mentor-form" onsubmit="handleBecomeMentorSubmit(event)">
+        <form id="become-mentor-form" data-submit-action="handleBecomeMentorSubmit">
           ${mentorProfileFields({ mode: 'create' })}
 
           <!--
@@ -1403,75 +1787,13 @@ function renderBecomeMentor() {
               <span style="font-size: 13px; opacity: 0.75; display: block; margin-bottom: 14px; line-height: 1.5;">Share your revision bibles, interview cheat sheets, or templates. Keep it free as a "freabie", or set a price — students pay exactly what you list, and frea's ${feePercent()}% comes out of your share, never theirs.</span>
 
               <div class="academic-integrity-callout">
-                <span style="font-size: 18px; flex-shrink: 0;">⚠️</span>
+                <span style="flex-shrink: 0; color: var(--color-burnt-sienna);">${ICONS.warning}</span>
                 <div>
                   <strong>Academic Integrity Warning:</strong> Please ensure all uploaded documents comply with UK university academic integrity regulations. Upload only original student-created notes, guides, or templates (no exam leaks, unauthorized coursework, or plagiarism).
                 </div>
               </div>
 
-              <!-- Title & Type Selection -->
-              <div class="mentor-form-row" style="margin-bottom: 12px;">
-                <div class="mentor-form-group" style="flex: 2; margin-bottom: 0;">
-                  <label class="mentor-form-label" style="font-size: 12.5px;">Resource Title</label>
-                  <input type="text" class="mentor-form-input" id="bm-doc-title" placeholder="e.g. 1st Year Exam Survival Bible or Tech CV Template">
-                </div>
-                <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
-                  <label class="mentor-form-label" style="font-size: 12.5px;">Pricing Model</label>
-                  <select class="mentor-form-select" id="bm-doc-type" onchange="window.toggleDocPriceField(this.value, 'bm-doc-price-wrap')">
-                    <option value="free">Freabie (Free)</option>
-                    <option value="paid">Playbook (Paid)</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Dynamic Price & Category Row -->
-              <div class="mentor-form-row" style="margin-bottom: 12px;">
-                <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
-                  <label class="mentor-form-label" style="font-size: 12.5px;">Category Tag</label>
-                  <select class="mentor-form-select" id="bm-doc-category">
-                    <option value="Tech & Coding">Tech & Coding</option>
-                    <option value="Economics & Finance">Economics & Finance</option>
-                    <option value="Engineering">Engineering</option>
-                    <option value="Law">Law</option>
-                    <option value="Medicine & Life Sciences">Medicine & Life Sciences</option>
-                    <option value="Maths & Statistics">Maths & Statistics</option>
-                    <option value="Interview Prep & CVs">Interview Prep & CVs</option>
-                    <option value="Exam Bibles & Revision">Exam Bibles & Revision</option>
-                    <option value="Productivity & Systems">Productivity & Systems</option>
-                    <option value="General">General / Other</option>
-                  </select>
-                </div>
-                <div class="mentor-form-group" id="bm-doc-price-wrap" style="flex: 1; display: none; margin-bottom: 0;">
-                  <label class="mentor-form-label" style="font-size: 12.5px;">Price (£ GBP)</label>
-                  <div style="position: relative; display: flex; align-items: center;">
-                    <span style="position: absolute; left: 12px; font-weight: 800; color: var(--color-charcoal);">£</span>
-                    <input type="number" class="mentor-form-input" id="bm-doc-price" min="1" max="100" step="0.01" value="4.99" disabled style="padding-left: 26px;" oninput="window.updatePayoutPreview('bm-doc-price', 'bm-doc-payout')">
-                  </div>
-                  <div id="bm-doc-payout" style="font-size: 12.5px; margin-top: 6px; line-height: 1.5;"></div>
-                </div>
-              </div>
-
-              <!-- Description Subtitle -->
-              <div class="mentor-form-group" style="margin-bottom: 14px;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Short Subtitle / Key Takeaways</label>
-                <input type="text" class="mentor-form-input" id="bm-doc-desc" placeholder="e.g. Annotated lecture walkthroughs & past exam pitfalls solved">
-              </div>
-
-              <!-- Real File Upload Area -->
-              <div class="mentor-form-group" style="margin-bottom: 0;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Upload Document <span>(PDF, Markdown .md, LaTeX .tex, or PowerPoint .pptx · Max 10MB)</span></label>
-                <div class="file-dropzone" id="bm-doc-dropzone">
-                  <input type="file" id="bm-doc-file" accept=".pdf,.md,.tex,.pptx" onchange="window.handleDocumentFileSelect(event, 'bm-doc-preview', 'bm-doc-uploaded-file')">
-                  <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                    <span style="color: var(--color-marker-orange);">${ICONS.documentDownload}</span>
-                    <div style="font-size: 13.5px; font-weight: 700; color: var(--color-charcoal);">Click to browse or drop your document here</div>
-                    <span style="font-size: 11.5px; opacity: 0.65;">Accepts PDF, Markdown, LaTeX, PowerPoint (up to 10MB)</span>
-                  </div>
-                </div>
-                <div id="bm-doc-preview" style="display: none;"></div>
-                <input type="hidden" id="bm-doc-uploaded-file" value="">
-                <input type="hidden" id="bm-doc-uploaded-format" value="">
-              </div>
+              ${resourceFormFields({ prefix: 'bm-doc', required: false })}
             </div>
           </div>
 
@@ -1510,12 +1832,12 @@ function renderSignupLinks() {
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
           <input type="text" class="mentor-form-input" style="width: 140px; padding: 8px 12px; font-size: 13px;"
                  value="${escapeHtml(link.label || '')}" placeholder="Label"
-                 oninput="window.updateSignupLink(${i}, 'label', this.value)">
+                 data-input-action="updateSignupLink" data-index="${i}" data-field="label">
           <input type="url" class="mentor-form-input" style="flex: 1; min-width: 200px; padding: 8px 12px; font-size: 13px;"
                  value="${escapeHtml(link.url || '')}" placeholder="https://…"
-                 oninput="window.updateSignupLink(${i}, 'url', this.value)">
+                 data-input-action="updateSignupLink" data-index="${i}" data-field="url">
           <button type="button" class="schedule-slot-remove" style="font-size: 18px;" title="Remove"
-                  onclick="window.removeSignupLink(${i})">×</button>
+                  data-action="removeSignupLink" data-arg="${i}">×</button>
         </div>
       `).join('');
 }
@@ -1626,14 +1948,14 @@ function renderPayoutCard(status) {
       ` : ''}
 
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px;">
-        <button type="button" class="pill-btn pill-btn--animated" id="payout-start-btn" onclick="window.beginPayoutOnboarding()">
+        <button type="button" class="pill-btn pill-btn--animated" id="payout-start-btn" data-action="beginPayoutOnboarding">
           <span class="pill-btn__inner">
             <span>${started ? 'continue setup' : 'set up payouts'}</span>
             <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
           </span>
         </button>
         ${started ? `
-          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.loadPayoutStatus(true)">
+          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" data-action="loadPayoutStatus">
             refresh status
           </button>` : ''}
       </div>
@@ -1708,8 +2030,6 @@ async function handlePayoutReturn(route) {
     }
   }
 }
-window.handlePayoutReturn = handlePayoutReturn;
-
 // ─── Reporting ─────
 //
 // Publishing is instant and unreviewed, so students need an in-product way to
@@ -1739,7 +2059,7 @@ function renderReportModal(targetType, targetId, label) {
   if (!modal) return;
 
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div style="padding: 24px 20px; max-width: 460px; margin: 0 auto;">
       <h2 style="font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">
         Report ${targetType === 'mentor' ? 'this mentor' : 'this resource'}
@@ -1750,7 +2070,8 @@ function renderReportModal(targetType, targetId, label) {
         Telling us when something is wrong is how we keep it trustworthy.
       </p>
 
-      <form id="report-form" onsubmit="window.handleReportSubmit(event, '${escapeHtml(targetType)}', '${escapeHtml(String(targetId))}')">
+      <form id="report-form" data-submit-action="handleReportSubmit" data-target-type="${escapeHtml(targetType)}"
+            data-target-id="${escapeHtml(String(targetId))}">
         <div class="mentor-form-group" style="margin-bottom: 14px;">
           <label class="mentor-form-label" style="font-size: 13px;">What's the problem?</label>
           <select id="report-reason" class="mentor-form-select" style="width: 100%;">
@@ -1767,7 +2088,7 @@ function renderReportModal(targetType, targetId, label) {
         <div id="report-error" style="display: none; color: #ef4444; font-size: 13px; font-weight: 600; margin-bottom: 10px;"></div>
 
         <div style="display: flex; gap: 10px;">
-          <button type="button" class="pill-btn pill-btn--subtle" onclick="closeModal()">cancel</button>
+          <button type="button" class="pill-btn pill-btn--subtle" data-action="close-modal">cancel</button>
           <button type="submit" id="report-submit-btn" class="pill-btn pill-btn--animated" style="flex: 1;">
             <span class="pill-btn__inner" style="justify-content: center;">
               <span>send report</span>
@@ -1816,14 +2137,13 @@ window.handleReportSubmit = handleReportSubmit;
 function reportLink(targetType, targetId, label = '') {
   return `
     <button type="button" class="report-link"
-            onclick="window.openReportModal(${jsArg(targetType)}, ${jsArg(targetId)}, ${jsArg(label)})"
+            data-action="openReportModal" data-target-type="${escapeHtml(targetType)}"
+            data-target-id="${escapeHtml(targetId)}" data-label="${escapeHtml(label)}"
             title="Report this to the frea team">
       report
     </button>
   `;
 }
-window.reportLink = reportLink;
-
 // ─── Pitch video: record in-app or upload a file ─────
 //
 // Recording is the lead path because it costs nothing to compress: the camera
@@ -1858,10 +2178,10 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
           <video src="${escapeHtml(currentUrl)}" controls playsinline preload="metadata"
                  style="width: 100%; max-width: 420px; border-radius: 12px; border: 1.5px solid var(--color-charcoal); background: #000; display: block;"></video>
           <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-            <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.replacePitchVideo()">
+            <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" data-action="replacePitchVideo">
               replace video
             </button>
-            <button type="button" class="admin-btn admin-btn--reject" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.removePitchVideo()">
+            <button type="button" class="admin-btn admin-btn--reject" style="font-size: 12.5px; padding: 6px 14px;" data-action="removePitchVideo">
               remove
             </button>
           </div>
@@ -1871,11 +2191,11 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
       <div id="pitch-chooser" ${hasVideo ? 'hidden' : ''}>
         <div class="pitch-video__tabs" role="tablist">
           <button type="button" class="pitch-tab ${supportsRecording ? 'active' : ''}" id="pitch-tab-record"
-                  onclick="window.switchPitchTab('record')" ${supportsRecording ? '' : 'disabled'}>
+                  data-action="switchPitchTab" data-arg="record" ${supportsRecording ? '' : 'disabled'}>
             ${ICONS.video} Record now
           </button>
           <button type="button" class="pitch-tab ${supportsRecording ? '' : 'active'}" id="pitch-tab-upload"
-                  onclick="window.switchPitchTab('upload')">
+                  data-action="switchPitchTab" data-arg="upload">
             ${ICONS.documentUpload || '↑'} Upload a file
           </button>
         </div>
@@ -1892,11 +2212,11 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
               </div>
             </div>
             <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center;">
-              <button type="button" class="pill-btn pill-btn--animated" id="pitch-start-btn" onclick="window.startPitchRecording()">
+              <button type="button" class="pill-btn pill-btn--animated" id="pitch-start-btn" data-action="startPitchRecording">
                 <span class="pill-btn__inner"><span>start camera</span><span class="pill-btn__arrow">${ICONS.video}</span></span>
               </button>
-              <button type="button" class="pill-btn pill-btn--dark" id="pitch-record-btn" onclick="window.togglePitchRecording()" hidden>record</button>
-              <button type="button" class="pill-btn pill-btn--subtle" id="pitch-retake-btn" onclick="window.retakePitch()" hidden>retake</button>
+              <button type="button" class="pill-btn pill-btn--dark" id="pitch-record-btn" data-action="togglePitchRecording" hidden>record</button>
+              <button type="button" class="pill-btn pill-btn--subtle" id="pitch-retake-btn" data-action="retakePitch" hidden>retake</button>
             </div>
             <p style="font-size: 12.5px; opacity: 0.65; margin: 10px 0 0; line-height: 1.5;">
               Up to 90 seconds. Recorded at 720p so it stays small and uploads in seconds —
@@ -1917,7 +2237,7 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
             <span style="font-size: 12.5px; opacity: 0.65;">MP4, WebM or MOV · up to 100MB</span>
           </label>
           <input type="file" id="pitch-file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
-                 style="display: none;" onchange="window.handlePitchFile(event)">
+                 style="display: none;" data-change-action="handlePitchFile">
         </div>
 
         <!-- Shared preview + confirm -->
@@ -1929,10 +2249,10 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
                  style="width: 100%; max-width: 420px; border-radius: 12px; border: 1.5px solid var(--color-charcoal); background: #000; display: block;"></video>
           <div id="pitch-meta" style="font-size: 12px; opacity: 0.65; margin-top: 6px;"></div>
           <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-            <button type="button" class="pill-btn pill-btn--animated" id="pitch-save-btn" onclick="window.savePitchVideo()">
+            <button type="button" class="pill-btn pill-btn--animated" id="pitch-save-btn" data-action="savePitchVideo">
               <span class="pill-btn__inner"><span>use this video</span><span class="pill-btn__arrow">${ICONS.arrowRight}</span></span>
             </button>
-            <button type="button" class="pill-btn pill-btn--subtle" onclick="window.discardPitchTake()">start over</button>
+            <button type="button" class="pill-btn pill-btn--subtle" data-action="discardPitchTake">start over</button>
           </div>
           <div id="pitch-progress" hidden style="margin-top: 10px;">
             <div style="height: 6px; background: rgba(23,23,23,0.1); border-radius: 999px; overflow: hidden;">
@@ -1947,8 +2267,6 @@ function renderPitchVideoControl(containerId, currentUrl = '') {
     </div>
   `;
 }
-window.renderPitchVideoControl = renderPitchVideoControl;
-
 function switchPitchTab(which) {
   ['record', 'upload'].forEach(t => {
     document.getElementById(`pitch-tab-${t}`)?.classList.toggle('active', t === which);
@@ -2288,8 +2606,6 @@ function splitForDisplay(price) {
   const fee = Math.round(total * (feePercent() / 100) * 100) / 100;
   return { total, fee, payout: Math.round((total - fee) * 100) / 100 };
 }
-window.splitForDisplay = splitForDisplay;
-
 function updateLivePostit(val) {
   const textEl = document.getElementById('live-postit-text');
   const counterEl = document.getElementById('bm-tip-counter');
@@ -2347,83 +2663,140 @@ function updateLiveAchievements() {
 }
 window.updateLiveAchievements = updateLiveAchievements;
 
-// ─── Mentor Profile Photo & Avatar Handlers ─────
+// ─── Mentor Profile Photo ─────
+//
+// The photo is a real upload to /api/upload/mentor-photo, which downscales it
+// and attaches it to the profile. It is deliberately not part of the form
+// submission: it used to be read as base64 into a hidden field and posted
+// inside the JSON body, which put a multi-MB string in the mentor record and
+// blew past the 2MB body cap for any photo a phone actually takes.
+//
+// Signing up is the one case where there is no profile to attach to yet, so
+// the file waits here until the application comes back with an id.
 
-function handleMentorPhotoUpload(e) {
+/** A photo chosen during signup, uploaded once the profile exists. */
+let pendingMentorPhoto = null;
+/** The object URL behind the local preview, so it can be revoked. */
+let pendingPhotoPreviewUrl = null;
+
+function setPhotoPreviewMarkup(markup, statusText) {
+  const previewEl = document.getElementById('bm-photo-preview');
+  const statusEl = document.getElementById('bm-avatar-status');
+  if (previewEl) previewEl.innerHTML = markup;
+  if (statusEl) statusEl.innerText = statusText;
+}
+
+function showPhotoControls(hasPhoto) {
+  const removeBtn = document.getElementById('bm-remove-photo-btn');
+  const labelText = document.getElementById('bm-photo-label-text');
+  if (removeBtn) removeBtn.style.display = hasPhoto ? 'inline-flex' : 'none';
+  if (labelText) labelText.innerText = hasPhoto ? 'Replace photo' : 'Upload a photo';
+}
+
+function releasePendingPhotoPreview() {
+  if (pendingPhotoPreviewUrl) {
+    URL.revokeObjectURL(pendingPhotoPreviewUrl);
+    pendingPhotoPreviewUrl = null;
+  }
+}
+
+/** The initials the form would fall back to, from whatever is typed so far. */
+function initialsPreviewMarkup() {
+  const typed = document.getElementById('bm-name')?.value || '';
+  return getMentorAvatar({ name: typed || 'Your Name' }, 72);
+}
+
+async function handleMentorPhotoUpload(e) {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
 
-  if (file.size > 5 * 1024 * 1024) {
-    showToast('That image is over 5MB. Please choose a smaller one.');
+  if (file.size > 12 * 1024 * 1024) {
+    showToast('That image is over 12MB. Please choose a smaller one.');
+    e.target.value = '';
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = function (evt) {
-    const dataUrl = evt.target.result;
-    const photoDataEl = document.getElementById('bm-photo-data');
-    const previewEl = document.getElementById('bm-photo-preview');
-    const statusEl = document.getElementById('bm-avatar-status');
-    const removeBtn = document.getElementById('bm-remove-photo-btn');
+  releasePendingPhotoPreview();
+  pendingPhotoPreviewUrl = URL.createObjectURL(file);
 
-    if (photoDataEl) photoDataEl.value = dataUrl;
-    if (previewEl) {
-      previewEl.innerHTML = `<img src="${dataUrl}" alt="Preview" class="mentor-avatar-img">`;
-    }
-    if (statusEl) {
-      statusEl.innerText = 'Custom Photo Uploaded';
-    }
-    if (removeBtn) {
-      removeBtn.style.display = 'inline-flex';
-    }
-
-    // Deselect avatar buttons
-    document.querySelectorAll('.avatar-preset-btn').forEach(b => b.classList.remove('active'));
-  };
-  reader.readAsDataURL(file);
-}
-window.handleMentorPhotoUpload = handleMentorPhotoUpload;
-
-function removeMentorUploadedPhoto() {
-  const photoDataEl = document.getElementById('bm-photo-data');
-  const fileInput = document.getElementById('bm-photo-input');
-  const removeBtn = document.getElementById('bm-remove-photo-btn');
-  const avatarIdEl = document.getElementById('bm-selected-avatar-id');
-
-  if (photoDataEl) photoDataEl.value = '';
-  if (fileInput) fileInput.value = '';
-  if (removeBtn) removeBtn.style.display = 'none';
-
-  const avatarId = avatarIdEl ? parseInt(avatarIdEl.value) || 1 : 1;
-  selectMentorPresetAvatar(avatarId);
-}
-window.removeMentorUploadedPhoto = removeMentorUploadedPhoto;
-
-function selectMentorPresetAvatar(id) {
-  const avatarIdEl = document.getElementById('bm-selected-avatar-id');
-  const photoDataEl = document.getElementById('bm-photo-data');
-  const fileInput = document.getElementById('bm-photo-input');
-  const previewEl = document.getElementById('bm-photo-preview');
-  const statusEl = document.getElementById('bm-avatar-status');
-  const removeBtn = document.getElementById('bm-remove-photo-btn');
-
-  if (avatarIdEl) avatarIdEl.value = id;
-  if (photoDataEl) photoDataEl.value = '';
-  if (fileInput) fileInput.value = '';
-  if (removeBtn) removeBtn.style.display = 'none';
-
-  if (previewEl) {
-    previewEl.innerHTML = getMentorAvatar(id, 72);
-  }
-  if (statusEl) {
-    statusEl.innerText = `Illustrated Avatar #${id}`;
+  // No profile yet: keep the file and show it locally. The upload happens the
+  // moment the application returns an id.
+  if (!getMentorSession()?.mentorId) {
+    pendingMentorPhoto = file;
+    setPhotoPreviewMarkup(
+      `<img src="${pendingPhotoPreviewUrl}" alt="" class="mentor-avatar-img">`,
+      'Your photo — saved when you publish'
+    );
+    showPhotoControls(true);
+    return;
   }
 
-  document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.avatarId) === id);
-  });
+  setPhotoPreviewMarkup(
+    `<img src="${pendingPhotoPreviewUrl}" alt="" class="mentor-avatar-img">`,
+    'Uploading…'
+  );
+
+  try {
+    const { photoUrl } = await uploadMentorPhoto(file);
+    const dataEl = document.getElementById('bm-photo-data');
+    if (dataEl) dataEl.value = photoUrl;
+    pendingMentorPhoto = null;
+    setPhotoPreviewMarkup(getMentorAvatar({ photoUrl }, 72), 'Your photo');
+    showPhotoControls(true);
+    releasePendingPhotoPreview();
+    showToast('Photo updated.');
+  } catch (err) {
+    pendingMentorPhoto = null;
+    releasePendingPhotoPreview();
+    setPhotoPreviewMarkup(initialsPreviewMarkup(), 'Your initials');
+    showPhotoControls(false);
+    showToast(err.message || 'That photo could not be uploaded.');
+  } finally {
+    e.target.value = '';
+  }
 }
-window.selectMentorPresetAvatar = selectMentorPresetAvatar;
+
+async function removeMentorUploadedPhoto() {
+  const dataEl = document.getElementById('bm-photo-data');
+  const fileInput = document.getElementById('bm-photo-input');
+
+  pendingMentorPhoto = null;
+  releasePendingPhotoPreview();
+  if (fileInput) fileInput.value = '';
+  if (dataEl) dataEl.value = '';
+
+  setPhotoPreviewMarkup(initialsPreviewMarkup(), 'Your initials');
+  showPhotoControls(false);
+
+  // Only a saved photo needs deleting server-side; one chosen during signup
+  // and dropped again never left the browser.
+  if (getMentorSession()?.mentorId) {
+    try {
+      await removeMentorPhoto();
+    } catch (err) {
+      showToast(err.message || 'Could not remove that photo.');
+    }
+  }
+}
+
+/**
+ * Uploads a photo held back during signup, now that the profile exists.
+ * A failure here is not worth failing the signup over — the profile is live
+ * and they can add a photo from their dashboard.
+ */
+async function flushPendingMentorPhoto() {
+  if (!pendingMentorPhoto) return;
+  const file = pendingMentorPhoto;
+  pendingMentorPhoto = null;
+  try {
+    await uploadMentorPhoto(file);
+  } catch (err) {
+    console.warn('[photo] could not attach the photo chosen at signup', err);
+    showToast('Your profile is live, but the photo did not upload. You can add it from your dashboard.');
+  } finally {
+    releasePendingPhotoPreview();
+  }
+}
 
 // ─── Digital Product Form & File Upload Handlers ─────
 
@@ -2471,7 +2844,7 @@ function toggleDocPriceField(type, elId) {
 }
 window.toggleDocPriceField = toggleDocPriceField;
 
-async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
+async function handleDocumentFileSelect(event, previewId, hiddenInputId, formatInputId) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
@@ -2513,7 +2886,9 @@ async function handleDocumentFileSelect(event, previewId, hiddenInputId) {
     // The server returns an opaque handle, not a public URL: resource files are
     // only ever served through the authorised download route.
     if (hiddenInput) hiddenInput.value = result.fileName;
-    const formatInput = document.getElementById(hiddenInputId.replace('-file', '-format'));
+    // Named outright rather than derived from the name field's id by string
+    // surgery, which only worked while no prefix happened to contain "-file".
+    const formatInput = document.getElementById(formatInputId);
     if (formatInput) formatInput.value = result.format;
     if (previewEl) {
       previewEl.innerHTML = `
@@ -3068,13 +3443,9 @@ function verifiedEmail() {
 function isVerified() {
   return Boolean(getSessionToken());
 }
-window.isVerified = isVerified;
-
 function hasUniversityIdentity() {
   return Boolean(getSessionToken() && getSession()?.universityVerified === true);
 }
-window.hasUniversityIdentity = hasUniversityIdentity;
-
 /**
  * Ensures there is a live verified session, prompting for a code if not, then
  * runs `onVerified`. Every gated action funnels through here.
@@ -3110,11 +3481,9 @@ async function openVerificationModal({ email, universityName, actionName, onVeri
   // already registered — and silently failed for everyone else.
   renderVerificationEmailStep(actionName, email || '');
 }
-window.openVerificationModal = openVerificationModal;
-
 function verificationShell(inner) {
   return `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div class="verification-modal" style="padding: 24px 20px; text-align: center; max-width: 460px; margin: 0 auto;">
       <div style="width: 56px; height: 56px; border-radius: 50%; background: #eff6ff; border: 2px solid #3b82f6; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #2563eb;">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
@@ -3172,8 +3541,6 @@ async function refreshEntitlements() {
   const me = await fetchMe();
   setUnlockedDocIds(me?.entitlements || []);
 }
-window.refreshEntitlements = refreshEntitlements;
-
 function openOverlay() {
   const overlay = document.getElementById('modal-overlay');
   if (overlay) overlay.classList.add('open');
@@ -3227,31 +3594,27 @@ async function handleBecomeMentorSubmit(e) {
     ...(linkedin ? [{ label: 'LinkedIn', url: linkedin }] : []),
     ...(signupLinksData || []).filter(l => l && l.url && l.url.trim())
   ];
-  // The pitch video is uploaded through its own endpoint and attached there;
-  // there is no URL field to read any more.
-  const photoUrl = document.getElementById('bm-photo-data')?.value.trim() || '';
-  const avatarId = parseInt(document.getElementById('bm-selected-avatar-id')?.value) || 1;
+  // The pitch video and the photo both upload through their own endpoints, so
+  // neither is read from this form. During signup there is no profile to
+  // attach a photo to yet, so it is held and flushed once this application
+  // comes back with an id.
   const topTip = document.getElementById('bm-toptip')?.value.trim();
   const submitBtn = e.target.querySelector('button[type="submit"]');
   clearFormError('bm-form-error');
 
-  // Shape only. The university proved who this is before the form opened;
-  // this address is just where booking notices go, and requiring .ac.uk
-  // would send them straight back into the filtering that made mail
-  // unusable in the first place.
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    showFormError('bm-form-error', 'Please enter a valid email address we can send booking notices to.', 'bm-email');
-    document.getElementById('bm-email')?.focus();
-    return;
-  }
-
-  // Booking notices have to reach a mentor, and .ac.uk mail is what does
-  // not arrive — a mentor who never sees a booking is worse than a student
-  // who cannot make one.
-  if (email.endsWith('.ac.uk')) {
-    showFormError('bm-form-error', 'Please use a personal email — university addresses filter our mail, so booking notices often never arrive.', 'bm-email');
-    document.getElementById('bm-email')?.focus();
-    return;
+  // The contact address is NOT validated here, and must not be.
+  //
+  // The field is read-only and filled from the session — the address they
+  // already proved by code — and /api/mentors/apply takes it from the session
+  // regardless of what the body says. So a rejection here can only ever be a
+  // dead end: the message asks them to change a field they cannot type in.
+  //
+  // That was reachable. A legacy or admin session can carry an .ac.uk address,
+  // and the old check refused exactly those, leaving the applicant stuck on a
+  // form that would never submit. Changing it is a separate, proven flow, and
+  // the control for it is right beside the field.
+  if (email && email.endsWith('.ac.uk')) {
+    showToast('Heads up: university inboxes filter our mail, so booking notices may not arrive. Use "use a different address" above to change it.');
   }
 
   // Top 3 achievements from the 3 text inputs
@@ -3266,14 +3629,10 @@ async function handleBecomeMentorSubmit(e) {
     return;
   }
 
-  // Optional Doc info
-  const docTitle = document.getElementById('bm-doc-title')?.value.trim();
-  const docType = document.getElementById('bm-doc-type')?.value || 'free';
-  const docCategory = document.getElementById('bm-doc-category')?.value || 'Tech & Coding';
-  const docPrice = docType === 'paid' ? parseFloat(document.getElementById('bm-doc-price')?.value) || 3.99 : 0;
-  const docDesc = document.getElementById('bm-doc-desc')?.value.trim();
-  const docFileName = document.getElementById('bm-doc-uploaded-file')?.value.trim();
-  const docFormat = document.getElementById('bm-doc-uploaded-format')?.value.trim() || 'PDF';
+  // The optional first resource, read through the same reader the standalone
+  // publish form uses — including the preview bullets, which this form had no
+  // fields for at all before the two copies were merged.
+  const firstResource = readResourceForm('bm-doc');
 
   const colorInput = document.querySelector('input[name="postit-color"]:checked');
   const topTipColor = colorInput ? colorInput.value : 'yellow';
@@ -3295,9 +3654,8 @@ async function handleBecomeMentorSubmit(e) {
         bio: document.getElementById('bm-bio')?.value.trim() || '',
         email,
         linkedin,
-        photoUrl,
-        avatarId,
         achievements,
+        helpsWith: readHelpsWith(),
         topTip,
         topTipColor,
         links
@@ -3307,16 +3665,15 @@ async function handleBecomeMentorSubmit(e) {
       // authorises the resource publish immediately afterwards.
       const applicationResult = await submitMentorApplication(applicationData);
 
-      if (docTitle && docFileName) {
+      // There is a mentor session now, so a photo chosen while filling the
+      // form finally has somewhere to go.
+      await flushPendingMentorPhoto();
+
+      if (firstResource.title && firstResource.fileName) {
         try {
           await createResource({
-            title: docTitle,
-            subtitle: docDesc || `Shared by ${name} (${uni})`,
-            type: docType,
-            price: docPrice,
-            category: docCategory,
-            fileName: docFileName,
-            format: docFormat
+            ...firstResource,
+            subtitle: firstResource.subtitle || `Shared by ${name} (${uni})`
           });
         } catch (e) {
           console.warn('Could not publish the attached resource:', e);
@@ -3343,7 +3700,6 @@ async function handleBecomeMentorSubmit(e) {
         topTip,
         topTipColor,
         achievements,
-        avatarId,
         weeklySchedule: { 1: ["10:00 AM", "2:00 PM"], 3: ["11:00 AM", "3:30 PM"], 5: ["1:00 PM", "4:30 PM"] },
         rating: 5.0,
         callsCompleted: 0
@@ -3397,7 +3753,7 @@ async function handleBecomeMentorSubmit(e) {
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 24px;">
             <button class="pill-btn pill-btn--animated" id="bm-done-dashboard">
               <span class="pill-btn__inner">
-                <span>open my mentor dashboard</span>
+                <span>open my mentor space</span>
                 <span class="pill-btn__arrow">→</span>
               </span>
             </button>
@@ -3420,7 +3776,7 @@ async function handleBecomeMentorSubmit(e) {
       modal.querySelector('#bm-done-close')
         .addEventListener('click', () => closeModal());
       modal.querySelector('#bm-done-dashboard')
-        .addEventListener('click', () => { closeModal(); navigateTo('/mentor-dashboard'); });
+        .addEventListener('click', () => { closeModal(); openMentorSpace(); });
       modal.querySelector('#bm-done-profile')
         .addEventListener('click', () => { closeModal(); navigateTo(`/mentor/${registeredMentor.id}`); });
 
@@ -3510,8 +3866,6 @@ function getStudentPrefs() {
     return null;
   }
 }
-window.getStudentPrefs = getStudentPrefs;
-
 function setStudentPrefs(prefs) {
   try {
     localStorage.setItem('frea_student_prefs', JSON.stringify(prefs));
@@ -3519,8 +3873,6 @@ function setStudentPrefs(prefs) {
     console.warn(e);
   }
 }
-window.setStudentPrefs = setStudentPrefs;
-
 let activeResourcesUni = 'all';
 let activeResourcesType = 'all'; // 'all' | 'free' | 'paid'
 let activeResourcesSubject = 'all';
@@ -3591,9 +3943,9 @@ function getFilteredDocsHtml() {
           ${activeResourcesUni !== 'all' ? `There are currently no notes specifically for <strong>${activeResourcesUni}</strong> matching this subject. Explore notes from other Russell Group universities or request notes!` : 'Try clearing your search query or switching filters.'}
         </p>
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-          ${activeResourcesUni !== 'all' ? `<button class="pill-btn pill-btn--small" onclick="window.setResourcesUniFilter('all')">explore all UK universities</button>` : ''}
-          <button class="pill-btn pill-btn--small pill-btn--subtle" onclick="window.openSuggestionModal()">request notes for your module</button>
-          <button class="pill-btn pill-btn--small" onclick="window.resetResourcesFilters()">reset all filters</button>
+          ${activeResourcesUni !== 'all' ? `<button class="pill-btn pill-btn--small" data-action="setResourcesUniFilter" data-arg="all">explore all UK universities</button>` : ''}
+          <button class="pill-btn pill-btn--small pill-btn--subtle" data-action="openSuggestionModal">request notes for your module</button>
+          <button class="pill-btn pill-btn--small" data-action="resetResourcesFilters">reset all filters</button>
         </div>
       </div>
     `;
@@ -3631,13 +3983,13 @@ function renderResourcesHub() {
           <div class="campus-tailored-strip">
             ${prefs && prefs.university && prefs.university !== 'All UK Universities' ? `
               <div class="campus-tailored-pill">
-                <span>📍 Tailored for: <strong>${escapeHtml(prefs.university)}</strong> ${prefs.subject && prefs.subject !== 'all' ? `· ${prefs.subject}` : ''}</span>
-                <button type="button" class="campus-switch-btn" onclick="window.openPreferencesModal(true)">change</button>
+                <span style="display: inline-flex; align-items: center; gap: 6px;">${ICONS.pin} Tailored for: <strong>${escapeHtml(prefs.university)}</strong> ${prefs.subject && prefs.subject !== 'all' ? `· ${prefs.subject}` : ''}</span>
+                <button type="button" class="campus-switch-btn" data-action="openPreferencesModal">change</button>
               </div>
             ` : `
-              <button type="button" class="campus-tailored-pill" onclick="window.openPreferencesModal(true)" style="cursor: pointer;" title="Filter resources to your university">
+              <button type="button" class="campus-tailored-pill" data-action="openPreferencesModal" style="cursor: pointer;" title="Filter resources to your university">
                 <span>${ICONS.book}</span>
-                <span>personalise for your campus: <strong>set university & course</strong></span>
+                <span>personalise for your campus: <strong>set university &amp; course</strong></span>
                 <span style="color: var(--color-marker-orange); font-weight: 700;">→</span>
               </button>
             `}
@@ -3651,20 +4003,20 @@ function renderResourcesHub() {
                 type="text" 
                 id="resources-search-input" 
                 class="resources-search-input" 
-                placeholder="Search by module (e.g. COMP26120, Concurrency, Tort), keyword..."
+                placeholder="search by module (e.g. COMP26120, Concurrency, Tort), keyword..."
                 value="${activeResourcesSearch}"
-                oninput="window.handleResourcesSearch(this.value)"
+                data-input-action="handleResourcesSearch"
               >
-              ${activeResourcesSearch ? `<button class="resources-search-clear" onclick="window.clearResourcesSearch()">${ICONS.close}</button>` : ''}
+              ${activeResourcesSearch ? `<button class="resources-search-clear" data-action="clearResourcesSearch">${ICONS.close}</button>` : ''}
             </div>
           </div>
 
           <!-- Filter Controls: University Dropdown -->
           <div class="resources-filter-row">
-            <select class="resources-uni-select" id="resources-uni-select" onchange="window.setResourcesUniFilter(this.value)">
+            <select class="resources-uni-select" id="resources-uni-select" data-change-action="setResourcesUniFilter">
               <option value="all" ${activeResourcesUni === 'all' ? 'selected' : ''}>All UK Universities</option>
               ${prefs && prefs.university && prefs.university !== 'All UK Universities' ? `
-                <option value="${escapeHtml(prefs.university)}" ${activeResourcesUni === prefs.university ? 'selected' : ''}>📍 ${prefs.university} (My Campus)</option>
+                <option value="${escapeHtml(prefs.university)}" ${activeResourcesUni === prefs.university ? 'selected' : ''}>· ${prefs.university} (my campus)</option>
               ` : ''}
               ${UK_UNIVERSITIES.filter(u => u !== 'All UK Universities' && (!prefs || u !== prefs.university)).map(u => `
                 <option value="${u}" ${activeResourcesUni === u ? 'selected' : ''}>${u}</option>
@@ -3676,13 +4028,13 @@ function renderResourcesHub() {
           <div class="resources-filter-container">
             <!-- Type Pill Selector (Hick's Law: 3 primary options) -->
             <div class="resources-type-selector">
-              <button class="resources-type-btn ${activeResourcesType === 'all' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('all')">
+              <button class="resources-type-btn ${activeResourcesType === 'all' ? 'active' : ''}" data-action="setResourcesTypeFilter" data-arg="all">
                 <span style="display: inline-flex; align-items: center; gap: 6px;">${ICONS.category} all resources (${allDocs.length})</span>
               </button>
-              <button class="resources-type-btn ${activeResourcesType === 'free' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('free')">
+              <button class="resources-type-btn ${activeResourcesType === 'free' ? 'active' : ''}" data-action="setResourcesTypeFilter" data-arg="free">
                 <span style="display: inline-flex; align-items: center; gap: 6px;">${ICONS.gift} 100% freabies (${freeCount})</span>
               </button>
-              <button class="resources-type-btn ${activeResourcesType === 'paid' ? 'active' : ''}" onclick="window.setResourcesTypeFilter('paid')">
+              <button class="resources-type-btn ${activeResourcesType === 'paid' ? 'active' : ''}" data-action="setResourcesTypeFilter" data-arg="paid">
                 <span style="display: inline-flex; align-items: center; gap: 6px;">${ICONS.flash} student playbooks (${paidCount})</span>
               </button>
             </div>
@@ -3690,7 +4042,7 @@ function renderResourcesHub() {
             <!-- Subject Pills -->
             <div class="resources-subject-pills">
               ${SUBJECTS.map(subj => `
-                <button class="filter-pill filter-pill--compact ${activeResourcesSubject === subj ? 'active' : ''}" onclick="window.setResourcesSubjectFilter('${subj}')">
+                <button class="filter-pill filter-pill--compact ${activeResourcesSubject === subj ? 'active' : ''}" data-action="setResourcesSubjectFilter" data-arg="${escapeHtml(subj)}">
                   ${subj === 'all' ? 'all subjects' : subj}
                 </button>
               `).join('')}
@@ -3723,9 +4075,9 @@ function renderResourcesHub() {
                 Join frea as a senior mentor. Publish free freabies to build your personal brand or set student-friendly prices (£2.99–£5.99) to earn directly from your hard work. Zero commission, 100% impact.
               </p>
             </div>
-            <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/become-a-mentor')">
+            <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/become-a-mentor">
               <span class="pill-btn__inner">
-                <span>become a mentor & author</span>
+                <span>become a mentor &amp; author</span>
                 <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
               </span>
             </button>
@@ -3737,8 +4089,6 @@ function renderResourcesHub() {
     </div>
   `;
 }
-window.renderResourcesHub = renderResourcesHub;
-
 function updateResourcesGrid() {
   const grid = document.getElementById('resources-docs-grid');
   const badge = document.getElementById('resources-count-badge');
@@ -3782,8 +4132,6 @@ window.setResourcesUniFilter = setResourcesUniFilter;
 function toggleShowAllUnis() {
   setResourcesUniFilter('all');
 }
-window.toggleShowAllUnis = toggleShowAllUnis;
-
 function setResourcesTypeFilter(type) {
   activeResourcesType = type;
   document.querySelectorAll('.resources-type-btn').forEach(btn => {
@@ -3854,7 +4202,7 @@ function openPreferencesModal(isManual = true) {
   ];
 
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div class="doc-modal" style="max-width: 520px; padding: 6px 4px;">
       <div style="text-align: center; margin-bottom: 20px;">
         <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; background: rgba(255, 111, 30, 0.08); border: 1.5px dashed rgba(255, 111, 30, 0.35); border-radius: 999px; font-family: var(--font-handwritten); font-size: 19px; color: var(--color-marker-orange); margin-bottom: 10px;">
@@ -3868,7 +4216,7 @@ function openPreferencesModal(isManual = true) {
         </p>
       </div>
 
-      <form id="preferences-form" onsubmit="window.saveStudentPreferences(event)">
+      <form id="preferences-form" data-submit-action="saveStudentPreferences">
         <div class="mentor-form-group" style="margin-bottom: 16px;">
           <label class="mentor-form-label" style="font-size: 13.5px; font-weight: 700;">1. Which UK university do you attend?</label>
           <select id="pref-university" class="mentor-form-select" style="padding: 11px 14px; font-size: 14px;">
@@ -3883,7 +4231,7 @@ function openPreferencesModal(isManual = true) {
           <label class="mentor-form-label" style="font-size: 13.5px; font-weight: 700;">2. What field or broad discipline?</label>
           <div class="pref-subject-grid">
             ${subjectOptions.map(subj => `
-              <div class="pref-subject-card ${(current.subject === subj || (current.subject === 'all' && subj === 'Tech')) ? 'active' : ''}" onclick="window.selectPrefSubject(this, '${subj}')">
+              <div class="pref-subject-card ${(current.subject === subj || (current.subject === 'all' && subj === 'Tech')) ? 'active' : ''}" data-action="selectPrefSubject" data-arg="${escapeHtml(subj)}">
                 <span>${subj}</span>
               </div>
             `).join('')}
@@ -3897,12 +4245,12 @@ function openPreferencesModal(isManual = true) {
         </div>
 
         <div style="display: flex; gap: 10px; align-items: center;">
-          <button type="button" class="pill-btn pill-btn--subtle" onclick="window.skipStudentPreferences()" style="flex: 1; justify-content: center; height: 42px;">
+          <button type="button" class="pill-btn pill-btn--subtle" data-action="skipStudentPreferences" style="flex: 1; justify-content: center; height: 42px;">
             explore all unis
           </button>
           <button type="submit" class="pill-btn pill-btn--animated" style="flex: 1.4; justify-content: center; height: 42px;">
             <span class="pill-btn__inner" style="justify-content: center;">
-              <span>save & tailor vault</span>
+              <span>save &amp; tailor vault</span>
               <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
             </span>
           </button>
@@ -3969,7 +4317,7 @@ function openSuggestionModal() {
   if (!modal) return;
 
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div class="doc-modal" style="max-width: 520px; padding: 6px 4px;">
       <div style="text-align: center; margin-bottom: 18px;">
         <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; background: rgba(255, 111, 30, 0.08); border: 1.5px dashed rgba(255, 111, 30, 0.35); border-radius: 999px; font-family: var(--font-handwritten); font-size: 19px; color: var(--color-marker-orange); margin-bottom: 8px;">
@@ -3983,13 +4331,13 @@ function openSuggestionModal() {
         </p>
       </div>
 
-      <form id="suggestion-form" onsubmit="window.handleSuggestionSubmit(event)">
+      <form id="suggestion-form" data-submit-action="handleSuggestionSubmit">
         <div class="mentor-form-group" style="margin-bottom: 14px;">
           <label class="mentor-form-label" style="font-size: 13px; font-weight: 700;">Suggestion Type</label>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button type="button" class="filter-pill active" onclick="window.selectSuggestionType(this, 'resource')">Request Resource / Notes</button>
-            <button type="button" class="filter-pill" onclick="window.selectSuggestionType(this, 'mentor')">Request a Senior Mentor</button>
-            <button type="button" class="filter-pill" onclick="window.selectSuggestionType(this, 'feature')">Feature Idea</button>
+            <button type="button" class="filter-pill active" data-action="selectSuggestionType" data-arg="resource">Request Resource / Notes</button>
+            <button type="button" class="filter-pill" data-action="selectSuggestionType" data-arg="mentor">Request a Senior Mentor</button>
+            <button type="button" class="filter-pill" data-action="selectSuggestionType" data-arg="feature">Feature Idea</button>
           </div>
           <input type="hidden" id="suggestion-type-input" value="resource">
         </div>
@@ -4020,7 +4368,7 @@ function openSuggestionModal() {
         </div>
 
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button type="button" class="pill-btn pill-btn--subtle" onclick="closeModal()">cancel</button>
+          <button type="button" class="pill-btn pill-btn--subtle" data-action="close-modal">cancel</button>
           <button type="submit" class="pill-btn pill-btn--animated" style="padding: 11px 24px;">
             <span class="pill-btn__inner">
               <span>submit suggestion</span>
@@ -4091,14 +4439,10 @@ function showFormError(containerId, message, focusId) {
   }
   if (focusId) document.getElementById(focusId)?.focus();
 }
-window.showFormError = showFormError;
-
 function clearFormError(containerId) {
   const el = document.getElementById(containerId);
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
-window.clearFormError = clearFormError;
-
 /**
  * Star a mentor, or take the star back.
  *
@@ -4138,7 +4482,7 @@ function showToast(message) {
   toast.innerHTML = `
     <div class="frea-toast__inner">
       <span>${escapeHtml(message)}</span>
-      <button class="frea-toast__close" onclick="this.closest('.frea-toast').classList.remove('show')">${ICONS.close}</button>
+      <button class="frea-toast__close" data-action="dismiss-toast">${ICONS.close}</button>
     </div>
   `;
   toast.classList.add('show');
@@ -4147,8 +4491,6 @@ function showToast(message) {
     toast.classList.remove('show');
   }, 4500);
 }
-window.showToast = showToast;
-
 // ─── Modals: Preview & Instant Checkout ─────
 
 function openDocPreviewModal(docId) {
@@ -4164,7 +4506,7 @@ function openDocPreviewModal(docId) {
   if (!modal) return;
 
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div class="doc-modal">
       <div class="doc-modal__header">
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
@@ -4176,9 +4518,9 @@ function openDocPreviewModal(docId) {
         <h2 class="doc-modal__title">${escapeHtml(doc.title)}</h2>
         <p class="doc-modal__subtitle">${escapeHtml(doc.subtitle)}</p>
 
-        <div class="doc-modal__author-banner" onclick="closeModal(); window.navigateTo('/mentor/${doc.mentorId}')">
+        <div class="doc-modal__author-banner" data-action="navigate-close" data-href="/mentor/${doc.mentorId}">
           <div class="doc-modal__avatar" style="flex-shrink: 0;">
-            ${getMentorAvatar(doc.mentorId, 44)}
+            ${getMentorAvatar({ name: doc.mentorName, photoUrl: doc.mentorPhotoUrl }, 44)}
           </div>
           <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 700; font-size: 15px; color: var(--color-charcoal); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
@@ -4228,16 +4570,16 @@ function openDocPreviewModal(docId) {
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
           ${reportLink('resource', doc.id, doc.title)}
-          <button class="pill-btn pill-btn--subtle" onclick="closeModal()">close</button>
+          <button class="pill-btn pill-btn--subtle" data-action="close-modal">close</button>
           ${isUnlocked || !isPaid ? `
-            <button class="pill-btn pill-btn--animated" onclick="window.downloadDoc('${doc.id}')">
+            <button class="pill-btn pill-btn--animated" data-action="downloadDoc" data-arg="${escapeHtml(doc.id)}">
               <span class="pill-btn__inner">
                 <span>download ${doc.format.split(' ')[0]}</span>
                 <span class="pill-btn__arrow">${ICONS.download}</span>
               </span>
             </button>
           ` : `
-            <button class="pill-btn pill-btn--animated" onclick="window.openDocCheckoutModal('${doc.id}')">
+            <button class="pill-btn pill-btn--animated" data-action="openDocCheckoutModal" data-arg="${escapeHtml(doc.id)}">
               <span class="pill-btn__inner">
                 <span>unlock now (£${doc.price.toFixed(2)})</span>
                 <span class="pill-btn__arrow">${ICONS.unlock}</span>
@@ -4273,7 +4615,7 @@ function openDocCheckoutModal(docId) {
   window.__activeCheckoutDocId = docId;
 
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <div class="doc-modal">
       <div class="doc-modal__header" style="border-bottom: none; padding-bottom: 8px;">
         <span class="doc-badge doc-badge--paid" style="margin-bottom: 8px;">secure checkout</span>
@@ -4314,8 +4656,8 @@ function openDocCheckoutModal(docId) {
           <div id="checkout-error" style="display: none; color: #ef4444; font-size: 13px; font-weight: 600; margin-bottom: 12px; text-align: left;"></div>
 
           <div style="display: flex; gap: 10px;">
-            <button type="button" class="pill-btn pill-btn--subtle" onclick="window.openDocPreviewModal('${escapeHtml(doc.id)}')">← back to preview</button>
-            <button type="button" id="checkout-submit-btn" class="pill-btn pill-btn--animated" style="flex: 1; padding: 13px 20px;" onclick="window.processDocCheckout('${escapeHtml(doc.id)}')">
+            <button type="button" class="pill-btn pill-btn--subtle" data-action="openDocPreviewModal" data-arg="${escapeHtml(doc.id)}">← back to preview</button>
+            <button type="button" id="checkout-submit-btn" class="pill-btn pill-btn--animated" style="flex: 1; padding: 13px 20px;" data-action="processDocCheckout" data-arg="${escapeHtml(doc.id)}">
               <span class="pill-btn__inner" style="justify-content: center;">
                 <span>pay £${price.toFixed(2)} with card</span>
                 <span class="pill-btn__arrow">${ICONS.arrowRight}</span>
@@ -4330,8 +4672,8 @@ function openDocCheckoutModal(docId) {
             ${escapeHtml(doc.mentorName.split(' ')[0])} offers free 20-minute calls.
           </div>
           <div style="display: flex; gap: 10px; margin-top: 16px;">
-            <button type="button" class="pill-btn pill-btn--subtle" onclick="window.openDocPreviewModal('${escapeHtml(doc.id)}')">← back to preview</button>
-            <button type="button" class="pill-btn" style="flex: 1;" onclick="closeModal(); window.navigateTo('/mentor/${doc.mentorId}');">
+            <button type="button" class="pill-btn pill-btn--subtle" data-action="openDocPreviewModal" data-arg="${escapeHtml(doc.id)}">← back to preview</button>
+            <button type="button" class="pill-btn" style="flex: 1;" data-action="navigate-close" data-href="/mentor/${doc.mentorId}">
               book a free chat instead
             </button>
           </div>
@@ -4411,7 +4753,7 @@ function renderCheckoutComplete(route) {
       root.innerHTML = `
         <h1 style="font-size: 28px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 8px;">checkout cancelled</h1>
         <p style="font-size: 15px; opacity: 0.75; margin-bottom: 22px;">No payment was taken. The playbook is still there whenever you want it.</p>
-        <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/resources')">back to freabies &amp; docs</button>
+        <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/resources">back to freabies &amp; docs</button>
       `;
       return;
     }
@@ -4426,7 +4768,7 @@ function renderCheckoutComplete(route) {
         trackEvent('doc_purchased', { docId: result.resourceId, title: result.resourceTitle, price: result.totalAmount });
 
         root.innerHTML = `
-          <div style="font-size: 40px; margin-bottom: 8px;">🎉</div>
+          <div style="color: var(--color-sprout-sticker); margin-bottom: 10px; display: flex; justify-content: center;">${largeIcon(ICONS.tickCircle, 44)}</div>
           <h1 style="font-size: 28px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 8px;">playbook unlocked</h1>
           <p style="font-size: 15px; opacity: 0.75; margin-bottom: 8px; max-width: 460px; margin-left: auto; margin-right: auto;">
             <strong>${escapeHtml(result.resourceTitle)}</strong> is yours for good. A receipt and download
@@ -4434,10 +4776,10 @@ function renderCheckoutComplete(route) {
           </p>
           <p style="font-size: 13px; opacity: 0.6; margin-bottom: 24px;">Order ${escapeHtml(result.orderId)}</p>
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <button class="pill-btn pill-btn--animated" onclick="window.downloadDoc('${escapeHtml(result.resourceId)}')">
+            <button class="pill-btn pill-btn--animated" data-action="downloadDoc" data-arg="${escapeHtml(result.resourceId)}">
               <span class="pill-btn__inner"><span>download it now</span><span class="pill-btn__arrow">${ICONS.download}</span></span>
             </button>
-            <button class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/resources')">browse more</button>
+            <button class="pill-btn pill-btn--subtle" data-action="navigate" data-href="/resources">browse more</button>
           </div>
         `;
       } else {
@@ -4447,14 +4789,14 @@ function renderCheckoutComplete(route) {
             Your bank hasn't confirmed this one yet. It usually takes a few seconds —
             we'll email your download link the moment it clears.
           </p>
-          <button class="pill-btn pill-btn--subtle" onclick="window.location.reload()">check again</button>
+          <button class="pill-btn pill-btn--subtle" data-action="reload">check again</button>
         `;
       }
     } catch (err) {
       root.innerHTML = `
         <h1 style="font-size: 26px; font-weight: 900; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 8px;">couldn't confirm that order</h1>
         <p style="font-size: 15px; opacity: 0.75; margin-bottom: 22px;">${escapeHtml(err.message)}</p>
-        <button class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/resources')">back to freabies &amp; docs</button>
+        <button class="pill-btn pill-btn--subtle" data-action="navigate" data-href="/resources">back to freabies &amp; docs</button>
       `;
     }
   }, 50);
@@ -4526,14 +4868,10 @@ async function downloadDocVersion(resourceId, versionId, title = 'frea-resource'
     showToast(err.message || 'Could not download that version.');
   }
 }
-window.downloadDocVersion = downloadDocVersion;
-
 /** Kept as a compatibility entry point; claiming now downloads immediately. */
 async function claimFreabie(docId) {
   return downloadDoc(docId);
 }
-window.claimFreabie = claimFreabie;
-
 function refreshDocCardsUI() {
   const unlocked = getUnlockedDocIds();
   unlocked.forEach(docId => {
@@ -4547,7 +4885,7 @@ function refreshDocCardsUI() {
       const actionBtn = card.querySelector('.doc-btn--paid');
       if (actionBtn) {
         actionBtn.outerHTML = `
-          <button type="button" class="doc-btn doc-btn--unlocked" onclick="window.downloadDoc('${docId}')" title="Download to device" aria-label="Download guide">
+          <button type="button" class="doc-btn doc-btn--unlocked" data-action="downloadDoc" data-arg="${escapeHtml(docId)}" title="Download to device" aria-label="Download guide">
             ${ICONS.download}
             <span>download</span>
           </button>
@@ -4556,8 +4894,6 @@ function refreshDocCardsUI() {
     }
   });
 }
-window.refreshDocCardsUI = refreshDocCardsUI;
-
 // ─── Footer Component ─────
 
 function renderFooter() {
@@ -4582,7 +4918,7 @@ function renderFooter() {
           <a class="footer__link" href="/resources">freabies &amp; docs</a>
           <a class="footer__link" href="/become-a-mentor">become a mentor</a>
           <a class="footer__link" href="/my-space" rel="nofollow">my space</a>
-          <a class="footer__link" href="#" onclick="event.preventDefault(); window.scrollTo({top: document.querySelector('.faq__list')?.offsetTop - 100, behavior: 'smooth'})">faq</a>
+          <a class="footer__link" href="#" data-action="scroll-to-faq">faq</a>
         </div>
       </div>
       <div class="footer__bottom" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -4652,8 +4988,6 @@ async function loadMentorCalendar(mentorId, year, month) {
     }
   }
 }
-window.loadMentorCalendar = loadMentorCalendar;
-
 function navigateMonth(delta) {
   let m = calendarState.month + delta;
   let y = calendarState.year;
@@ -4734,11 +5068,11 @@ function renderCalendarDOM() {
     <div class="frea-cal">
       <!-- Calendar Header: Symmetrical, fixed buttons & clean month title -->
       <div class="frea-cal__header">
-        <button class="frea-cal__nav-btn" onclick="window.navigateMonth(-1)" title="Previous month" aria-label="Previous month">
+        <button class="frea-cal__nav-btn" data-action="navigateMonth" data-arg="-1" title="Previous month" aria-label="Previous month">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
         </button>
         <div class="frea-cal__title">${fullMonthTitle}</div>
-        <button class="frea-cal__nav-btn" onclick="window.navigateMonth(1)" title="Next month" aria-label="Next month">
+        <button class="frea-cal__nav-btn" data-action="navigateMonth" data-arg="1" title="Next month" aria-label="Next month">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
@@ -4793,7 +5127,7 @@ function renderCalendarDOM() {
     }
 
     contentHtml += `
-      <div class="${cellClass}" onclick="${isPast ? '' : `window.selectCalendarMonthCell('${day.date}')`}" title="${isPast ? `${day.displayDate} (past)` : (hasSlots ? `${day.slotCount} open slot(s) on ${day.displayDate}` : `No availability on ${day.displayDate}`)}">
+      <div class="${cellClass}" ${isPast ? '' : `data-action="selectCalendarMonthCell" data-arg="${escapeHtml(day.date)}"`} title="${isPast ? `${day.displayDate} (past)` : (hasSlots ? `${day.slotCount} open slot(s) on ${day.displayDate}` : `No availability on ${day.displayDate}`)}">
         <span class="frea-cal__num">${day.dayNumber}</span>
       </div>
     `;
@@ -4830,7 +5164,8 @@ function renderCalendarDOM() {
             `;
       }
       return `
-              <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" onclick="window.selectMonthSlotChip('${s.time}', '${selectedDayObj.date}', '${escapeHtml(selectedDayObj.displayDate)}')">
+              <button class="frea-cal__chip ${isSlotSelected ? 'selected' : ''}" data-action="selectMonthSlotChip" data-time="${escapeHtml(s.time)}"
+                data-date="${escapeHtml(selectedDayObj.date)}" data-display="${escapeHtml(selectedDayObj.displayDate)}">
                 <span>${escapeHtml(s.range)}</span>
               </button>
             `;
@@ -4859,7 +5194,7 @@ function renderCalendarDOM() {
         </div>
         <div style="font-size: 13px; opacity: 0.65; margin-top: 3px;">instant video link · calendar invite to you and your mentor</div>
       </div>
-      <button class="pill-btn pill-btn--animated" onclick="window.openBookingModal(${calendarState.mentorId})">
+      <button class="pill-btn pill-btn--animated" data-action="openBookingModal" data-arg="${calendarState.mentorId}">
         <span class="pill-btn__inner">
           <span>confirm chat</span>
           <span class="pill-btn__arrow">→</span>
@@ -4934,7 +5269,7 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot }) {
 
   const modal = document.getElementById('modal-content');
   modal.innerHTML = `
-    <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+    <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
     <h2 class="modal__title">book your free 20-min chat</h2>
     <p class="modal__body">you're booking with <strong>${escapeHtml(mentor.name)}</strong> (${escapeHtml(mentor.university)})</p>
     <ul class="modal__steps">
@@ -4964,7 +5299,7 @@ function renderBookingModal({ mentor, selectedDay, selectedSlot }) {
           <button type="button" id="booking-not-you"
                   style="background: none; border: none; padding: 0; font-size: 12.5px; color: #15803d; text-decoration: underline; cursor: pointer; opacity: 0.85;">not you?</button>
         </div>
-        <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" onclick="confirmBooking(${mentor.id})">confirm chat</button>
+        <button id="confirm-booking-btn" class="pill-btn pill-btn--dark" data-action="confirmBooking" data-arg="${mentor.id}">confirm chat</button>
       </div>
       <div id="booking-error-msg" style="color: var(--color-marker-orange); font-size: 13px; margin-top: 6px; display: none;"></div>
     </div>
@@ -5090,7 +5425,7 @@ async function confirmBooking(mentorId) {
 
       const modal = document.getElementById('modal-content');
       modal.innerHTML = `
-        <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+        <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
         <div class="modal--confirmation">
           <div class="modal__celebration" style="display: flex; align-items: center; justify-content: center; gap: 8px;">${ICONS.tickCircle} <span style="font-weight: 800; font-size: 22px;">You're booked in</span></div>
           <h2 class="modal__title">you're booked in!</h2>
@@ -5116,13 +5451,13 @@ async function confirmBooking(mentorId) {
               <span>${ICONS.calendar}</span> Add to your calendar:
             </div>
             <div class="calendar-sync-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button type="button" class="cal-sync-btn cal-sync-btn--google" onclick="window.addBookingToCalendar('google')">
+              <button type="button" class="cal-sync-btn cal-sync-btn--google" data-action="addBookingToCalendar" data-arg="google">
                 <span>${ICONS.google}</span> Google Calendar
               </button>
-              <button type="button" class="cal-sync-btn cal-sync-btn--outlook" onclick="window.addBookingToCalendar('outlook')">
+              <button type="button" class="cal-sync-btn cal-sync-btn--outlook" data-action="addBookingToCalendar" data-arg="outlook">
                 <span>${ICONS.outlook || ICONS.calendar}</span> Outlook
               </button>
-              <button type="button" class="cal-sync-btn cal-sync-btn--ics" onclick="window.downloadBookingInvite('${escapeHtml(booking.id)}')">
+              <button type="button" class="cal-sync-btn cal-sync-btn--ics" data-action="downloadBookingInvite" data-arg="${escapeHtml(booking.id)}">
                 <span>${ICONS.documentDownload}</span> Apple / other (.ics)
               </button>
             </div>
@@ -5137,8 +5472,8 @@ async function confirmBooking(mentorId) {
           </div>
 
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <button class="pill-btn" onclick="closeModal(); window.navigateTo('/browse')">browse more seniors</button>
-            <button class="pill-btn pill-btn--subtle" onclick="closeModal(); window.navigateTo('/my-space')">my space</button>
+            <button class="pill-btn" data-action="navigate-close" data-href="/browse">browse more seniors</button>
+            <button class="pill-btn pill-btn--subtle" data-action="navigate-close" data-href="/my-space">my space</button>
           </div>
         </div>
       `;
@@ -5165,11 +5500,11 @@ async function confirmBooking(mentorId) {
         openOverlay();
         if (modal) {
           modal.innerHTML = `
-            <button class="modal__close" onclick="closeModal()">${ICONS.close}</button>
+            <button class="modal__close" data-action="close-modal">${ICONS.close}</button>
             <div style="padding: 24px; text-align: center;">
-              <h3 style="color: #ef4444; margin-bottom: 8px;">Booking could not be completed</h3>
+              <h3 style="color: #ef4444; margin-bottom: 8px;">booking could not be completed</h3>
               <p style="font-size: 14px; opacity: 0.8; margin-bottom: 16px;">${escapeHtml(err.message || 'Something went wrong.')}</p>
-              <button class="pill-btn" onclick="openBookingModal(${parseInt(mentorId)})">Try again</button>
+              <button class="pill-btn" data-action="openBookingModal" data-arg="${parseInt(mentorId)}">Try again</button>
             </div>
           `;
         }
@@ -5326,7 +5661,7 @@ async function initAdminDashboard() {
     container.innerHTML = adminLockedCard(
       'Sign in to continue',
       'The review queue contains applicants&rsquo; personal details, so it needs an administrator sign-in.',
-      `<button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'sign in as an administrator' })">
+      `<button class="pill-btn pill-btn--animated" data-action="verify" data-arg="sign in as an administrator">
          <span class="pill-btn__inner"><span>sign in</span><span class="pill-btn__arrow">→</span></span>
        </button>`
     );
@@ -5351,7 +5686,7 @@ async function initAdminDashboard() {
       err.status === 403
         ? `The account ${escapeHtml(verifiedEmail() || '')} is not on frea's administrator list.`
         : escapeHtml(err.message || 'Please try again.'),
-      `<button class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/')">back to frea</button>`
+      `<button class="pill-btn pill-btn--subtle" data-action="navigate" data-href="/">back to frea</button>`
     );
     const countBadge = document.getElementById('admin-pending-count');
     if (countBadge) countBadge.innerText = '—';
@@ -5413,7 +5748,7 @@ async function loadAdminReports() {
           </div>
           ${r.status === 'open' ? `
             <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11.5px; padding: 4px 12px;"
-                    onclick="window.markReportResolved('${escapeHtml(r.id)}')">mark resolved</button>
+                    data-action="markReportResolved" data-arg="${escapeHtml(r.id)}">mark resolved</button>
           ` : '<span class="doc-badge doc-badge--free">resolved</span>'}
         </div>
       `).join('')}
@@ -5484,7 +5819,7 @@ async function renderAdminApplicationsList() {
         <div style="width: 56px; height: 56px; border-radius: 50%; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
           ${ICONS.tickCircle}
         </div>
-        <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">Nobody has joined yet</h3>
+        <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 4px;">nobody has joined yet</h3>
         <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto;">Mentors go live the moment they verify their university email — there is nothing to approve. Everyone who signs up is listed here, newest first.</p>
       </div>
     `;
@@ -5510,7 +5845,7 @@ async function renderAdminApplicationsList() {
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 16px;">
           <div style="display: flex; align-items: center; gap: 14px;">
             <div style="width: 56px; height: 56px; border-radius: 12px; overflow: hidden; background: #f3f4f6; border: 1.5px solid var(--color-charcoal); display: flex; align-items: center; justify-content: center;">
-              ${getMentorAvatar(app.mentorId || 1, 56)}
+              ${getMentorAvatar({ name: app.name, photoUrl: mentor ? mentor.photoUrl : null }, 56)}
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -5531,7 +5866,7 @@ async function renderAdminApplicationsList() {
           <div style="display: flex; gap: 8px; align-items: center;">
             <span class="doc-badge doc-badge--free">${ICONS.tickCircle} live</span>
             ${app.mentorId ? `
-              <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12px; padding: 5px 12px;" onclick="window.navigateTo('/mentor/${app.mentorId}')">
+              <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 12px; padding: 5px 12px;" data-action="navigate" data-href="/mentor/${app.mentorId}">
                 view profile →
               </button>` : ''}
           </div>
@@ -5604,7 +5939,7 @@ function renderAdminDashboard() {
           <h2 style="font-size: 22px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0;">
             Who has joined
           </h2>
-          <button type="button" class="pill-btn pill-btn--subtle" onclick="window.initAdminDashboard()">
+          <button type="button" class="pill-btn pill-btn--subtle" data-action="initAdminDashboard">
             ↻ Refresh
           </button>
         </div>
@@ -5637,8 +5972,6 @@ function renderAdminDashboard() {
   `;
 }
 window.initAdminDashboard = initAdminDashboard;
-window.renderAdminDashboard = renderAdminDashboard;
-
 // ─── Mentor Account Portal & Authentication ─────
 
 
@@ -5672,8 +6005,6 @@ async function syncLiveMentors() {
     console.warn('[main] live mentors sync failed; keeping bundled list', e);
   }
 }
-window.syncLiveMentors = syncLiveMentors;
-
 /** Shows "my space" in the navbar once a student has verified. */
 function updateNavbarSessionLink() {
   const btn = document.getElementById('nav-my-space');
@@ -5702,22 +6033,22 @@ function updateNavbarMentorStatus() {
       <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
     `;
     menu.innerHTML = `
-      <a href="/mentor-dashboard" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor-dashboard')">
-        <span class="dropdown-item-icon">📊</span>
+      <a href="/mentor-dashboard" class="navbar__dropdown-item" data-action="navigate-mentor-space">
+        <span class="dropdown-item-icon">${ICONS.chart}</span>
         <div>
-          <div class="dropdown-item-title">my space · mentoring</div>
+          <div class="dropdown-item-title">my mentor space</div>
           <div class="dropdown-item-desc">availability, profile & products</div>
         </div>
       </a>
-      <a href="/mentor/${session.mentorId}" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor/${session.mentorId}')">
-        <span class="dropdown-item-icon">👤</span>
+      <a href="/mentor/${session.mentorId}" class="navbar__dropdown-item" data-action="navigate-menu" data-href="/mentor/${session.mentorId}">
+        <span class="dropdown-item-icon">${ICONS.user}</span>
         <div>
           <div class="dropdown-item-title">view my live profile</div>
           <div class="dropdown-item-desc">see how freshers view your card</div>
         </div>
       </a>
-      <a href="#" class="navbar__dropdown-item" onclick="event.preventDefault(); window.closeMentorsDropdown(); window.mentorSignOut()">
-        <span class="dropdown-item-icon">🚪</span>
+      <a href="#" class="navbar__dropdown-item" data-action="mentorSignOut">
+        <span class="dropdown-item-icon">${ICONS.signOut}</span>
         <div>
           <div class="dropdown-item-title">sign out</div>
           <div class="dropdown-item-desc">${session.email || ''}</div>
@@ -5731,23 +6062,23 @@ function updateNavbarMentorStatus() {
       <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
     `;
     menu.innerHTML = `
-      <a href="/become-a-mentor" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/become-a-mentor')">
-        <span class="dropdown-item-icon">🎓</span>
+      <a href="/become-a-mentor" class="navbar__dropdown-item" data-action="navigate-menu" data-href="/become-a-mentor">
+        <span class="dropdown-item-icon">${ICONS.teacher}</span>
         <div>
           <div class="dropdown-item-title">become a mentor</div>
           <div class="dropdown-item-desc">instant setup · no interviews needed</div>
         </div>
       </a>
-      <a href="/mentor-dashboard" class="navbar__dropdown-item" onclick="window.closeMentorsDropdown(); window.navigateTo('/mentor-dashboard')">
-        <span class="dropdown-item-icon">🔑</span>
+      <a href="/mentor-dashboard" class="navbar__dropdown-item" data-action="navigate-mentor-space">
+        <span class="dropdown-item-icon">${ICONS.key}</span>
         <div>
           <div class="dropdown-item-title">mentor sign in</div>
           <div class="dropdown-item-desc">access your availability & earnings</div>
         </div>
       </a>
       ${verified && verified.email ? `
-        <a href="#" class="navbar__dropdown-item" onclick="event.preventDefault(); window.closeMentorsDropdown(); window.studentSignOut()">
-          <span class="dropdown-item-icon">🚪</span>
+        <a href="#" class="navbar__dropdown-item" data-action="studentSignOut">
+          <span class="dropdown-item-icon">${ICONS.signOut}</span>
           <div>
             <div class="dropdown-item-title">sign out</div>
             <div class="dropdown-item-desc">${escapeHtml(verified.email)}</div>
@@ -5778,8 +6109,6 @@ async function studentSignOut() {
   navigateTo('/');
 }
 window.studentSignOut = studentSignOut;
-window.updateNavbarMentorStatus = updateNavbarMentorStatus;
-
 /**
  * Mentors no longer have a separate session store. There is one verified
  * session; it simply carries a mentorId when that email owns a mentor profile.
@@ -5794,8 +6123,6 @@ function getMentorSession() {
     university: session.university
   };
 }
-window.getMentorSession = getMentorSession;
-
 async function mentorSignOut() {
   await signOut();
   mentorScheduleData = null;
@@ -5842,7 +6169,7 @@ function renderNoMentorProfile() {
         </p>
         ${getSession()?.legacyClaim?.total ? `
           <p style="font-size: 13px; color: #92400e; margin: 18px 0 10px;">You have ${getSession().legacyClaim.total} older frea record${getSession().legacyClaim.total === 1 ? '' : 's'} to connect before creating a new profile.</p>
-          <button type="button" class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/my-space')">connect old records</button>
+          <button type="button" class="pill-btn pill-btn--subtle" data-action="navigate" data-href="/my-space">connect old records</button>
         ` : ''}
         <button type="button" id="no-profile-apply" class="pill-btn pill-btn--dark pill-btn--animated" style="margin-top: 8px;">
           become a mentor
@@ -5889,8 +6216,7 @@ function renderMentorPanels() {
     university: session.university || 'UK University',
     major: 'Degree',
     bio: '',
-    topTip: '',
-    avatarId: 1
+    topTip: ''
   };
 
   return `
@@ -5902,20 +6228,20 @@ function renderMentorPanels() {
           </p>
           <a class="auth-flow__link" style="font-size: 13.5px; font-weight: 700;"
              href="/mentor/${currentMentor.id}"
-             onclick="event.preventDefault(); window.navigateTo('/mentor/${currentMentor.id}')">
+             data-action="navigate" data-href="/mentor/${currentMentor.id}">
             view my live profile →
           </a>
         </div>
 
         <!-- Portal Tabs Navigation -->
         <div class="mentor-portal-tabs">
-          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'schedule' ? 'active' : ''}" onclick="window.switchMentorPortalTab('schedule')">
+          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'schedule' ? 'active' : ''}" data-action="switchMentorPortalTab" data-arg="schedule">
             ${ICONS.calendar} 1. Availability
           </button>
-          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'profile' ? 'active' : ''}" onclick="window.switchMentorPortalTab('profile')">
+          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'profile' ? 'active' : ''}" data-action="switchMentorPortalTab" data-arg="profile">
             ${ICONS.edit} 2. Profile
           </button>
-          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'resources' ? 'active' : ''}" onclick="window.switchMentorPortalTab('resources')">
+          <button type="button" class="portal-tab-btn ${activeDashboardTab === 'resources' ? 'active' : ''}" data-action="switchMentorPortalTab" data-arg="resources">
             ${ICONS.gift} 3. Resources
           </button>
         </div>
@@ -5963,7 +6289,7 @@ function renderMentorPanels() {
           <div id="portal-schedule-summary" style="font-size: 13px; font-weight: 700; color: var(--color-marker-orange); margin-bottom: 18px;"></div>
 
           <div class="sched-section-head">
-            <h3 class="sched-section-title">Your weekly pattern</h3>
+            <h3 class="sched-section-title">your weekly pattern</h3>
             <span class="sched-section-note">Repeats every week</span>
           </div>
 
@@ -5979,7 +6305,7 @@ function renderMentorPanels() {
           </div>
 
           <div class="sched-section-head" style="margin-top: 30px;">
-            <h3 class="sched-section-title">Specific dates</h3>
+            <h3 class="sched-section-title">specific dates</h3>
             <span class="sched-section-note">Overrides the pattern, that date only</span>
           </div>
           <p style="font-size: 13.5px; opacity: 0.7; margin: 0 0 14px; max-width: 560px;">
@@ -6003,7 +6329,7 @@ function renderMentorPanels() {
             Keep your achievements and fresher advice up-to-date.
           </p>
 
-          <form id="portal-profile-form" onsubmit="window.saveMentorProfile(event)">
+          <form id="portal-profile-form" data-submit-action="saveMentorProfile">
             ${mentorProfileFields({ mode: 'edit', mentor: currentMentor })}
 
             <div style="margin-top: 24px;">
@@ -6078,90 +6404,25 @@ function renderMentorPanels() {
         <div class="portal-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
             <h2 style="font-size: 20px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin: 0;">
-              Publish New Freabie or Playbook
+              publish a new freabie or playbook
             </h2>
             <span class="doc-badge doc-badge--free">${feeBadgeText()}</span>
           </div>
 
           <div class="academic-integrity-callout">
-            <span style="font-size: 18px; flex-shrink: 0;">⚠️</span>
+            <span style="flex-shrink: 0; color: var(--color-burnt-sienna);">${ICONS.warning}</span>
             <div>
               <strong>Academic Integrity Notice:</strong> All uploads must strictly adhere to UK university academic conduct codes. Only upload original notes, walkthroughs, or templates (no unauthorized exam materials, solutions to live assignments, or plagiarized work).
             </div>
           </div>
 
-          <form id="portal-new-resource-form" onsubmit="window.publishDashboardResource(event)">
-            <div class="mentor-form-row" style="margin-bottom: 12px;">
-              <div class="mentor-form-group" style="flex: 2; margin-bottom: 0;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Resource Title *</label>
-                <input type="text" class="mentor-form-input" id="pr-title" required placeholder="e.g. Organic Chemistry Mechanism Cheat Sheet or Spring Week Tracker">
-              </div>
-              <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Pricing Model</label>
-                <select class="mentor-form-select" id="pr-type" onchange="window.toggleDocPriceField(this.value, 'pr-price-wrap')">
-                  <option value="free">Freabie (Free)</option>
-                  <option value="paid">Playbook (Paid)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="mentor-form-row" style="margin-bottom: 12px;">
-              <div class="mentor-form-group" style="flex: 1; margin-bottom: 0;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Category Tag</label>
-                <select class="mentor-form-select" id="pr-category">
-                  <option value="Tech & Coding">Tech & Coding</option>
-                  <option value="Economics & Finance">Economics & Finance</option>
-                  <option value="Engineering">Engineering</option>
-                  <option value="Law">Law</option>
-                  <option value="Medicine & Life Sciences">Medicine & Life Sciences</option>
-                  <option value="Maths & Statistics">Maths & Statistics</option>
-                  <option value="Interview Prep & CVs">Interview Prep & CVs</option>
-                  <option value="Exam Bibles & Revision">Exam Bibles & Revision</option>
-                  <option value="Productivity & Systems">Productivity & Systems</option>
-                  <option value="General">General / Other</option>
-                </select>
-              </div>
-              <div class="mentor-form-group" id="pr-price-wrap" style="flex: 1; display: none; margin-bottom: 0;">
-                <label class="mentor-form-label" style="font-size: 12.5px;">Price (£ GBP)</label>
-                <div style="position: relative; display: flex; align-items: center;">
-                  <span style="position: absolute; left: 12px; font-weight: 800; color: var(--color-charcoal);">£</span>
-                  <input type="number" class="mentor-form-input" id="pr-price" min="1" max="100" step="0.01" value="4.99" disabled style="padding-left: 26px;" oninput="window.updatePayoutPreview('pr-price', 'pr-payout')">
-                </div>
-                <div id="pr-payout" style="font-size: 12.5px; margin-top: 6px; line-height: 1.5;"></div>
-                </div>
-            </div>
-
-            <div class="mentor-form-group" style="margin-bottom: 14px;">
-              <label class="mentor-form-label" style="font-size: 12.5px;">Short Subtitle / Key Takeaway</label>
-              <input type="text" class="mentor-form-input" id="pr-desc" placeholder="e.g. 15-page distilled breakdown with annotated exam past paper questions">
-            </div>
-            <div class="mentor-form-group" style="margin-bottom: 14px;">
-              <label class="mentor-form-label" style="font-size: 12.5px;">What's Inside <span>(optional · up to 3 lines students see before downloading)</span></label>
-              <input type="text" class="mentor-form-input" id="pr-bullet-1" maxlength="160" placeholder="e.g. The exact bullet formula that gets past ATS screens" style="margin-bottom: 6px;">
-              <input type="text" class="mentor-form-input" id="pr-bullet-2" maxlength="160" placeholder="e.g. Six phrases recruiters skim past, and what to write instead" style="margin-bottom: 6px;">
-              <input type="text" class="mentor-form-input" id="pr-bullet-3" maxlength="160" placeholder="e.g. A worked before-and-after on a real first-year CV">
-            </div>
-
-            <!-- Real Document Upload Dropzone -->
-            <div class="mentor-form-group">
-              <label class="mentor-form-label" style="font-size: 12.5px;">Upload Study Document * <span>(PDF, Markdown .md, LaTeX .tex, PowerPoint .pptx · Max 10MB)</span></label>
-              <div class="file-dropzone" id="pr-dropzone">
-                <input type="file" id="pr-file" accept=".pdf,.md,.tex,.pptx" required onchange="window.handleDocumentFileSelect(event, 'pr-file-preview', 'pr-uploaded-file')">
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                  <span style="color: var(--color-marker-orange);">${ICONS.documentDownload}</span>
-                  <div style="font-size: 13.5px; font-weight: 700; color: var(--color-charcoal);">Click to browse or drop your document here</div>
-                  <span style="font-size: 11.5px; opacity: 0.65;">Accepts PDF, Markdown, LaTeX, PowerPoint (up to 10MB)</span>
-                </div>
-              </div>
-              <div id="pr-file-preview" style="display: none;"></div>
-              <input type="hidden" id="pr-uploaded-file" value="">
-              <input type="hidden" id="pr-uploaded-format" value="">
-            </div>
+          <form id="portal-new-resource-form" data-submit-action="publishDashboardResource">
+            ${resourceFormFields({ prefix: 'pr', required: true })}
 
             <div style="margin-top: 20px;">
               <button type="submit" class="pill-btn pill-btn--animated" id="pr-submit-btn">
                 <span class="pill-btn__inner">
-                  <span>upload & publish resource</span>
+                  <span>upload &amp; publish resource</span>
                   <span class="pill-btn__arrow">↑</span>
                 </span>
               </button>
@@ -6198,8 +6459,6 @@ function closeMentorsDropdown() {
     dropdown.classList.remove('open');
   }
 }
-window.closeMentorsDropdown = closeMentorsDropdown;
-
 // Availability is held in the canonical shape the server uses:
 // { "0".."6": ["17:00", ...] }. The editor shows day names and friendly times,
 // but never stores them — that mismatch is what used to wipe a mentor's
@@ -6267,14 +6526,11 @@ function resolveSessionMentor() {
     weeklySchedule: {},
     docs: [],
     rating: 5.0,
-    callsCompleted: 0,
-    avatarId: 1
+    callsCompleted: 0
   };
   MENTORS.push(stub);
   return stub;
 }
-window.resolveSessionMentor = resolveSessionMentor;
-
 function initMentorDashboard() {
   const session = getMentorSession();
   if (!session) return;
@@ -6304,8 +6560,6 @@ function initMentorDashboard() {
   loadPayoutStatus();
   handlePayoutReturn(getRoute());
 }
-window.initMentorDashboard = initMentorDashboard;
-
 // ─── The availability editor ────────────────────────────
 //
 // Two things, and the relationship between them is the whole design. The
@@ -6843,35 +7097,22 @@ function renderMentorResourceList(currentMentor) {
       </div>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         ${doc.type === 'paid' ? `
-          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" onclick="window.editResourcePrice('${escapeHtml(doc.id)}')">
+          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" data-action="editResourcePrice" data-arg="${escapeHtml(doc.id)}">
             edit price
           </button>` : ''}
         <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;"
           data-action="publish-resource-version" data-resource-id="${escapeHtml(doc.id)}">
           new version
         </button>
-        <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" onclick="window.downloadDoc('${escapeHtml(doc.id)}')">
+        <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11px; padding: 4px 10px;" data-action="downloadDoc" data-arg="${escapeHtml(doc.id)}">
           ${ICONS.download}
         </button>
-        <button type="button" class="admin-btn admin-btn--reject" style="font-size: 11px; padding: 4px 10px;" onclick="window.deleteMentorResource('${escapeHtml(doc.id)}')">
+        <button type="button" class="admin-btn admin-btn--reject" style="font-size: 11px; padding: 4px 10px;" data-action="deleteMentorResource" data-arg="${escapeHtml(doc.id)}">
           ${ICONS.trash || 'Delete'}
         </button>
       </div>
     </div>
   `).join('');
-
-  initMentorResourceVersionControls();
-}
-
-function initMentorResourceVersionControls() {
-  const container = document.getElementById('portal-resources-list');
-  if (!container || container.dataset.versionActionsWired === 'true') return;
-  container.dataset.versionActionsWired = 'true';
-  container.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-action="publish-resource-version"]');
-    if (!button) return;
-    publishNewResourceVersion(button.dataset.resourceId);
-  });
 }
 
 async function publishNewResourceVersion(resourceId) {
@@ -6901,8 +7142,6 @@ async function publishNewResourceVersion(resourceId) {
   };
   input.click();
 }
-window.publishNewResourceVersion = publishNewResourceVersion;
-
 /** Edit a paid product's current price. Product type is immutable. */
 async function editResourcePrice(docId) {
   const session = getMentorSession();
@@ -7033,8 +7272,8 @@ async function loadMentorDiary(mentorId) {
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <a href="${escapeHtml(b.meetingUrl || '')}" target="_blank" rel="noopener noreferrer" class="pill-btn pill-btn--dark" style="text-decoration: none; font-size: 11.5px; padding: 4px 12px;">join</a>
-          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11.5px; padding: 4px 12px;" onclick="window.downloadBookingInvite('${escapeHtml(b.id)}')">.ics</button>
-          <button type="button" class="admin-btn admin-btn--reject" style="font-size: 11.5px; padding: 4px 12px;" onclick="window.mentorCancelBooking('${escapeHtml(b.id)}')">cancel</button>
+          <button type="button" class="pill-btn pill-btn--subtle" style="font-size: 11.5px; padding: 4px 12px;" data-action="downloadBookingInvite" data-arg="${escapeHtml(b.id)}">.ics</button>
+          <button type="button" class="admin-btn admin-btn--reject" style="font-size: 11.5px; padding: 4px 12px;" data-action="mentorCancelBooking" data-arg="${escapeHtml(b.id)}">cancel</button>
         </div>
       </div>
     `).join('') : '<div style="padding: 14px; text-align: center; opacity: 0.6; font-size: 13.5px;">Nothing upcoming.</div>'}
@@ -7076,8 +7315,9 @@ async function saveMentorProfile(e) {
   const read = (id) => document.getElementById(id)?.value.trim() || '';
   const achievements = [read('bm-achieve-1'), read('bm-achieve-2'), read('bm-achieve-3')].filter(Boolean);
   const colorInput = document.querySelector('input[name="postit-color"]:checked');
-  // Uploaded separately via /api/upload/pitch-video — never sent from this form,
-  // or saving the profile would wipe a video the mentor just recorded.
+  // The pitch video and the photo are both uploaded through their own
+  // endpoints and attached there — neither is sent from this form, or saving
+  // the profile would wipe a video or a photo just uploaded.
 
   const linkedin = read('bm-linkedin');
   const links = [
@@ -7090,9 +7330,8 @@ async function saveMentorProfile(e) {
     major: read('bm-major'),
     year: document.getElementById('bm-year')?.value,
     bio: read('bm-bio'),
-    photoUrl: read('bm-photo-data'),
-    avatarId: parseInt(document.getElementById('bm-selected-avatar-id')?.value) || 1,
     achievements,
+    helpsWith: readHelpsWith(),
     topTip: read('bm-toptip'),
     topTipColor: colorInput ? colorInput.value : 'yellow',
     links,
@@ -7110,7 +7349,6 @@ async function saveMentorProfile(e) {
       year: updated.year,
       bio: updated.bio,
       photoUrl: updated.photoUrl,
-      avatarId: updated.avatarId,
       achievements: updated.achievements,
       topTip: updated.topTip,
       topTipColor: updated.topTipColor,
@@ -7134,16 +7372,11 @@ async function publishDashboardResource(e) {
   if (!session) return;
 
   const currentMentor = resolveSessionMentor();
-  const title = document.getElementById('pr-title')?.value.trim();
-  const type = document.getElementById('pr-type')?.value || 'free';
-  const category = document.getElementById('pr-category')?.value || 'Tech & Coding';
-  const price = type === 'paid' ? parseFloat(document.getElementById('pr-price')?.value) || 0 : 0;
-  const desc = document.getElementById('pr-desc')?.value.trim();
   const submitBtn = document.getElementById('pr-submit-btn');
 
   // The upload endpoint hands back an opaque fileName; there is no public URL.
-  const fileName = document.getElementById('pr-uploaded-file')?.value.trim();
-  const format = document.getElementById('pr-uploaded-format')?.value.trim() || 'PDF';
+  const { title, type, category, price, subtitle, fileName, format, previewBullets } =
+    readResourceForm('pr');
 
   if (!title) {
     showToast('Give your resource a title.');
@@ -7164,13 +7397,9 @@ async function publishDashboardResource(e) {
   }
 
   try {
-    const previewBullets = ['pr-bullet-1', 'pr-bullet-2', 'pr-bullet-3']
-      .map(id => document.getElementById(id)?.value.trim())
-      .filter(Boolean);
-
     const created = await createResource({
       title,
-      subtitle: desc || `Shared by ${currentMentor.name}`,
+      subtitle: subtitle || `Shared by ${currentMentor.name}`,
       type,
       price,
       category,
@@ -7260,10 +7489,10 @@ function renderEmailVerificationResult(route) {
         title: 'Email verified',
         body: 'Your UK student status is confirmed. You can now book 1-on-1 calls, download freabies, and publish a mentor profile.',
         actions: `
-          <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+          <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/browse">
             <span class="pill-btn__inner"><span>find a senior mentor</span><span class="pill-btn__arrow">→</span></span>
           </button>
-          <button class="pill-btn pill-btn--subtle" onclick="window.navigateTo('/resources')">
+          <button class="pill-btn pill-btn--subtle" data-action="navigate" data-href="/resources">
             <span>explore freabies &amp; docs</span>
           </button>
         `
@@ -7274,7 +7503,7 @@ function renderEmailVerificationResult(route) {
         title: 'That link didn\'t work',
         body: escapeHtml(err.message || 'The link may have expired or already been used.'),
         actions: `
-          <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'verify your student email' })">
+          <button class="pill-btn pill-btn--animated" data-action="verify" data-arg="verify your student email">
             <span class="pill-btn__inner"><span>send me a new code</span><span class="pill-btn__arrow">→</span></span>
           </button>
         `
@@ -7294,8 +7523,6 @@ function renderEmailVerificationResult(route) {
     ${renderFooter()}
   `;
 }
-window.renderEmailVerificationResult = renderEmailVerificationResult;
-
 function verifyResultCard({ ok, title, body, actions = '' }) {
   return `
     <div style="background: #fff; border: 2px solid var(--color-charcoal); border-radius: 20px; box-shadow: var(--shadow-brutal-lg); padding: 36px 28px; text-align: center;">
@@ -7339,7 +7566,7 @@ function renderCancelBooking(route) {
                <strong>${escapeHtml(toDisplayTime(booking.time))}</strong> has been cancelled and the slot
                is open again. We've let the other person know.`,
         actions: `
-          <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/mentor/${booking.mentorId}')">
+          <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/mentor/${booking.mentorId}">
             <span class="pill-btn__inner"><span>book another time</span><span class="pill-btn__arrow">→</span></span>
           </button>
         `
@@ -7365,8 +7592,6 @@ function renderCancelBooking(route) {
     ${renderFooter()}
   `;
 }
-window.renderCancelBooking = renderCancelBooking;
-
 // ─── My Space ─────
 
 function renderLegacyClaimCard() {
@@ -7380,12 +7605,12 @@ function renderLegacyClaimCard() {
       <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <label for="legacy-claim-email" style="font-size: 12.5px; font-weight: 700; color: #78350f;">old contact email</label>
         <input id="legacy-claim-email" type="email" value="${escapeHtml(session.email || '')}" style="flex: 1 1 220px; min-width: 180px; padding: 9px 10px; border: 1px solid #f59e0b; border-radius: 8px; font: inherit;">
-        <button type="button" class="pill-btn pill-btn--dark" onclick="window.requestLegacyClaimFromSpace()">email me a code</button>
+        <button type="button" class="pill-btn pill-btn--dark" data-action="requestLegacyClaimFromSpace">email me a code</button>
       </div>
       <div id="legacy-claim-code-area" style="display: none; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px;">
         <label for="legacy-claim-code" style="font-size: 12.5px; font-weight: 700; color: #78350f;">claim code</label>
         <input id="legacy-claim-code" inputmode="numeric" autocomplete="one-time-code" style="width: 120px; padding: 9px 10px; border: 1px solid #f59e0b; border-radius: 8px; font: inherit;">
-        <button type="button" class="pill-btn pill-btn--dark" onclick="window.verifyLegacyClaimFromSpace()">connect account</button>
+        <button type="button" class="pill-btn pill-btn--dark" data-action="verifyLegacyClaimFromSpace">connect account</button>
       </div>
     </section>`;
 }
@@ -7476,7 +7701,7 @@ function renderMySpace() {
         ? '<div style="opacity: 0.6; padding: 30px 0;">loading your space…</div>'
         : `<div style="padding: 30px 0;">
              <p style="opacity: 0.7; margin-bottom: 16px;">Verify with your university to see your space.</p>
-             <button class="pill-btn pill-btn--animated" onclick="window.openVerificationModal({ email: null, actionName: 'open your my space' })">
+             <button class="pill-btn pill-btn--animated" data-action="verify" data-arg="open your my space">
                <span class="pill-btn__inner"><span>verify with your university</span><span class="pill-btn__arrow">&rarr;</span></span>
              </button>
            </div>`}
@@ -7509,7 +7734,17 @@ function renderMySpace() {
     ${renderFooter()}
   `;
 }
-window.renderMySpace = renderMySpace;
+/**
+ * Opens my space on the mentor tab.
+ *
+ * The tab has to be set before navigating, not after: renderMySpace reads
+ * activeSpaceTab as it renders, so setting it afterwards would paint the
+ * student half first and only correct itself on the next repaint.
+ */
+function openMentorSpace({ replace = false } = {}) {
+  activeSpaceTab = 'mentor';
+  navigateTo('/my-space', { replace });
+}
 
 /** Does this person have a mentor profile to show a mentor tab for? */
 function mentorRoleAvailable() {
@@ -7542,8 +7777,6 @@ function initMySpace() {
 
   if (mentorRoleAvailable() && activeSpaceTab === 'mentor') initMentorDashboard();
 }
-window.renderMySessions = renderMySpace;
-
 async function loadMySpace() {
   const sessionsRoot = document.getElementById('my-space-sessions');
   const vaultRoot = document.getElementById('my-space-vault-grid');
@@ -7578,7 +7811,7 @@ async function loadMySpace() {
       <div style="text-align: center; padding: 32px 20px; background: #fff; border-radius: 16px; border: 1.5px dashed rgba(23, 23, 23, 0.2);">
         <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">no sessions yet</h3>
         <p style="font-size: 14px; opacity: 0.7; max-width: 420px; margin: 0 auto 18px;">Find a senior who has walked the path you want and book a free 20 minutes with them.</p>
-        <button class="pill-btn pill-btn--animated" onclick="window.navigateTo('/browse')">
+        <button class="pill-btn pill-btn--animated" data-action="navigate" data-href="/browse">
           <span class="pill-btn__inner"><span>find a mentor</span><span class="pill-btn__arrow">→</span></span>
         </button>
       </div>
@@ -7590,7 +7823,6 @@ async function loadMySpace() {
           <h3 style="font-size: 19px; font-weight: 800; font-family: var(--font-display); color: var(--color-charcoal); margin-bottom: 6px;">your vault is empty</h3>
           <p style="font-size: 14px; opacity: 0.7; margin: 0;">Free freabies and purchased playbooks will stay here so you can download them again whenever you need.</p>
         </div>`;
-    initMySpaceVault();
   } catch (err) {
     if (err.needsVerification || err.status === 401) {
       clearSession();
@@ -7602,8 +7834,6 @@ async function loadMySpace() {
     vaultRoot.innerHTML = '';
   }
 }
-window.loadMySpace = loadMySpace;
-
 function sessionCard(b, isUpcoming) {
   const meetingUrl = b.meetingUrl || b.googleMeetUrl || '';
   return `
@@ -7620,8 +7850,8 @@ function sessionCard(b, isUpcoming) {
         ${isUpcoming ? `
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <a href="${escapeHtml(meetingUrl)}" target="_blank" rel="noopener noreferrer" class="pill-btn pill-btn--dark" style="text-decoration: none; font-size: 12.5px; padding: 6px 14px;">join call</a>
-            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.downloadBookingInvite('${escapeHtml(b.id)}')">.ics</button>
-            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" onclick="window.cancelMySession('${escapeHtml(b.id)}')">cancel</button>
+            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" data-action="downloadBookingInvite" data-arg="${escapeHtml(b.id)}">.ics</button>
+            <button class="pill-btn pill-btn--subtle" style="font-size: 12.5px; padding: 6px 14px;" data-action="cancelMySession" data-arg="${escapeHtml(b.id)}">cancel</button>
           </div>` : ''}
       </div>
     </div>
@@ -7738,8 +7968,6 @@ function requireAuth({ intent = 'continue', next = null } = {}) {
   navigateTo('/sign-in');
   return false;
 }
-window.requireAuth = requireAuth;
-
 /**
  * What to tell someone they are signing in for.
  *
@@ -7749,7 +7977,7 @@ window.requireAuth = requireAuth;
 function intentForRoute(path) {
   if (path === '/become-a-mentor') return 'become a mentor';
   if (path === '/my-space' || path === '/my-sessions') return 'open your my space';
-  if (path === '/mentor-dashboard') return 'reach your mentor dashboard';
+  if (path === '/mentor-dashboard') return 'reach your mentor space';
   if (path === '/admin') return 'open the admin dashboard';
   return 'continue';
 }
@@ -7819,12 +8047,11 @@ function renderPage() {
     return;
   }
 
-  // The mentor portal is a tab of my space now. The route stays so bookmarks,
-  // the footer link and every "open my mentor dashboard" button still land
-  // somewhere — on the mentor half, which is what they meant.
+  // The mentor portal is a tab of my space now. The route stays so bookmarks
+  // and old links still land somewhere — on the mentor half, which is what
+  // they meant. The app's own links use openMentorSpace and skip the hop.
   if (path === '/mentor-dashboard') {
-    activeSpaceTab = 'mentor';
-    navigateTo('/my-space', { replace: true });
+    openMentorSpace({ replace: true });
     return;
   }
 
@@ -7866,7 +8093,7 @@ function renderPage() {
     // Already a mentor: the page is a signpost to the dashboard, not a form.
     const existingDash = document.getElementById('bm-existing-dashboard');
     if (existingDash) {
-      existingDash.addEventListener('click', () => navigateTo('/mentor-dashboard'));
+      existingDash.addEventListener('click', () => openMentorSpace());
       document.getElementById('bm-existing-profile')
         ?.addEventListener('click', () => navigateTo(`/mentor/${getSession()?.mentorId}`));
     }
@@ -7954,12 +8181,8 @@ function navigateTo(path, { replace = false } = {}) {
   renderPage();
   updateNavbarMentorStatus();
 }
-window.navigateTo = navigateTo;
-
 window.openBookingModal = openBookingModal;
 window.confirmBooking = confirmBooking;
-window.closeModal = closeModal;
-window.loadMentorCalendar = loadMentorCalendar;
 window.navigateMonth = navigateMonth;
 window.selectCalendarMonthCell = selectCalendarMonthCell;
 window.selectMonthSlotChip = selectMonthSlotChip;
@@ -8012,25 +8235,16 @@ function setupModalClose() {
 
 // ─── Navigation Click Handlers ─────
 
+/**
+ * The navbar's own wiring, which is now only the click that closes the mentor
+ * menu from anywhere else on the page.
+ *
+ * The links themselves used to be bound here, once per element, with a
+ * `__hasClickListener` flag on the button to stop the binding stacking up
+ * across re-renders. They carry `data-action` like everything else now, so the
+ * one dispatcher handles them and there is nothing to re-bind or de-duplicate.
+ */
 function setupNavLinks() {
-  document.querySelectorAll('[data-navigate]').forEach(el => {
-    el.onclick = (e) => {
-      e.preventDefault();
-      closeMentorsDropdown();
-      navigateTo(el.dataset.navigate);
-    };
-  });
-
-  const mentorsBtn = document.getElementById('nav-mentors-btn');
-  if (mentorsBtn && !mentorsBtn.__hasClickListener) {
-    mentorsBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleMentorsDropdown(e);
-    });
-    mentorsBtn.__hasClickListener = true;
-  }
-
   if (!window.__dropdownClickListenerAdded) {
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#nav-mentors-dropdown')) {

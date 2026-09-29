@@ -33,12 +33,33 @@ as `&#39;`, the HTML parser decodes that back to `'` before the JS is parsed,
 and the string literal reopens. `jsArg` is `escapeHtml(JSON.stringify(v))` —
 both escapes, in the order that composes. It returns its own quotes.
 
+It has no call sites left — arguments travel as data attributes now (see
+*Writing new UI*) — and the CSP would block such a handler anyway. It is kept
+because the hazard is a property of the construction, not of this codebase, and
+whoever writes the next one needs it to already exist. Both live in
+`src/escape.js`: a second copy of an escaper is how `avatars.js` came to have
+none at all.
+
 **Uploads are named after their owner** — `doc-<mentorId>-…`,
-`pitch-<mentorId>-…` — and the server checks that prefix before publishing a
-resource or deleting a file. `fileName` and `pitchVideoUrl` come back from the
-client, so they are untrusted even though they live in our own records. Treating
-either as a filesystem key without the ownership check is how one mentor reads
-or deletes another's file.
+`pitch-<mentorId>-…`, `photo-<mentorId>-…` — and the server checks that prefix
+before publishing a resource, serving a profile or deleting a file. `fileName`,
+`pitchVideoUrl` and `photoUrl` come back from the client, so they are untrusted
+even though they live in our own records. Treating any of them as a filesystem
+key without the ownership check is how one mentor reads or deletes another's
+file — and checking only the *shape* of the name is not the check: `photoUrl`
+briefly validated the pattern without comparing the id, which let one mentor
+put another's face on their own card.
+
+**`photoUrl` is a path this server minted, never anything else.**
+`safePhotoUrl(value, mentorId)` allow-lists
+`/uploads/mentor_photos/photo-<thatMentorId>-<ts>-<8 hex>.webp` and returns `''`
+for everything else — no `data:` URI, no remote host. It was stored raw and
+interpolated straight into an `<img src="…">`, so `http://x" onerror="…` passed
+the "does it start with http" guard, broke out of the attribute, and ran for
+every visitor to browse. Photos are real files on the volume now, downscaled to
+512px WebP by sharp on upload; they were base64 in the record, which put a
+multi-MB string in every browse response and could not work anyway, because
+base64 inflates past the 2MB JSON body cap for any photo a phone takes.
 
 **Sanitise on write, in `server/db.js`.** `createMentorApplication` once stored
 `name`, `topTipColor`, `linkedin` and `helpsWith` raw, which is what made the
@@ -48,6 +69,62 @@ or an allow-list.
 **`server/email.js` escapes with `esc()`.** Mail leaves our domain with valid
 SPF and DKIM; injected markup there is a phishing tool, not a defacement.
 Subjects stay raw — nodemailer encodes those.
+
+## Records that must not drift
+
+**A resource shows its author's *current* details, not a snapshot.**
+`resourceView` re-reads `mentorName`, `mentorUniversity` and `mentorMajor` from
+the mentor record on every read; the copies stored on the resource are only the
+fallback for a mentor who no longer exists. They were written once at publish
+time and never refreshed, so a mentor who corrected their degree kept the old
+one on every document they had already published — including the Stripe line
+item a student sees at checkout.
+
+**`callsCompleted` is derived, never counted.** `countCompletedCalls` counts
+bookings that are not cancelled and whose slot has passed. It used to be a
+stored counter incremented when a booking was *made*, so a mentor with one
+session booked for next month advertised "1 chats completed" today, on the page
+a student uses to decide whether to trust them. `migrate` deletes the stored
+field, so there is no second answer to drift.
+
+**No invented numbers, anywhere.** The landing page counts `MENTORS.length`
+rather than naming a figure, and the hero's sample card shows what a real card
+shows. Both carried fabricated counts. `test:integrity` guards this.
+
+**A meeting room name is 16 random bytes,** not the booking id. A Jitsi room is
+open to anyone who knows its name and has no password, so the name *is* the
+access control — and a booking id is a timestamp plus three random bytes, for a
+call whose start time is known.
+
+**Uploads are in the backup or they are not backed up.** `/api/admin/archive`
+is `data.json` plus the whole `uploads/` tree, and it is the one to schedule.
+`/api/admin/backup` is the database alone: useful to look at, useless to
+restore from, because every order and entitlement it contains points at a file
+that lives beside it. The orphan sweep covers all three upload directories for
+the same reason — documents, pitch videos and photos.
+
+## One form per thing
+
+`mentorProfileFields({ mode, mentor })` and
+`resourceFormFields({ prefix, required })` are each rendered in two places, and
+each replaced two copies that had already diverged. The publish form's signup
+copy had no "What's Inside" fields at all, so a mentor who published during
+signup could never give students the three lines they read before downloading,
+and nothing let them add those later either.
+
+If a field belongs on one, it belongs on both. `readResourceForm(prefix)` is
+the matching reader, so a field cannot be rendered on both and read from one.
+
+**`helpsWith` is the mentor's to write.** It feeds the profile's "what you can
+ask me about", the browse search box and the goal filter — and had no field
+anywhere, so it was set once at signup to the degree plus three fixed strings.
+Every mentor carried the same tags, which makes a filter built on them useless.
+
+**Don't validate a field the person cannot edit.** The contact address on the
+mentor form is read-only and filled from the session, and `/api/mentors/apply`
+takes it from the session regardless. Rejecting it on submit was a dead end:
+the message asked them to change a field with no cursor in it. A legacy or
+admin session carrying an `.ac.uk` address hit exactly that.
 
 ## University sign-in (Studid)
 
@@ -133,6 +210,28 @@ Do not turn this into a plain text field, and do not add a separate
 student's name and meeting link, and an unproven address is also a way to squat
 one its real owner has not registered with yet.
 
+## Mentor avatars
+
+**A mentor is their photo or their initials. There is no third option.**
+`getMentorAvatar(person, size, photoUrl)` in `src/avatars.js` takes a
+mentor-shaped object or a display name — a *name*, never an id, because
+initials cannot be derived from a primary key.
+
+There were twelve hand-drawn SVG portraits and a picker. It was wrong three
+ways at once: the renderer resolved the illustration from `mentor.id` rather
+than the `avatarId` that was picked, so the picker did nothing; only ids 1–12
+existed, so every mentor who actually signed up rendered as seed mentor #1; and
+on a page whose whole job is deciding whether to trust a stranger, an
+illustration asserting a gender, a skin tone and in one case a headscarf is a
+claim about a person, made by us, at random. Initials cannot be wrong about
+anybody.
+
+The tint is one of the four sticker colours, picked by hashing the name — not
+from the mentor's `color` field, which is derived from the post-it colour at
+signup and left at its default by almost everyone, so a browse page would come
+out entirely orange. Hashing is stable, so an avatar does not change colour
+between pages. `avatarId` is deleted on load in `migrate()`.
+
 ## One account home
 
 `/my-space` is the only account destination. A mentor is also a student — they
@@ -194,17 +293,41 @@ every day off a mentor had set.
 
 ## Writing new UI
 
-**No `onclick=` (or any inline `on*=`) in new markup.** Use `addEventListener`,
-or delegate from a container with `data-action`.
+**No `onclick=` (or any inline `on*=`) in markup. This is now enforced by the
+CSP, not by convention** — `script-src` is `'self'`, so an inline handler does
+not fail review, it silently does nothing. There were 149 of them; there are
+none, and `test:photo` fails if one comes back.
 
-There are ~178 inline handlers in `src/main.js` from before this rule. They are
-the only reason the CSP carries `script-src 'unsafe-inline'`, which is what
-stopped it defending against every XSS listed above. The moment the last one is
-gone, `script-src` tightens to `'self'` and that whole class of bug stops being
-exploitable. Every new handler pushes that further away.
+**Behaviour is wired with `data-action`.** One delegated listener per event
+type (`click`, `input`, `change`, `submit`) sits on `document` and dispatches
+through a registry; `registerActions(type, map)` adds to it. Delegation rather
+than `addEventListener` per element because the app renders by assigning
+`innerHTML` — every repaint discards the nodes, so anything bound to them has
+to be re-bound, and the one render that forgets is a dead button.
+
+Arguments ride as data attributes and the handler reads them off the element,
+which is also why `jsArg` has no call sites left: there is no JS string literal
+inside an HTML attribute any more. It stays exported, because the hazard
+returns the moment someone writes one.
+
+The nearest ancestor carrying an action wins and nothing above it runs, which
+is what the old `event.stopPropagation()` calls were doing — a "book a chat"
+button inside a mentor card that is itself clickable.
 
 Session tokens live in `localStorage`, so an XSS is account takeover, not a
 defacement — which is why this matters more here than it would elsewhere.
+
+## Icons, not emoji
+
+Everything on a button, a menu row or a callout comes from `ICONS` in
+`src/icons.js` — 24×24 stroke SVGs that inherit `currentColor`. There were
+emoji: 🎓 🔑 🚪 📊 👤 📍 ⚠️ 🎉. They render as a different typeface on every
+platform, ignore the colour around them, and sit at the wrong optical weight
+beside real icons. `largeIcon(svg, size)` rescales one for a standalone mark.
+
+Typographic arrows (`→ ← ↗ ↑`), `·` and `©` are not emoji and stay.
+`test:integrity` fails on a pictographic character in `src/main.js`,
+`index.html` or `src/icons.js`.
 
 ## Deploys
 
